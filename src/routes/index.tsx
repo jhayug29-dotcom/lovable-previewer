@@ -5,10 +5,12 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal, CountUp } from "@/components/site/Reveal";
 import { VideoCarousel } from "@/components/site/VideoCarousel";
-import { products } from "@/lib/products";
+import { getStoreProducts } from "@/lib/catalog.functions";
 
 export const Route = createFileRoute("/")({
+  loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
+    links: [{ rel: "preload", as: "image", href: cardFan, fetchpriority: "high" }],
     meta: [
       { title: "Editly Store — Premium After Effects, LUT & SFX Packs" },
       {
@@ -27,6 +29,7 @@ export const Route = createFileRoute("/")({
   }),
   component: Landing,
 });
+
 
 const perks = [
   { icon: Download, title: "Instant delivery", body: "Your download link lands the second your payment clears." },
