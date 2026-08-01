@@ -3,7 +3,10 @@ import { Star, ArrowUpRight } from "lucide-react";
 import { formatPrice, type Product } from "@/lib/products";
 
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
-  const discount = Math.round((1 - product.price / product.originalPrice) * 100);
+  const discount =
+    product.originalPrice > product.price
+      ? Math.round((1 - product.price / product.originalPrice) * 100)
+      : 0;
 
   return (
     <Link
