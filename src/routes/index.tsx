@@ -6,6 +6,8 @@ import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal, CountUp } from "@/components/site/Reveal";
 import { VideoCarousel } from "@/components/site/VideoCarousel";
 import { getStoreProducts } from "@/lib/catalog.functions";
+import type { DbProduct } from "@/lib/catalog-map";
+
 
 export const Route = createFileRoute("/")({
   loader: async () => ({ products: await getStoreProducts() }),

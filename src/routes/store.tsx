@@ -39,6 +39,7 @@ const sortOptions: { key: SortKey; label: string }[] = [
 ];
 
 function StorePage() {
+  const { products } = Route.useLoaderData() as { products: DbProduct[] };
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "All">("All");
   const [sort, setSort] = useState<SortKey>("popular");
@@ -61,7 +62,8 @@ function StorePage() {
       if (sort === "rating") return b.rating - a.rating;
       return b.sales - a.sales;
     });
-  }, [query, category, sort]);
+  }, [products, query, category, sort]);
+
 
   return (
     <SiteLayout>
