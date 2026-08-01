@@ -105,12 +105,21 @@ function ProductPage() {
             </div>
 
             <div className="mt-7 flex items-end gap-3">
-              <span className="font-display text-4xl font-extrabold text-ink">{formatPrice(product.price)}</span>
-              <span className="text-lg text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
-              <span className="mb-1 rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground">
-                Save {discount}%
+              <span className="font-display text-4xl font-extrabold text-ink">
+                {product.isFree ? "Free" : formatPrice(product.price)}
               </span>
+              {discount > 0 ? (
+                <>
+                  <span className="text-lg text-muted-foreground line-through">
+                    {formatPrice(product.originalPrice)}
+                  </span>
+                  <span className="mb-1 rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground">
+                    Save {discount}%
+                  </span>
+                </>
+              ) : null}
             </div>
+
 
             <BuyButton slug={product.slug} price={product.price} isFree={product.isFree} />
             <button
