@@ -5,6 +5,8 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { categories, type Category } from "@/lib/products";
 import { getStoreProducts } from "@/lib/catalog.functions";
+import type { DbProduct } from "@/lib/catalog-map";
+
 
 export const Route = createFileRoute("/store")({
   loader: async () => ({ products: await getStoreProducts() }),

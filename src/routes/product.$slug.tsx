@@ -4,14 +4,16 @@ import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { BuyButton } from "@/components/site/BuyButton";
-import { formatPrice, getProduct, products, type Product } from "@/lib/products";
+import { formatPrice } from "@/lib/products";
+import { getStoreProduct } from "@/lib/catalog.functions";
+import type { DbProduct } from "@/lib/catalog-map";
 
 
 export const Route = createFileRoute("/product/$slug")({
-  loader: ({ params }) => {
-    const product = getProduct(params.slug);
+  loader: async ({ params }) => {
+    const { product, related } = await getStoreProduct({ data: { slug: params.slug } });
     if (!product) throw notFound();
-    return { product };
+    return { product, related };
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;
@@ -19,6 +21,7 @@ export const Route = createFileRoute("/product/$slug")({
     const description = product
       ? `${product.tagline}. ${formatPrice(product.price)} one-time, instant download and lifetime updates.`
       : "Premium editing assets from Editly Store.";
+    const image = product?.cover?.startsWith("https://") ? product.cover : undefined;
     return {
       meta: [
         { title },
@@ -27,6 +30,12 @@ export const Route = createFileRoute("/product/$slug")({
         { property: "og:description", content: description },
         { property: "og:type", content: "product" },
         { name: "twitter:card", content: "summary_large_image" },
+        ...(image
+          ? [
+              { property: "og:image", content: image },
+              { name: "twitter:image", content: image },
+            ]
+          : []),
       ],
     };
   },
@@ -34,9 +43,10 @@ export const Route = createFileRoute("/product/$slug")({
 });
 
 function ProductPage() {
-  const { product } = Route.useLoaderData() as { product: Product };
-  const discount = Math.round((1 - product.price / product.originalPrice) * 100);
-  const related = products.filter((p) => p.slug !== product.slug).slice(0, 3);
+  const { product, related } = Route.useLoaderData() as { product: DbProduct; related: DbProduct[] };
+  const discount =
+    product.originalPrice > 0 ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
+
 
   return (
     <SiteLayout>
