@@ -3,9 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
-import { categories, products, type Category } from "@/lib/products";
+import { categories, type Category } from "@/lib/products";
+import { getStoreProducts } from "@/lib/catalog.functions";
 
 export const Route = createFileRoute("/store")({
+  loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
     meta: [
       { title: "Store — After Effects, LUTs, Extensions & SFX | Editly Store" },
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/store")({
   }),
   component: StorePage,
 });
+
 
 type SortKey = "popular" | "price-low" | "price-high" | "rating";
 

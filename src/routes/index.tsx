@@ -47,7 +47,9 @@ const stats = [
 
 
 function Landing() {
+  const { products } = Route.useLoaderData();
   return (
+
     <SiteLayout>
       {/* Hero */}
       <section className="relative mx-auto max-w-[1600px] px-6 pb-10 pt-8 lg:px-12">
