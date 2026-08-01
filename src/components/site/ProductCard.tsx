@@ -30,9 +30,11 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
             {product.badge}
           </span>
         ) : null}
-        <span className="absolute right-3 top-3 rounded-full bg-accent px-3 py-1 text-[0.7rem] font-bold text-accent-foreground shadow-lift">
-          -{discount}%
-        </span>
+        {discount > 0 ? (
+          <span className="absolute right-3 top-3 rounded-full bg-accent px-3 py-1 text-[0.7rem] font-bold text-accent-foreground shadow-lift">
+            -{discount}%
+          </span>
+        ) : null}
       </div>
 
       <div className="px-3 pb-2 pt-4">
