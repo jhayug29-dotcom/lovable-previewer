@@ -1,11 +1,20 @@
 import { supabase } from "@/integrations/supabase/client";
 import { products as fallbackProducts } from "@/lib/products";
-import { mapProduct, PRODUCT_SELECT, type Row } from "@/lib/catalog-map";
+import {
+  mapProduct,
+  PRODUCT_SELECT,
+  type Row,
+  type DbProduct,
+  type Coupon,
+  type Banner,
+  type Sale,
+} from "@/lib/catalog-map";
 
 export { mapProduct } from "@/lib/catalog-map";
 export type { DbProduct, Coupon, Banner, Sale } from "@/lib/catalog-map";
 
 const SELECT = PRODUCT_SELECT;
+
 
 
 /** Products from the database; falls back to the built-in demo catalog until the backend has rows. */
