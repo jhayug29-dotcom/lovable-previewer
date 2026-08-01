@@ -12,7 +12,7 @@ import type { DbProduct } from "@/lib/catalog-map";
 export const Route = createFileRoute("/")({
   loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
-    links: [{ rel: "preload", as: "image", href: cardFan, fetchpriority: "high" }],
+    links: [{ rel: "preload", as: "image", href: cardFan }],
     meta: [
       { title: "Editly Store — Premium After Effects, LUT & SFX Packs" },
       {
