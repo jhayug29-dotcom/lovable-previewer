@@ -10,33 +10,142 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as ReadMoreRouteImport } from './routes/read-more'
+import { Route as StoreRouteImport } from './routes/store'
+import { Route as AuthIndexRouteImport } from './routes/auth.index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as PaymentStatusRouteImport } from './routes/payment.status'
+import { Route as ProductSlugRouteImport } from './routes/product.$slug'
+import { Route as ApiPublicCashfreeWebhookRouteImport } from './routes/api/public/cashfree-webhook'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReadMoreRoute = ReadMoreRouteImport.update({
+  id: '/read-more',
+  path: '/read-more',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StoreRoute = StoreRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthIndexRoute = AuthIndexRouteImport.update({
+  id: '/auth/',
+  path: '/auth/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentStatusRoute = PaymentStatusRouteImport.update({
+  id: '/payment/status',
+  path: '/payment/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductSlugRoute = ProductSlugRouteImport.update({
+  id: '/product/$slug',
+  path: '/product/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicCashfreeWebhookRoute =
+  ApiPublicCashfreeWebhookRouteImport.update({
+    id: '/api/public/cashfree-webhook',
+    path: '/api/public/cashfree-webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/read-more': typeof ReadMoreRoute
+  '/store': typeof StoreRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/payment/status': typeof PaymentStatusRoute
+  '/product/$slug': typeof ProductSlugRoute
+  '/auth/': typeof AuthIndexRoute
+  '/api/public/cashfree-webhook': typeof ApiPublicCashfreeWebhookRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/read-more': typeof ReadMoreRoute
+  '/store': typeof StoreRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/payment/status': typeof PaymentStatusRoute
+  '/product/$slug': typeof ProductSlugRoute
+  '/auth': typeof AuthIndexRoute
+  '/api/public/cashfree-webhook': typeof ApiPublicCashfreeWebhookRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/read-more': typeof ReadMoreRoute
+  '/store': typeof StoreRoute
+  '/auth/callback': typeof AuthCallbackRoute
+  '/payment/status': typeof PaymentStatusRoute
+  '/product/$slug': typeof ProductSlugRoute
+  '/auth/': typeof AuthIndexRoute
+  '/api/public/cashfree-webhook': typeof ApiPublicCashfreeWebhookRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/read-more'
+    | '/store'
+    | '/auth/callback'
+    | '/payment/status'
+    | '/product/$slug'
+    | '/auth/'
+    | '/api/public/cashfree-webhook'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/read-more'
+    | '/store'
+    | '/auth/callback'
+    | '/payment/status'
+    | '/product/$slug'
+    | '/auth'
+    | '/api/public/cashfree-webhook'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/read-more'
+    | '/store'
+    | '/auth/callback'
+    | '/payment/status'
+    | '/product/$slug'
+    | '/auth/'
+    | '/api/public/cashfree-webhook'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
+  ReadMoreRoute: typeof ReadMoreRoute
+  StoreRoute: typeof StoreRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
+  PaymentStatusRoute: typeof PaymentStatusRoute
+  ProductSlugRoute: typeof ProductSlugRoute
+  AuthIndexRoute: typeof AuthIndexRoute
+  ApiPublicCashfreeWebhookRoute: typeof ApiPublicCashfreeWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +157,75 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/read-more': {
+      id: '/read-more'
+      path: '/read-more'
+      fullPath: '/read-more'
+      preLoaderRoute: typeof ReadMoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/store': {
+      id: '/store'
+      path: '/store'
+      fullPath: '/store'
+      preLoaderRoute: typeof StoreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/': {
+      id: '/auth/'
+      path: '/auth'
+      fullPath: '/auth/'
+      preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/status': {
+      id: '/payment/status'
+      path: '/payment/status'
+      fullPath: '/payment/status'
+      preLoaderRoute: typeof PaymentStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/product/$slug': {
+      id: '/product/$slug'
+      path: '/product/$slug'
+      fullPath: '/product/$slug'
+      preLoaderRoute: typeof ProductSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/cashfree-webhook': {
+      id: '/api/public/cashfree-webhook'
+      path: '/api/public/cashfree-webhook'
+      fullPath: '/api/public/cashfree-webhook'
+      preLoaderRoute: typeof ApiPublicCashfreeWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
+  ReadMoreRoute: ReadMoreRoute,
+  StoreRoute: StoreRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
+  PaymentStatusRoute: PaymentStatusRoute,
+  ProductSlugRoute: ProductSlugRoute,
+  AuthIndexRoute: AuthIndexRoute,
+  ApiPublicCashfreeWebhookRoute: ApiPublicCashfreeWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,0 +1,19 @@
+# Keep media binary-safe so GitHub never mangles it on commit or upload.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.webm binary
+*.mov binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.pdf binary
+
+# Normalise line endings for text so builds behave the same on every OS.
+* text=auto eol=lf
