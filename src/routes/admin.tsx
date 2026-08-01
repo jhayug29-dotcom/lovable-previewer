@@ -225,6 +225,10 @@ function PrimaryButton({
 function useTable<T>(table: string, order = "created_at") {
   return useQuery<T[]>({
     queryKey: [table],
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
     queryFn: async () => {
       if (!supabase) return [];
       const { data, error } = await supabase.from(table).select("*").order(order, { ascending: false });
@@ -233,6 +237,7 @@ function useTable<T>(table: string, order = "created_at") {
     },
   });
 }
+
 
 function useSave(table: string) {
   const qc = useQueryClient();

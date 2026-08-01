@@ -5,10 +5,14 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal, CountUp } from "@/components/site/Reveal";
 import { VideoCarousel } from "@/components/site/VideoCarousel";
-import { products } from "@/lib/products";
+import { getStoreProducts } from "@/lib/catalog.functions";
+import type { DbProduct } from "@/lib/catalog-map";
+
 
 export const Route = createFileRoute("/")({
+  loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
+    links: [{ rel: "preload", as: "image", href: cardFan }],
     meta: [
       { title: "Editly Store — Premium After Effects, LUT & SFX Packs" },
       {
@@ -28,6 +32,7 @@ export const Route = createFileRoute("/")({
   component: Landing,
 });
 
+
 const perks = [
   { icon: Download, title: "Instant delivery", body: "Your download link lands the second your payment clears." },
   { icon: ShieldCheck, title: "Commercial licence", body: "Use every asset in client work, ads and monetised videos." },
@@ -44,7 +49,10 @@ const stats = [
 
 
 function Landing() {
+  const { products } = Route.useLoaderData() as { products: DbProduct[] };
+
   return (
+
     <SiteLayout>
       {/* Hero */}
       <section className="relative mx-auto max-w-[1600px] px-6 pb-10 pt-8 lg:px-12">

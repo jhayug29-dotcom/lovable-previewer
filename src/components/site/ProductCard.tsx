@@ -3,7 +3,10 @@ import { Star, ArrowUpRight } from "lucide-react";
 import { formatPrice, type Product } from "@/lib/products";
 
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
-  const discount = Math.round((1 - product.price / product.originalPrice) * 100);
+  const discount =
+    product.originalPrice > product.price
+      ? Math.round((1 - product.price / product.originalPrice) * 100)
+      : 0;
 
   return (
     <Link
@@ -27,9 +30,11 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
             {product.badge}
           </span>
         ) : null}
-        <span className="absolute right-3 top-3 rounded-full bg-accent px-3 py-1 text-[0.7rem] font-bold text-accent-foreground shadow-lift">
-          -{discount}%
-        </span>
+        {discount > 0 ? (
+          <span className="absolute right-3 top-3 rounded-full bg-accent px-3 py-1 text-[0.7rem] font-bold text-accent-foreground shadow-lift">
+            -{discount}%
+          </span>
+        ) : null}
       </div>
 
       <div className="px-3 pb-2 pt-4">
@@ -46,8 +51,12 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
 
         <div className="mt-4 flex items-end justify-between">
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-2xl font-extrabold text-ink">{formatPrice(product.price)}</span>
-            <span className="text-sm text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
+            <span className="font-display text-2xl font-extrabold text-ink">
+              {product.isFree ? "Free" : formatPrice(product.price)}
+            </span>
+            {discount > 0 ? (
+              <span className="text-sm text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
+            ) : null}
           </div>
           <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform duration-500 ease-[var(--ease-macos)] group-hover:scale-110 group-hover:-rotate-12">
             <ArrowUpRight className="size-5" strokeWidth={1.8} />

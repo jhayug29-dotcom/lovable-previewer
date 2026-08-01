@@ -3,9 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
-import { categories, products, type Category } from "@/lib/products";
+import { categories, type Category } from "@/lib/products";
+import { getStoreProducts } from "@/lib/catalog.functions";
+import type { DbProduct } from "@/lib/catalog-map";
+
 
 export const Route = createFileRoute("/store")({
+  loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
     meta: [
       { title: "Store — After Effects, LUTs, Extensions & SFX | Editly Store" },
@@ -26,6 +30,7 @@ export const Route = createFileRoute("/store")({
   component: StorePage,
 });
 
+
 type SortKey = "popular" | "price-low" | "price-high" | "rating";
 
 const sortOptions: { key: SortKey; label: string }[] = [
@@ -36,6 +41,7 @@ const sortOptions: { key: SortKey; label: string }[] = [
 ];
 
 function StorePage() {
+  const { products } = Route.useLoaderData() as { products: DbProduct[] };
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "All">("All");
   const [sort, setSort] = useState<SortKey>("popular");
@@ -58,7 +64,8 @@ function StorePage() {
       if (sort === "rating") return b.rating - a.rating;
       return b.sales - a.sales;
     });
-  }, [query, category, sort]);
+  }, [products, query, category, sort]);
+
 
   return (
     <SiteLayout>
