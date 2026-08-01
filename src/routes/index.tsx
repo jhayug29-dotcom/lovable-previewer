@@ -47,7 +47,8 @@ const stats = [
 
 
 function Landing() {
-  const { products } = Route.useLoaderData();
+  const { products } = Route.useLoaderData() as { products: DbProduct[] };
+
   return (
 
     <SiteLayout>
