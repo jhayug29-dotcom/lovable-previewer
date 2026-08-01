@@ -5,17 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Design system definition.
- *
- * The @theme inline block maps CSS custom properties to Tailwind utility
- * classes (e.g. --color-primary -> bg-primary, text-primary).
- *
- * The :root and .dark blocks define the actual color values using oklch.
- * All colors MUST use oklch format.
- *
- * To add a new semantic color:
- * 1. Add the variable to :root (light value) and .dark (dark value)
- * 2. Register it in @theme inline as --color-<name>: var(--<name>)
+ * Editly Store design system — premium light theme, lavender/violet dusk palette
+ * tuned to the fixed hero background. All colors are oklch semantic tokens.
  */
 
 @theme inline {
@@ -46,90 +37,48 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  --color-ink: var(--ink);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-lilac: var(--lilac);
+  --color-peach: var(--peach);
+  --color-violet-deep: var(--violet-deep);
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --shadow-glass: 0 1px 1px oklch(1 0 0 / 55%) inset, 0 18px 50px -20px oklch(0.35 0.09 290 / 35%);
+  --shadow-float: 0 30px 70px -30px oklch(0.35 0.09 290 / 45%);
+  --shadow-lift: 0 14px 34px -18px oklch(0.35 0.09 290 / 40%);
+  --ease-macos: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.129 0.042 264.695);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.129 0.042 264.695);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.129 0.042 264.695);
-  --primary: oklch(0.208 0.042 265.755);
-  --primary-foreground: oklch(0.984 0.003 247.858);
-  --secondary: oklch(0.968 0.007 247.896);
-  --secondary-foreground: oklch(0.208 0.042 265.755);
-  --muted: oklch(0.968 0.007 247.896);
-  --muted-foreground: oklch(0.554 0.046 257.417);
-  --accent: oklch(0.968 0.007 247.896);
-  --accent-foreground: oklch(0.208 0.042 265.755);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(0.929 0.013 255.508);
-  --input: oklch(0.929 0.013 255.508);
-  --ring: oklch(0.704 0.04 256.788);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.984 0.003 247.858);
-  --sidebar-foreground: oklch(0.129 0.042 264.695);
-  --sidebar-primary: oklch(0.208 0.042 265.755);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.968 0.007 247.896);
-  --sidebar-accent-foreground: oklch(0.208 0.042 265.755);
-  --sidebar-border: oklch(0.929 0.013 255.508);
-  --sidebar-ring: oklch(0.704 0.04 256.788);
-}
+  --radius: 1.25rem;
+  --background: oklch(0.965 0.015 300);
+  --foreground: oklch(0.16 0.03 290);
+  --card: oklch(1 0 0 / 62%);
+  --card-foreground: oklch(0.16 0.03 290);
+  --popover: oklch(0.99 0.005 300);
+  --popover-foreground: oklch(0.16 0.03 290);
+  --primary: oklch(0.18 0.02 290);
+  --primary-foreground: oklch(0.985 0.005 300);
+  --secondary: oklch(1 0 0 / 55%);
+  --secondary-foreground: oklch(0.22 0.03 290);
+  --muted: oklch(0.94 0.015 300);
+  --muted-foreground: oklch(0.45 0.04 290);
+  --accent: oklch(0.62 0.19 295);
+  --accent-foreground: oklch(0.985 0.005 300);
+  --destructive: oklch(0.6 0.22 20);
+  --destructive-foreground: oklch(0.985 0.005 300);
+  --border: oklch(1 0 0 / 45%);
+  --input: oklch(1 0 0 / 60%);
+  --ring: oklch(0.62 0.19 295);
 
-.dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --ink: oklch(0.14 0.02 290);
+  --glass: oklch(1 0 0 / 55%);
+  --glass-border: oklch(1 0 0 / 70%);
+  --lilac: oklch(0.82 0.08 300);
+  --peach: oklch(0.9 0.06 45);
+  --violet-deep: oklch(0.42 0.13 292);
 }
 
 @layer base {
@@ -137,8 +86,259 @@
     border-color: var(--color-border);
   }
 
+  html {
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
   }
 }
+
+/* Apple-style liquid glass surface — layered highlight + specular edge */
+@utility glass {
+  position: relative;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in oklab, white 72%, transparent),
+      color-mix(in oklab, white 34%, transparent) 48%,
+      color-mix(in oklab, white 52%, transparent)
+    );
+  backdrop-filter: blur(34px) saturate(190%) brightness(1.04);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 70%) inset,
+    0 -1px 0 oklch(1 0 0 / 25%) inset,
+    0 22px 60px -26px oklch(0.35 0.09 290 / 38%);
+}
+
+@utility glass-soft {
+  background: color-mix(in oklab, white 38%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid color-mix(in oklab, white 55%, transparent);
+}
+
+@utility text-balance-tight {
+  text-wrap: balance;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(-0.6deg);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+@utility animate-float-slow {
+  animation: float-slow 7s var(--ease-macos) infinite;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(-0.8deg);
+  }
+}
+
+/* Slow, smooth floating for the hero artwork */
+@utility animate-drift {
+  animation: drift 11s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+@utility animate-rise-in {
+  animation: rise-in 0.8s var(--ease-macos) both;
+}
+
+@utility hover-lift {
+  transition:
+    transform 0.5s var(--ease-macos),
+    box-shadow 0.5s var(--ease-macos);
+  &:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-float);
+  }
+}
+
+/* Quick, snappy pop for cards / columns on hover */
+@utility hover-pop {
+  transition:
+    transform 0.24s cubic-bezier(0.22, 1.2, 0.36, 1),
+    box-shadow 0.24s var(--ease-macos),
+    border-color 0.24s ease;
+  will-change: transform;
+  &:hover {
+    transform: translateY(-10px) scale(1.025);
+    box-shadow: var(--shadow-float);
+  }
+  &:active {
+    transform: translateY(-4px) scale(1.005);
+  }
+}
+
+/* Button with a light sweep on hover */
+@utility btn-shine {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.24s cubic-bezier(0.22, 1.2, 0.36, 1);
+  &:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+  &:active {
+    transform: scale(0.96);
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 40%;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, white 55%, transparent), transparent);
+    transform: translateX(-140%);
+    pointer-events: none;
+  }
+  &:hover::after {
+    animation: shimmer-sweep 0.9s var(--ease-macos);
+  }
+}
+
+/* ---------------------------------------------- zero-gravity + morph motion */
+
+@keyframes zero-g {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate3d(6px, -12px, 0) rotate(0.7deg) scale(1.006);
+  }
+  50% {
+    transform: translate3d(-4px, -20px, 0) rotate(-0.6deg) scale(1.01);
+  }
+  75% {
+    transform: translate3d(-7px, -9px, 0) rotate(0.4deg) scale(1.004);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+}
+
+/* Weightless drifting — elements look suspended in mid-air */
+@utility animate-zero-g {
+  animation: zero-g 13s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+/* Dynamic-Island style morph: bouncy scale + radius + shadow on hover */
+@utility morph-card {
+  transition:
+    transform 0.55s cubic-bezier(0.18, 1.35, 0.28, 1),
+    border-radius 0.55s cubic-bezier(0.18, 1.35, 0.28, 1),
+    box-shadow 0.55s var(--ease-macos);
+  will-change: transform;
+  &:hover {
+    transform: translateY(-10px) scale(1.028);
+    border-radius: calc(var(--radius) + 30px);
+    box-shadow: var(--shadow-float);
+  }
+  &:active {
+    transform: translateY(-3px) scale(0.995);
+  }
+}
+
+/* Springy press feedback for icon buttons */
+@utility press-pop {
+  transition: transform 0.4s cubic-bezier(0.18, 1.4, 0.3, 1);
+  &:hover {
+    transform: scale(1.09);
+  }
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
+/* Scroll reveal states (driven by the Reveal component) */
+@utility reveal {
+  opacity: 0;
+  transition:
+    opacity 0.9s var(--ease-macos),
+    transform 0.9s cubic-bezier(0.2, 1.15, 0.32, 1),
+    filter 0.9s var(--ease-macos);
+  &.is-in {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@utility reveal-up {
+  transform: translateY(38px);
+}
+
+@utility reveal-scale {
+  transform: translateY(24px) scale(0.94);
+}
+
+@utility reveal-blur {
+  transform: translateY(18px);
+  filter: blur(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drift,
+  .animate-float-slow,
+  .animate-zero-g {
+    animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+

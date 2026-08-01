@@ -27,3 +27,35 @@ npm run dev
 - TypeScript
 - React
 - Tailwind CSS
+
+
+## Deploying
+
+The app is platform-agnostic: the frontend is a standard Vite build and the
+server runs through Nitro, so the same code deploys to Vercel, Netlify,
+Cloudflare or a plain Node server.
+
+### Vercel
+
+1. Push the repo to GitHub and import it in Vercel.
+2. Build command `vite build`, output directory `.vercel/output`
+   (already set in `vercel.json`, which also pins `NITRO_PRESET=vercel`).
+3. Add the environment variables from `.env.example` in
+   Project Settings -> Environment Variables.
+
+### Other targets
+
+Set `NITRO_PRESET` to `netlify`, `cloudflare-module` or `node-server` and run
+`npm run build`.
+
+### Environment variables
+
+Copy `.env.example` to `.env` for local development. `VITE_*` values are
+browser-safe; everything else (service role key, Cashfree secret, Gemini key)
+is server-only and must never be prefixed with `VITE_`.
+
+### Media
+
+All images live in `src/assets` as `.jpg` / `.webp` and are imported directly,
+so nothing depends on external hosting. `.gitattributes` marks media as binary
+so GitHub never corrupts it.
