@@ -14,3 +14,9 @@ export const getStoreProduct = createServerFn({ method: "GET" })
     const [product, all] = await Promise.all([loadProduct(data.slug), loadProducts()]);
     return { product, related: all.filter((p) => p.slug !== data.slug).slice(0, 3) };
   });
+
+/** Active sale + festive banners for the storefront. Public, cached server-side. */
+export const getStorePromos = createServerFn({ method: "GET" }).handler(async () => {
+  const { loadPromos } = await import("./catalog.server");
+  return loadPromos();
+});

@@ -38,6 +38,26 @@ async function loadProduct(slug: string): Promise<ProductRow> {
   return data as ProductRow;
 }
 
+/** Honours the live store-wide / per-product sale so checkout matches the storefront. */
+async function applySalePricing(productId: string, price: number): Promise<number> {
+  try {
+    const { loadPromos } = await import("./catalog.server");
+    const { sale } = await loadPromos();
+    if (!sale) return price;
+    const ids = sale.product_ids ?? [];
+    if (ids.length > 0 && !ids.includes(productId)) return price;
+    const next =
+      sale.sale_type === "flat" && sale.flat_price !== null
+        ? Math.round(sale.flat_price)
+        : sale.percent_off
+          ? Math.round(price * (1 - sale.percent_off / 100))
+          : price;
+    return next > 0 && next < price ? next : price;
+  } catch {
+    return price;
+  }
+}
+
 async function applyCoupon(amount: number, code: string | undefined): Promise<number> {
   if (!code) return amount;
   const { data } = await adminClient()
@@ -67,7 +87,8 @@ export async function createOrder(input: CreateOrderInput) {
   const product = await loadProduct(input.slug);
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
-  const amount = await applyCoupon(Number(product.price), input.couponCode);
+  const salePrice = await applySalePricing(product.id, Number(product.price));
+  const amount = await applyCoupon(salePrice, input.couponCode);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
 

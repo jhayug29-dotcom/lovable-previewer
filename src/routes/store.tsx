@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
+import { PromoBanners } from "@/components/site/PromoBanners";
+import { SupportChat } from "@/components/site/SupportChat";
 import { categories, type Category } from "@/lib/products";
 import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
@@ -69,6 +71,7 @@ function StorePage() {
 
   return (
     <SiteLayout>
+      <PromoBanners />
       <section className="mx-auto max-w-[1600px] px-6 pt-6 lg:px-12">
         <h1 className="animate-rise-in max-w-3xl font-display text-[clamp(2.2rem,5vw,4rem)] font-extrabold leading-[1.02] text-ink">
           The store.
@@ -164,6 +167,7 @@ function StorePage() {
           </div>
         )}
       </section>
+      <SupportChat />
     </SiteLayout>
   );
 }
