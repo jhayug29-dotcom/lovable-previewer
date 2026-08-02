@@ -1,6 +1,6 @@
 import { adminClient } from "./supabase.server";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-flash-latest";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
