@@ -15,6 +15,7 @@ import {
   Save,
   Lock,
   LifeBuoy,
+  MessageCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
@@ -46,6 +47,7 @@ const TABS = [
   { id: "coupons", label: "Coupons", icon: Ticket },
   { id: "banners", label: "Banners", icon: ImageIcon },
   { id: "sales", label: "Sales", icon: Megaphone },
+  { id: "support", label: "Support inbox", icon: MessageCircle },
   { id: "settings", label: "Contact", icon: LifeBuoy },
   { id: "admins", label: "Admins", icon: Shield },
 ] as const;
@@ -121,6 +123,7 @@ function AdminPage() {
           {tab === "coupons" ? <CouponsTab /> : null}
           {tab === "banners" ? <BannersTab /> : null}
           {tab === "sales" ? <SalesTab /> : null}
+          {tab === "support" ? <SupportTab /> : null}
           {tab === "settings" ? <SettingsTab /> : null}
           {tab === "admins" ? <AdminsTab /> : null}
         </div>
@@ -654,44 +657,211 @@ function CouponsTab() {
 
 /* ---------------------------------------------------------------- banners */
 
-type BannerRow = { id: string; title: string; subtitle: string | null; image_url: string | null; active: boolean };
+type BannerRow = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  image_url: string | null;
+  link_url: string | null;
+  emoji: string | null;
+  cta_label: string | null;
+  bg_from: string | null;
+  bg_to: string | null;
+  text_color: string | null;
+  active: boolean;
+  sort_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+};
+
+const FESTIVE_PRESETS: { name: string; emoji: string; from: string; to: string; text: string }[] = [
+  { name: "Diwali", emoji: "\u{1FA94}", from: "#F59E0B", to: "#DC2626", text: "#FFFFFF" },
+  { name: "Holi", emoji: "\u{1F3A8}", from: "#EC4899", to: "#22C55E", text: "#FFFFFF" },
+  { name: "New Year", emoji: "\u{1F386}", from: "#0F172A", to: "#6366F1", text: "#FFFFFF" },
+  { name: "Christmas", emoji: "\u{1F384}", from: "#166534", to: "#B91C1C", text: "#FFFFFF" },
+  { name: "Independence Day", emoji: "\u{1F1EE}\u{1F1F3}", from: "#F97316", to: "#16A34A", text: "#FFFFFF" },
+  { name: "Mega sale", emoji: "\u{1F525}", from: "#7C3AED", to: "#DB2777", text: "#FFFFFF" },
+];
+
+const emptyBanner = {
+  id: "",
+  title: "",
+  subtitle: "",
+  image_url: "",
+  link_url: "",
+  emoji: "",
+  cta_label: "",
+  bg_from: "#7C3AED",
+  bg_to: "#DB2777",
+  text_color: "#FFFFFF",
+  sort_order: "0",
+  starts_at: "",
+  ends_at: "",
+  active: true,
+};
+
+function toLocalInput(value: string | null): string {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function toIso(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
 
 function BannersTab() {
   const { data: rows = [] } = useTable<BannerRow>("banners");
   const save = useSave("banners");
   const remove = useRemove("banners");
-  const [title, setTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [image, setImage] = useState("");
-  const [link, setLink] = useState("");
+  const [form, setForm] = useState({ ...emptyBanner });
+
+  const set = (key: keyof typeof form) => (v: string | boolean) => setForm((f) => ({ ...f, [key]: v }));
+
+  const load = (row: BannerRow) =>
+    setForm({
+      id: row.id,
+      title: row.title,
+      subtitle: row.subtitle ?? "",
+      image_url: row.image_url ?? "",
+      link_url: row.link_url ?? "",
+      emoji: row.emoji ?? "",
+      cta_label: row.cta_label ?? "",
+      bg_from: row.bg_from ?? "#7C3AED",
+      bg_to: row.bg_to ?? "#DB2777",
+      text_color: row.text_color ?? "#FFFFFF",
+      sort_order: String(row.sort_order ?? 0),
+      starts_at: toLocalInput(row.starts_at),
+      ends_at: toLocalInput(row.ends_at),
+      active: row.active,
+    });
+
+  const submit = () => {
+    if (!form.title) {
+      toast.error("Enter a title");
+      return;
+    }
+    save.mutate({
+      ...(form.id ? { id: form.id } : {}),
+      title: form.title,
+      subtitle: form.subtitle,
+      image_url: form.image_url || null,
+      link_url: form.link_url || null,
+      emoji: form.emoji,
+      cta_label: form.cta_label,
+      bg_from: form.bg_from,
+      bg_to: form.bg_to,
+      text_color: form.text_color,
+      sort_order: Number(form.sort_order || 0),
+      starts_at: toIso(form.starts_at),
+      ends_at: toIso(form.ends_at),
+      active: form.active,
+    });
+    setForm({ ...emptyBanner });
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-      <Card title="Add a banner">
-        <Text label="Title" value={title} onChange={setTitle} />
-        <Text label="Subtitle" value={subtitle} onChange={setSubtitle} />
-        <Text label="Image URL" value={image} onChange={setImage} />
-        <Text label="Link URL" value={link} onChange={setLink} />
-        <PrimaryButton
-          busy={save.isPending}
-          onClick={() => {
-            if (!title) {
-              toast.error("Enter a title");
-              return;
-            }
-            save.mutate({ title, subtitle, image_url: image || null, link_url: link || null, active: true });
-            setTitle("");
-            setSubtitle("");
-            setImage("");
-            setLink("");
+      <Card title={form.id ? "Edit festive banner" : "Create a festive banner"}>
+        <div className="flex flex-wrap gap-2">
+          {FESTIVE_PRESETS.map((p) => (
+            <button
+              key={p.name}
+              type="button"
+              onClick={() =>
+                setForm((f) => ({ ...f, emoji: p.emoji, bg_from: p.from, bg_to: p.to, text_color: p.text }))
+              }
+              className="rounded-full px-4 py-2 text-xs font-bold text-white shadow-lift transition-transform hover:scale-105"
+              style={{ backgroundImage: `linear-gradient(120deg, ${p.from}, ${p.to})` }}
+            >
+              {p.emoji} {p.name}
+            </button>
+          ))}
+        </div>
+
+        <Text label="Headline" value={form.title} onChange={set("title") as (v: string) => void} placeholder="Diwali sale is live" />
+        <Text label="Subtitle" value={form.subtitle} onChange={set("subtitle") as (v: string) => void} />
+        <div className="grid grid-cols-2 gap-3">
+          <Text label="Emoji" value={form.emoji} onChange={set("emoji") as (v: string) => void} />
+          <Text label="Button text" value={form.cta_label} onChange={set("cta_label") as (v: string) => void} placeholder="Shop the sale" />
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          <Text label="Colour from" type="color" value={form.bg_from} onChange={set("bg_from") as (v: string) => void} />
+          <Text label="Colour to" type="color" value={form.bg_to} onChange={set("bg_to") as (v: string) => void} />
+          <Text label="Text colour" type="color" value={form.text_color} onChange={set("text_color") as (v: string) => void} />
+        </div>
+        <Text label="Background image URL (optional)" value={form.image_url} onChange={set("image_url") as (v: string) => void} />
+        <Text label="Link URL (optional)" value={form.link_url} onChange={set("link_url") as (v: string) => void} />
+        <div className="grid grid-cols-2 gap-3">
+          <Text label="Starts" type="datetime-local" value={form.starts_at} onChange={set("starts_at") as (v: string) => void} />
+          <Text label="Ends" type="datetime-local" value={form.ends_at} onChange={set("ends_at") as (v: string) => void} />
+        </div>
+        <Text label="Sort order" type="number" value={form.sort_order} onChange={set("sort_order") as (v: string) => void} />
+        <Toggle label="Show on the storefront" value={form.active} onChange={set("active") as (v: boolean) => void} />
+
+        <div
+          className="rounded-3xl px-6 py-5"
+          style={{
+            backgroundImage: `linear-gradient(120deg, ${form.bg_from}, ${form.bg_to})`,
+            color: form.text_color,
           }}
         >
-          <Plus className="size-4" strokeWidth={1.9} />
-          Add banner
+          <p className="font-display text-lg font-extrabold">
+            {form.emoji} {form.title || "Live preview"}
+          </p>
+          {form.subtitle ? <p className="mt-1 text-sm opacity-90">{form.subtitle}</p> : null}
+        </div>
+
+        <PrimaryButton onClick={submit} busy={save.isPending}>
+          {form.id ? <Save className="size-4" strokeWidth={1.9} /> : <Plus className="size-4" strokeWidth={1.9} />}
+          {form.id ? "Save banner" : "Add banner"}
         </PrimaryButton>
+        {form.id ? (
+          <button
+            type="button"
+            onClick={() => setForm({ ...emptyBanner })}
+            className="w-full text-center text-xs text-muted-foreground hover:text-ink"
+          >
+            Cancel editing
+          </button>
+        ) : null}
       </Card>
+
       <Card title={`Banners (${rows.length})`}>
-        <RowList rows={rows} onDelete={(id) => remove.mutate(id)} render={(b) => b.title} />
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No banners yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 transition-colors hover:bg-white/75"
+              >
+                <button type="button" onClick={() => load(row)} className="min-w-0 flex-1 text-left">
+                  <p className="truncate font-display text-sm font-bold text-ink">
+                    {row.emoji} {row.title}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {row.active ? "live" : "hidden"}
+                    {row.ends_at ? ` · until ${new Date(row.ends_at).toLocaleDateString("en-IN")}` : ""}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove.mutate(row.id)}
+                  aria-label="Delete banner"
+                  className="text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.8} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
@@ -699,51 +869,281 @@ function BannersTab() {
 
 /* ------------------------------------------------------------------ sales */
 
-type SaleRow = { id: string; title: string; percent_off: number | null; active: boolean };
+type SaleRow = {
+  id: string;
+  title: string;
+  description: string | null;
+  sale_type: "percent" | "flat";
+  percent_off: number | null;
+  flat_price: number | null;
+  product_ids: string[] | null;
+  badge_label: string | null;
+  active: boolean;
+  starts_at: string | null;
+  ends_at: string | null;
+};
+
+const emptySale = {
+  id: "",
+  title: "",
+  description: "",
+  sale_type: "percent" as "percent" | "flat",
+  percent_off: "20",
+  flat_price: "99",
+  badge_label: "SALE",
+  starts_at: "",
+  ends_at: "",
+  active: true,
+};
 
 function SalesTab() {
   const { data: rows = [] } = useTable<SaleRow>("sales");
+  const { data: products = [] } = useTable<ProductRow>("products");
   const save = useSave("sales");
   const remove = useRemove("sales");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [percent, setPercent] = useState("20");
+  const [form, setForm] = useState({ ...emptySale });
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const set = (key: keyof typeof form) => (v: string | boolean) => setForm((f) => ({ ...f, [key]: v }));
+
+  const load = (row: SaleRow) => {
+    setForm({
+      id: row.id,
+      title: row.title,
+      description: row.description ?? "",
+      sale_type: row.sale_type === "flat" ? "flat" : "percent",
+      percent_off: String(row.percent_off ?? 20),
+      flat_price: String(row.flat_price ?? 99),
+      badge_label: row.badge_label ?? "SALE",
+      starts_at: toLocalInput(row.starts_at),
+      ends_at: toLocalInput(row.ends_at),
+      active: row.active,
+    });
+    setPicked(row.product_ids ?? []);
+  };
+
+  const toggleProduct = (id: string) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  const submit = () => {
+    if (!form.title) {
+      toast.error("Enter a headline");
+      return;
+    }
+    save.mutate({
+      ...(form.id ? { id: form.id } : {}),
+      title: form.title,
+      description: form.description,
+      sale_type: form.sale_type,
+      percent_off: form.sale_type === "percent" ? Number(form.percent_off || 0) : null,
+      flat_price: form.sale_type === "flat" ? Number(form.flat_price || 0) : null,
+      product_ids: picked,
+      badge_label: form.badge_label || null,
+      starts_at: toIso(form.starts_at),
+      ends_at: toIso(form.ends_at),
+      active: form.active,
+    });
+    setForm({ ...emptySale });
+    setPicked([]);
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-      <Card title="Run a sale advertisement">
-        <Text label="Headline" value={title} onChange={setTitle} placeholder="Monsoon sale — 40% off" />
-        <Area label="Description" value={description} onChange={setDescription} />
-        <Text label="Discount %" type="number" value={percent} onChange={setPercent} />
-        <PrimaryButton
-          busy={save.isPending}
-          onClick={() => {
-            if (!title) {
-              toast.error("Enter a headline");
-              return;
-            }
-            save.mutate({ title, description, percent_off: Number(percent), active: true });
-            setTitle("");
-            setDescription("");
-          }}
-        >
+      <Card title={form.id ? "Edit sale" : "Run a sale"}>
+        <Text label="Headline" value={form.title} onChange={set("title") as (v: string) => void} placeholder="Diwali sale — everything at ₹99" />
+        <Area label="Description" value={form.description} onChange={set("description") as (v: string) => void} />
+
+        <div className="grid grid-cols-2 gap-2">
+          {(
+            [
+              { id: "percent", label: "Percent off" },
+              { id: "flat", label: "Flat price" },
+            ] as const
+          ).map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setForm((f) => ({ ...f, sale_type: option.id }))}
+              className={`rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${
+                form.sale_type === option.id ? "bg-primary text-primary-foreground" : "bg-white/60 text-ink/75 hover:bg-white/85"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        {form.sale_type === "percent" ? (
+          <Text label="Discount %" type="number" value={form.percent_off} onChange={set("percent_off") as (v: string) => void} />
+        ) : (
+          <Text label="Flat price for every product in the sale (₹)" type="number" value={form.flat_price} onChange={set("flat_price") as (v: string) => void} />
+        )}
+
+        <Text label="Badge shown on cards" value={form.badge_label} onChange={set("badge_label") as (v: string) => void} />
+
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Products ({picked.length === 0 ? "all products" : `${picked.length} selected`})
+          </p>
+          <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-2xl bg-white/45 p-2">
+            {products.length === 0 ? (
+              <p className="px-2 py-1 text-sm text-muted-foreground">No products yet.</p>
+            ) : (
+              products.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => toggleProduct(p.id)}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                    picked.includes(p.id) ? "bg-primary text-primary-foreground" : "text-ink hover:bg-white/70"
+                  }`}
+                >
+                  <span className="truncate">{p.title}</span>
+                  <span className="text-xs opacity-80">₹{p.price}</span>
+                </button>
+              ))
+            )}
+          </div>
+          <p className="mt-1.5 text-xs text-muted-foreground">Leave everything unselected to apply the sale to the whole store.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Text label="Starts" type="datetime-local" value={form.starts_at} onChange={set("starts_at") as (v: string) => void} />
+          <Text label="Ends" type="datetime-local" value={form.ends_at} onChange={set("ends_at") as (v: string) => void} />
+        </div>
+        <Toggle label="Sale is live" value={form.active} onChange={set("active") as (v: boolean) => void} />
+
+        <PrimaryButton onClick={submit} busy={save.isPending}>
           <Megaphone className="size-4" strokeWidth={1.9} />
-          Publish sale
+          {form.id ? "Save sale" : "Publish sale"}
         </PrimaryButton>
+        {form.id ? (
+          <button
+            type="button"
+            onClick={() => {
+              setForm({ ...emptySale });
+              setPicked([]);
+            }}
+            className="w-full text-center text-xs text-muted-foreground hover:text-ink"
+          >
+            Cancel editing
+          </button>
+        ) : null}
       </Card>
+
       <Card title={`Sales (${rows.length})`}>
-        <RowList
-          rows={rows}
-          onDelete={(id) => remove.mutate(id)}
-          render={(s) => (
-            <>
-              <span className="font-semibold">{s.title}</span>{" "}
-              <span className="text-muted-foreground">{s.percent_off ?? 0}% off</span>
-            </>
-          )}
-        />
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No sales yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((row) => (
+              <li
+                key={row.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 transition-colors hover:bg-white/75"
+              >
+                <button type="button" onClick={() => load(row)} className="min-w-0 flex-1 text-left">
+                  <p className="truncate font-display text-sm font-bold text-ink">{row.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {row.sale_type === "flat" ? `Flat ₹${row.flat_price ?? 0}` : `${row.percent_off ?? 0}% off`} ·{" "}
+                    {(row.product_ids ?? []).length === 0 ? "all products" : `${(row.product_ids ?? []).length} products`} ·{" "}
+                    {row.active ? "live" : "off"}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove.mutate(row.id)}
+                  aria-label="Delete sale"
+                  className="text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.8} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
+  );
+}
+
+/* --------------------------------------------------------- support inbox */
+
+type SupportRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  topic: string;
+  message: string;
+  reply: string | null;
+  handled: boolean;
+  created_at: string;
+};
+
+function SupportTab() {
+  const { data: rows = [] } = useTable<SupportRow>("support_messages");
+  const save = useSave("support_messages");
+  const remove = useRemove("support_messages");
+  const [filter, setFilter] = useState<"all" | "question" | "payment" | "complaint">("all");
+
+  const visible = rows.filter((r) => filter === "all" || r.topic === filter);
+
+  return (
+    <Card title={`Support inbox (${visible.length})`}>
+      <div className="flex flex-wrap gap-2">
+        {(["all", "question", "payment", "complaint"] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            onClick={() => setFilter(f)}
+            className={`rounded-full px-4 py-2 text-xs font-semibold capitalize transition-colors ${
+              filter === f ? "bg-primary text-primary-foreground" : "bg-white/60 text-ink/75 hover:bg-white/85"
+            }`}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing here yet.</p>
+      ) : (
+        <ul className="space-y-2">
+          {visible.map((row) => (
+            <li key={row.id} className="rounded-2xl bg-white/55 px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold uppercase tracking-wider text-violet-deep">
+                    {row.topic} · {new Date(row.created_at).toLocaleString("en-IN")}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ink">{row.email || row.name || "Anonymous"}</p>
+                  <p className="mt-1 text-sm text-ink/85">{row.message}</p>
+                  {row.reply ? <p className="mt-1 text-xs text-muted-foreground">Bot replied: {row.reply}</p> : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => save.mutate({ id: row.id, handled: !row.handled })}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                      row.handled ? "bg-accent text-accent-foreground" : "bg-primary text-primary-foreground"
+                    }`}
+                  >
+                    {row.handled ? "Handled" : "Mark done"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove.mutate(row.id)}
+                    aria-label="Delete message"
+                    className="text-muted-foreground transition-colors hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" strokeWidth={1.8} />
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
