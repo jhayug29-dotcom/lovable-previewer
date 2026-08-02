@@ -1,6 +1,6 @@
 import { requireAdmin, adminClient } from "./supabase.server";
 
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-flash-latest";
 
 export type GeneratedReview = { name: string; handle: string; rating: number; body: string };
 
