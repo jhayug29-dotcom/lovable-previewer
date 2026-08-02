@@ -48,7 +48,7 @@ export function SupportChat() {
     try {
       const { reply } = await ask({
         data: {
-          messages: next.filter((m) => m.role === "user" || messages.indexOf(m) > 0),
+          messages: next,
           topic,
           ...(email.trim() ? { email: email.trim() } : {}),
         },
