@@ -58,9 +58,10 @@ export async function askSupport(input: SupportInput): Promise<{ reply: string }
   const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
 
   let reply = "";
+  const lovableKey = process.env["LOVABLE_API_KEY"];
   const apiKey = process.env["GEMINI_API_KEY"];
 
-  if (apiKey && lastUser) {
+  if ((lovableKey || apiKey) && lastUser) {
     try {
       const context = await storeContext();
       const system = `You are the friendly support assistant for Editly Store, an Indian digital store selling After Effects packs, LUTs, Premiere extensions and SFX packs. Payments run through Cashfree and downloads are emailed instantly after payment.
@@ -70,26 +71,47 @@ Answer in 1-3 short sentences, plain language, no markdown headings. Never inven
 STORE FACTS:
 ${context}`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: history.map((m) => ({
-            role: m.role === "user" ? "user" : "model",
-            parts: [{ text: m.content }],
-          })),
-          generationConfig: { temperature: 0.6, maxOutputTokens: 400 },
-        }),
-      });
-      const payload = (await response.json()) as {
-        candidates?: { content?: { parts?: { text?: string }[] } }[];
-      };
-      reply = payload.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+      if (lovableKey) {
+        // Lovable AI Gateway — no separate Gemini key needed.
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${lovableKey}` },
+          body: JSON.stringify({
+            model: "google/gemini-3.6-flash",
+            messages: [
+              { role: "system", content: system },
+              ...history.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content })),
+            ],
+            max_completion_tokens: 400,
+          }),
+        });
+        const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+        reply = payload.choices?.[0]?.message?.content?.trim() ?? "";
+      }
+
+      if (!reply && apiKey) {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: history.map((m) => ({
+              role: m.role === "user" ? "user" : "model",
+              parts: [{ text: m.content }],
+            })),
+            generationConfig: { temperature: 0.6, maxOutputTokens: 400 },
+          }),
+        });
+        const payload = (await response.json()) as {
+          candidates?: { content?: { parts?: { text?: string }[] } }[];
+        };
+        reply = payload.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+      }
     } catch {
       reply = "";
     }
   }
+
 
   if (!reply) reply = fallbackReply(input.topic);
 
