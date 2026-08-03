@@ -165,6 +165,90 @@ function Text({
   );
 }
 
+/** URL field with a "choose file" uploader that pushes media to the product-media bucket. */
+function MediaField({
+  label,
+  value,
+  onChange,
+  accept = "image/*",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  accept?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const inputId = useMemo(() => `media-${Math.random().toString(36).slice(2)}`, []);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    if (!supabase) {
+      toast.error("Backend not connected yet");
+      return;
+    }
+    setBusy(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
+      const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("product-media")
+        .upload(path, file, { cacheControl: "31536000", upsert: false, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("product-media").getPublicUrl(path);
+      onChange(data.publicUrl);
+      toast.success("Uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isVideo = accept.includes("video");
+
+  return (
+    <div className="block">
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={value}
+          placeholder="Paste a URL or upload a file"
+          onChange={(e) => onChange(e.target.value)}
+          className={inputCls}
+        />
+        <label
+          htmlFor={inputId}
+          className="flex shrink-0 cursor-pointer items-center gap-2 rounded-2xl bg-white/65 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white/90"
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {busy ? "Uploading" : "Upload"}
+        </label>
+        <input
+          id={inputId}
+          type="file"
+          accept={accept}
+          className="hidden"
+          disabled={busy}
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {value ? (
+        <div className="mt-2 overflow-hidden rounded-2xl bg-white/40">
+          {isVideo ? (
+            <video src={value} controls preload="metadata" className="max-h-40 w-full object-cover" />
+          ) : (
+            <img src={value} alt="" loading="lazy" className="max-h-40 w-full object-cover" />
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Area({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
