@@ -1141,93 +1141,118 @@ function SupportTab() {
 
 /* ----------------------------------------------------------------- admins */
 
-type ProfileRow = { id: string; email: string | null; full_name: string | null };
+type AdminUserRow = {
+  id: string;
+  email: string;
+  fullName: string | null;
+  isAdmin: boolean;
+  roleRowId: string | null;
+};
+
+function useAccessToken() {
+  const { session } = useAuth();
+  return session?.access_token;
+}
 
 function AdminsTab() {
   const qc = useQueryClient();
-  const { data: profiles = [] } = useQuery<ProfileRow[]>({
-    queryKey: ["profiles"],
-    queryFn: async () => {
-      if (!supabase) return [];
-      const { data, error } = await supabase.from("profiles").select("id, email, full_name");
-      if (error) throw error;
-      return (data ?? []) as ProfileRow[];
-    },
+  const accessToken = useAccessToken();
+  const { user } = useAuth();
+
+  const { data: users = [], isLoading } = useQuery<AdminUserRow[]>({
+    queryKey: ["admin-users"],
+    queryFn: () => listAdminUsers({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
-  const { data: roles = [] } = useTable<{ id: string; user_id: string; role: string }>("user_roles");
 
   const grant = useMutation({
-    mutationFn: async (userId: string) => {
-      if (!supabase) throw new Error("Backend not connected");
-      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: "admin" });
-      if (error) throw error;
-    },
+    mutationFn: (userId: string) => grantAdminAccess({ data: { accessToken, userId } }),
     onSuccess: () => {
       toast.success("Admin access granted");
-      void qc.invalidateQueries({ queryKey: ["user_roles"] });
+      void qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not grant access"),
   });
 
   const revoke = useMutation({
-    mutationFn: async (rowId: string) => {
-      if (!supabase) throw new Error("Backend not connected");
-      const { error } = await supabase.from("user_roles").delete().eq("id", rowId);
-      if (error) throw error;
-    },
+    mutationFn: (userId: string) => revokeAdminAccess({ data: { accessToken, userId } }),
     onSuccess: () => {
       toast.success("Admin access removed");
-      void qc.invalidateQueries({ queryKey: ["user_roles"] });
+      void qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not remove access"),
   });
 
-  const adminRows = roles.filter((r) => r.role === "admin");
+  const admins = users.filter((u) => u.isAdmin);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-      <Card title={`Users (${profiles.length})`}>
-        {profiles.length === 0 ? (
+      <Card title={`Users (${users.length})`}>
+        {isLoading ? (
+          <Loader2 className="size-5 animate-spin text-ink/60" />
+        ) : users.length === 0 ? (
           <p className="text-sm text-muted-foreground">No signed-up users yet.</p>
         ) : (
           <ul className="space-y-2">
-            {profiles.map((p) => {
-              const isAdminUser = adminRows.some((r) => r.user_id === p.id);
-              return (
-                <li
-                  key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm transition-colors hover:bg-white/75"
-                >
-                  <span className="min-w-0 flex-1 truncate text-ink">{p.email ?? p.id}</span>
-                  {isAdminUser ? (
-                    <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground">
-                      Admin
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => grant.mutate(p.id)}
-                      className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground"
-                    >
-                      Make admin
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+            {users.map((u) => (
+              <li
+                key={u.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm transition-colors hover:bg-white/75"
+              >
+                <span className="min-w-0 flex-1 truncate text-ink">{u.fullName ? `${u.fullName} — ${u.email}` : u.email}</span>
+                {u.isAdmin ? (
+                  <span className="rounded-full bg-accent px-3 py-1 text-xs font-bold text-accent-foreground">
+                    Admin
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={grant.isPending}
+                    onClick={() => grant.mutate(u.id)}
+                    className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+                  >
+                    Make admin
+                  </button>
+                )}
+              </li>
+            ))}
           </ul>
         )}
       </Card>
-      <Card title={`Admins (${adminRows.length})`}>
-        <RowList
-          rows={adminRows}
-          onDelete={(id) => revoke.mutate(id)}
-          render={(r) => profiles.find((p) => p.id === r.user_id)?.email ?? r.user_id}
-        />
+      <Card title={`Admins (${admins.length})`}>
+        {admins.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No admins yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {admins.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
+              >
+                <span className="min-w-0 flex-1 truncate text-ink">{a.email}</span>
+                {a.id === user?.id ? (
+                  <span className="text-xs font-semibold text-muted-foreground">You</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={revoke.isPending}
+                    onClick={() => revoke.mutate(a.id)}
+                    className="rounded-full bg-white/70 p-2 text-ink/70 transition-colors hover:text-ink disabled:opacity-60"
+                    aria-label={`Remove admin access for ${a.email}`}
+                  >
+                    <Trash2 className="size-4" strokeWidth={1.8} />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
 }
+
 
 /* ------------------------------------------------- contact & support details */
 
