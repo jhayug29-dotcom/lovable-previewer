@@ -525,9 +525,14 @@ function ProductsTab() {
         </div>
         <Toggle label="Free product (no payment)" value={form.is_free} onChange={set("is_free") as (v: boolean) => void} />
         <Text label="Badge" value={form.badge} onChange={set("badge") as (v: string) => void} placeholder="Bestseller" />
-        <Text label="Cover image URL" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
-        <Text label="Banner image URL" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
-        <Text label="Preview video URL" value={form.video_url} onChange={set("video_url") as (v: string) => void} />
+        <MediaField label="Cover image" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
+        <MediaField label="Banner image" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
+        <MediaField
+          label="Preview video"
+          accept="video/*"
+          value={form.video_url}
+          onChange={set("video_url") as (v: string) => void}
+        />
         <Text label="Download link (sent after payment)" value={form.download_link} onChange={set("download_link") as (v: string) => void} />
         <Area label="Features (one per line)" value={form.features} onChange={set("features") as (v: string) => void} />
         <Area label="File info (one per line)" value={form.file_info} onChange={set("file_info") as (v: string) => void} />
