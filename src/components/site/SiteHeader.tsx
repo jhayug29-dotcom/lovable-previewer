@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { CircleUserRound, Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
+import logoMark from "@/assets/logo.png";
 
 const navItems = [
   { label: "Store", to: "/store", icon: Store },
@@ -23,14 +24,7 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 lg:px-12">
         <Link to="/" className="group flex items-center gap-2.5 sm:gap-3">
           <span className="glass flex size-10 items-center justify-center rounded-2xl transition-transform duration-500 group-hover:scale-105">
-            <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path
-                d="M12 3c2.4 1.6 3.6 4 3.6 7.2 0 3.6-1.7 6.6-3.6 10.8-1.9-4.2-3.6-7.2-3.6-10.8C8.4 7 9.6 4.6 12 3Z"
-                fill="var(--accent)"
-              />
-              <path d="M12 12.5c2.9-1.7 5.6-1.9 8.4-.6-2.1 2.6-4.8 3.7-8.4 3.4v-2.8Z" fill="var(--violet-deep)" />
-              <path d="M12 12.5c-2.9-1.7-5.6-1.9-8.4-.6 2.1 2.6 4.8 3.7 8.4 3.4v-2.8Z" fill="var(--lilac)" />
-            </svg>
+            <img src={logoMark} alt="Editly Store logo" className="size-7 object-contain" width={28} height={28} />
           </span>
           <span className="font-display text-[1.15rem] font-extrabold tracking-tight text-ink sm:text-[1.35rem]">
             Editly Store
