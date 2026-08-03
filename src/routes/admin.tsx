@@ -29,6 +29,15 @@ import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
+  // Server-verified gate: anyone who isn't an admin gets the standard 404 page,
+  // so the panel's existence is never revealed.
+  beforeLoad: async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const accessToken = data.session?.access_token;
+    const { admin } = await checkAdminAccess({ data: { accessToken } });
+    if (!admin) throw notFound();
+  },
   head: () => ({
     meta: [
       { title: "Admin — Editly Store" },
@@ -57,13 +66,8 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminPage() {
-  const { user, isAdmin, loading } = useAuth();
-  const navigate = useNavigate();
+  const { loading } = useAuth();
   const [tab, setTab] = useState<TabId>("products");
-
-  useEffect(() => {
-    if (!loading && !user && isSupabaseConfigured) void navigate({ to: "/auth" });
-  }, [loading, user, navigate]);
 
   if (loading) {
     return (
@@ -75,27 +79,6 @@ function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <SiteLayout>
-        <section className="mx-auto max-w-[520px] px-6 pb-24">
-          <div className="glass animate-rise-in rounded-4xl p-10 text-center">
-            <Lock className="mx-auto size-10 text-ink/60" strokeWidth={1.6} />
-            <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">Admins only</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              This area is restricted. Sign in with the owner account to continue.
-            </p>
-            <Link
-              to="/auth"
-              className="mt-6 inline-flex rounded-full bg-primary px-6 py-3 font-display text-sm font-semibold text-primary-foreground"
-            >
-              Sign in
-            </Link>
-          </div>
-        </section>
-      </SiteLayout>
-    );
-  }
 
   return (
     <SiteLayout>
