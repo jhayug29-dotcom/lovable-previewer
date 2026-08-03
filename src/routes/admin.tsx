@@ -18,6 +18,7 @@ import {
   Lock,
   LifeBuoy,
   MessageCircle,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
@@ -162,6 +163,90 @@ function Text({
         className={inputCls}
       />
     </label>
+  );
+}
+
+/** URL field with a "choose file" uploader that pushes media to the product-media bucket. */
+function MediaField({
+  label,
+  value,
+  onChange,
+  accept = "image/*",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  accept?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const inputId = useMemo(() => `media-${Math.random().toString(36).slice(2)}`, []);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    if (!supabase) {
+      toast.error("Backend not connected yet");
+      return;
+    }
+    setBusy(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
+      const path = `uploads/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage
+        .from("product-media")
+        .upload(path, file, { cacheControl: "31536000", upsert: false, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from("product-media").getPublicUrl(path);
+      onChange(data.publicUrl);
+      toast.success("Uploaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isVideo = accept.includes("video");
+
+  return (
+    <div className="block">
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</span>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={value}
+          placeholder="Paste a URL or upload a file"
+          onChange={(e) => onChange(e.target.value)}
+          className={inputCls}
+        />
+        <label
+          htmlFor={inputId}
+          className="flex shrink-0 cursor-pointer items-center gap-2 rounded-2xl bg-white/65 px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-white/90"
+        >
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+          {busy ? "Uploading" : "Upload"}
+        </label>
+        <input
+          id={inputId}
+          type="file"
+          accept={accept}
+          className="hidden"
+          disabled={busy}
+          onChange={(e) => {
+            void upload(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+      </div>
+      {value ? (
+        <div className="mt-2 overflow-hidden rounded-2xl bg-white/40">
+          {isVideo ? (
+            <video src={value} controls preload="metadata" className="max-h-40 w-full object-cover" />
+          ) : (
+            <img src={value} alt="" loading="lazy" className="max-h-40 w-full object-cover" />
+          )}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -440,9 +525,14 @@ function ProductsTab() {
         </div>
         <Toggle label="Free product (no payment)" value={form.is_free} onChange={set("is_free") as (v: boolean) => void} />
         <Text label="Badge" value={form.badge} onChange={set("badge") as (v: string) => void} placeholder="Bestseller" />
-        <Text label="Cover image URL" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
-        <Text label="Banner image URL" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
-        <Text label="Preview video URL" value={form.video_url} onChange={set("video_url") as (v: string) => void} />
+        <MediaField label="Cover image" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
+        <MediaField label="Banner image" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
+        <MediaField
+          label="Preview video"
+          accept="video/*"
+          value={form.video_url}
+          onChange={set("video_url") as (v: string) => void}
+        />
         <Text label="Download link (sent after payment)" value={form.download_link} onChange={set("download_link") as (v: string) => void} />
         <Area label="Features (one per line)" value={form.features} onChange={set("features") as (v: string) => void} />
         <Area label="File info (one per line)" value={form.file_info} onChange={set("file_info") as (v: string) => void} />
@@ -786,7 +876,7 @@ function BannersTab() {
           <Text label="Colour to" type="color" value={form.bg_to} onChange={set("bg_to") as (v: string) => void} />
           <Text label="Text colour" type="color" value={form.text_color} onChange={set("text_color") as (v: string) => void} />
         </div>
-        <Text label="Background image URL (optional)" value={form.image_url} onChange={set("image_url") as (v: string) => void} />
+        <MediaField label="Background image (optional)" value={form.image_url} onChange={set("image_url") as (v: string) => void} />
         <Text label="Link URL (optional)" value={form.link_url} onChange={set("link_url") as (v: string) => void} />
         <div className="grid grid-cols-2 gap-3">
           <Text label="Starts" type="datetime-local" value={form.starts_at} onChange={set("starts_at") as (v: string) => void} />
