@@ -24,6 +24,13 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
+import {
+  checkAdminAccess,
+  grantAdminAccess,
+  listAdminUsers,
+  revokeAdminAccess,
+} from "@/lib/admin.functions";
+
 import { categories } from "@/lib/products";
 import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from "@/lib/settings";
 
