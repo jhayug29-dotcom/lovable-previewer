@@ -3,6 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { CircleUserRound, Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
+import logoMark from "@/assets/logo.png";
 
 const navItems = [
   { label: "Store", to: "/store", icon: Store },
