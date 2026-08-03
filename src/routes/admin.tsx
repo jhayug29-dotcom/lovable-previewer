@@ -18,6 +18,7 @@ import {
   Lock,
   LifeBuoy,
   MessageCircle,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
