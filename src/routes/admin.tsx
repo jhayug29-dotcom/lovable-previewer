@@ -876,7 +876,7 @@ function BannersTab() {
           <Text label="Colour to" type="color" value={form.bg_to} onChange={set("bg_to") as (v: string) => void} />
           <Text label="Text colour" type="color" value={form.text_color} onChange={set("text_color") as (v: string) => void} />
         </div>
-        <Text label="Background image URL (optional)" value={form.image_url} onChange={set("image_url") as (v: string) => void} />
+        <MediaField label="Background image (optional)" value={form.image_url} onChange={set("image_url") as (v: string) => void} />
         <Text label="Link URL (optional)" value={form.link_url} onChange={set("link_url") as (v: string) => void} />
         <div className="grid grid-cols-2 gap-3">
           <Text label="Starts" type="datetime-local" value={form.starts_at} onChange={set("starts_at") as (v: string) => void} />
