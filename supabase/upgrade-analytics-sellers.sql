@@ -3,15 +3,10 @@
 -- Run ONCE in Supabase → SQL Editor → New query → paste → Run. Safe to re-run.
 -- ============================================================================
 
--- ---------- 1. Seller role --------------------------------------------------
-do $$ begin
-  alter type public.app_role add value if not exists 'seller';
-exception when undefined_object then null; end $$;
+-- ---------- 1. Seller access ------------------------------------------------
+-- A user is a "seller" when they have at least one assigned product below.
+-- Sellers can only ever see analytics for the products assigned to them.
 
-create or replace function public.is_seller()
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.user_roles where user_id = auth.uid() and role = 'seller')
-$$;
 
 -- Products a seller is allowed to see analytics for.
 create table if not exists public.seller_products (
