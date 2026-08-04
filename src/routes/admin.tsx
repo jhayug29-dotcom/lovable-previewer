@@ -37,14 +37,14 @@ import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  // Server-verified gate: anyone who isn't an admin gets the standard 404 page,
-  // so the panel's existence is never revealed.
+  // Server-verified gate: anyone who isn't an admin or an assigned seller gets the
+  // standard 404 page, so the panel's existence is never revealed.
   beforeLoad: async () => {
     if (!isSupabaseConfigured || !supabase) return;
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
-    const { admin } = await checkAdminAccess({ data: { accessToken } });
-    if (!admin) throw notFound();
+    const access = await checkPanelAccess({ data: { accessToken } });
+    if (!access.admin && !access.seller) throw notFound();
   },
   head: () => ({
     meta: [
@@ -61,6 +61,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 const TABS = [
+  { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "products", label: "Products", icon: Package },
   { id: "reviews", label: "AI reviews", icon: Sparkles },
   { id: "coupons", label: "Coupons", icon: Ticket },
@@ -68,16 +69,29 @@ const TABS = [
   { id: "sales", label: "Sales", icon: Megaphone },
   { id: "support", label: "Support inbox", icon: MessageCircle },
   { id: "settings", label: "Contact", icon: LifeBuoy },
+  { id: "sellers", label: "Sellers", icon: Store },
   { id: "admins", label: "Admins", icon: Shield },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminPage() {
-  const { loading } = useAuth();
-  const [tab, setTab] = useState<TabId>("products");
+  const { loading, session } = useAuth();
+  const accessToken = session?.access_token;
+  const [tab, setTab] = useState<TabId>("analytics");
 
-  if (loading) {
+  const { data: access } = useQuery({
+    queryKey: ["panel-access", accessToken ?? ""],
+    queryFn: () => checkPanelAccess({ data: { accessToken } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const isAdminUser = access?.admin ?? false;
+  const visibleTabs = isAdminUser ? TABS : TABS.filter((t) => t.id === "analytics");
+  const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "analytics";
+
+  if (loading || !access) {
     return (
       <SiteLayout>
         <div className="flex min-h-[50vh] items-center justify-center">
@@ -87,21 +101,26 @@ function AdminPage() {
     );
   }
 
-
   return (
     <SiteLayout>
       <section className="mx-auto max-w-[1600px] px-6 pb-24 lg:px-12">
-        <h1 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-extrabold text-ink">Control panel</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Everything on the storefront, managed from here.</p>
+        <h1 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-extrabold text-ink">
+          {isAdminUser ? "Control panel" : "Seller dashboard"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isAdminUser
+            ? "Everything on the storefront, managed from here."
+            : "Sales and analytics for the products assigned to you."}
+        </p>
 
         <div className="glass mt-7 flex flex-wrap gap-1 rounded-full p-1.5">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-500 ease-[var(--ease-macos)] ${
-                tab === t.id ? "bg-primary text-primary-foreground shadow-lift" : "text-ink/75 hover:bg-white/50"
+                activeTab === t.id ? "bg-primary text-primary-foreground shadow-lift" : "text-ink/75 hover:bg-white/50"
               }`}
             >
               <t.icon className="size-4" strokeWidth={1.8} />
@@ -111,18 +130,21 @@ function AdminPage() {
         </div>
 
         <div className="mt-7">
-          {tab === "products" ? <ProductsTab /> : null}
-          {tab === "reviews" ? <ReviewsTab /> : null}
-          {tab === "coupons" ? <CouponsTab /> : null}
-          {tab === "banners" ? <BannersTab /> : null}
-          {tab === "sales" ? <SalesTab /> : null}
-          {tab === "support" ? <SupportTab /> : null}
-          {tab === "settings" ? <SettingsTab /> : null}
-          {tab === "admins" ? <AdminsTab /> : null}
+          {activeTab === "analytics" ? <AnalyticsTab /> : null}
+          {activeTab === "products" ? <ProductsTab /> : null}
+          {activeTab === "reviews" ? <ReviewsTab /> : null}
+          {activeTab === "coupons" ? <CouponsTab /> : null}
+          {activeTab === "banners" ? <BannersTab /> : null}
+          {activeTab === "sales" ? <SalesTab /> : null}
+          {activeTab === "support" ? <SupportTab /> : null}
+          {activeTab === "settings" ? <SettingsTab /> : null}
+          {activeTab === "sellers" ? <SellersTab /> : null}
+          {activeTab === "admins" ? <AdminsTab /> : null}
         </div>
       </section>
     </SiteLayout>
   );
+
 }
 
 /* ---------------------------------------------------------------- helpers */
