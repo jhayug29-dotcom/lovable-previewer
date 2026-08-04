@@ -1520,3 +1520,243 @@ function SettingsTab() {
     </div>
   );
 }
+
+/* -------------------------------------------------------------- analytics */
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="glass animate-rise-in rounded-3xl p-5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-2 font-display text-2xl font-extrabold text-ink">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function AnalyticsTab() {
+  const accessToken = useAccessToken();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["analytics", accessToken ?? ""],
+    queryFn: () => fetchAnalytics({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (isLoading) return <Loader2 className="size-6 animate-spin text-ink/60" />;
+  if (error || !data)
+    return <p className="text-sm text-muted-foreground">Analytics aren't available yet. Run the latest database upgrade script.</p>;
+
+  const isAdminScope = data.scope === "admin";
+  const peak = Math.max(1, ...data.daily.map((d) => d.revenue));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Products" value={String(data.productCount)} hint={`${data.activeProductCount} live`} />
+        <Stat label="Total sales" value={String(data.totalOrders)} hint={inr(data.totalRevenue)} />
+        <Stat label="This month" value={String(data.ordersThisMonth)} hint={inr(data.revenueThisMonth)} />
+        <Stat label="This week" value={String(data.ordersThisWeek)} hint={inr(data.revenueThisWeek)} />
+        {isAdminScope ? (
+          <>
+            <Stat label="Visitors (7 days)" value={String(data.visitorsWeek)} hint={`${data.viewsWeek} page views`} />
+            <Stat label="Visitors (30 days)" value={String(data.visitorsMonth)} hint={`${data.viewsMonth} page views`} />
+            <Stat label="Sign-ins (7 days)" value={String(data.signInsWeek)} hint={`${data.signupsWeek} new accounts`} />
+            <Stat
+              label="Sign-ins (30 days)"
+              value={String(data.signInsMonth)}
+              hint={`${data.signupsMonth} new accounts`}
+            />
+          </>
+        ) : null}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Card title="Sales by product">
+          {data.products.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No products assigned yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {data.products.map((p) => (
+                <li
+                  key={p.productId}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display font-bold text-ink">{p.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.category} · {p.active ? "live" : "hidden"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display font-bold text-ink">{p.orders} sold</span>
+                    <span className="text-xs text-muted-foreground">{inr(p.revenue)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card title="Sales by category">
+          {data.categories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing to show yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {data.categories.map((c) => (
+                <li
+                  key={c.category}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm text-ink"
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold">{c.category}</span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display font-bold">{c.orders} sold</span>
+                    <span className="text-xs text-muted-foreground">{inr(c.revenue)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <Card title="Last 30 days">
+        <div className="flex h-40 items-end gap-1">
+          {data.daily.map((d) => (
+            <div key={d.day} className="group relative flex-1">
+              <div
+                className="w-full rounded-t-md bg-primary/70 transition-all duration-500 group-hover:bg-primary"
+                style={{ height: `${Math.max(2, (d.revenue / peak) * 140)}px` }}
+                title={`${d.day}: ${d.orders} sales · ${inr(d.revenue)}`}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">Daily revenue. Hover a bar for the exact figures.</p>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- sellers */
+
+function SellersTab() {
+  const qc = useQueryClient();
+  const accessToken = useAccessToken();
+  const { data: products = [] } = useTable<ProductRow>("products");
+
+  const { data: users = [] } = useQuery<AdminUserRow[]>({
+    queryKey: ["admin-users"],
+    queryFn: () => listAdminUsers({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: sellers = [], isLoading } = useQuery({
+    queryKey: ["sellers", accessToken ?? ""],
+    queryFn: () => fetchSellers({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const [userId, setUserId] = useState("");
+  const [productIds, setProductIds] = useState<string[]>([]);
+
+  const saveSeller = useMutation({
+    mutationFn: (input: { userId: string; productIds: string[] }) =>
+      saveSellerProducts({ data: { accessToken, ...input } }),
+    onSuccess: () => {
+      toast.success("Seller access updated");
+      void qc.invalidateQueries({ queryKey: ["sellers"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save seller access"),
+  });
+
+  const toggle = (id: string) =>
+    setProductIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+
+  const load = (seller: { userId: string; productIds: string[] }) => {
+    setUserId(seller.userId);
+    setProductIds(seller.productIds);
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <Card title="Give seller access">
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Account
+          </span>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className={inputCls}>
+            <option value="">Select a user…</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName ? `${u.fullName} — ${u.email}` : u.email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ProductPicker
+          products={products}
+          selected={productIds}
+          onToggle={toggle}
+          emptyLabel="Products this seller can see"
+        />
+        <PrimaryButton
+          busy={saveSeller.isPending}
+          onClick={() => {
+            if (!userId) {
+              toast.error("Pick an account first");
+              return;
+            }
+            saveSeller.mutate({ userId, productIds });
+            setUserId("");
+            setProductIds([]);
+          }}
+        >
+          <Save className="size-4" strokeWidth={1.9} />
+          Save seller access
+        </PrimaryButton>
+        <p className="text-xs text-muted-foreground">
+          Sellers only see the Analytics tab, limited to the products assigned here. Saving with nothing selected
+          removes their access.
+        </p>
+      </Card>
+
+      <Card title={`Sellers (${sellers.length})`}>
+        {isLoading ? (
+          <Loader2 className="size-5 animate-spin text-ink/60" />
+        ) : sellers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No sellers yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sellers.map((s) => (
+              <li
+                key={s.userId}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
+              >
+                <button type="button" onClick={() => load(s)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-display font-bold text-ink">{s.email}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {s.productIds
+                      .map((id) => products.find((p) => p.id === id)?.title ?? "product")
+                      .join(", ")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveSeller.mutate({ userId: s.userId, productIds: [] })}
+                  aria-label={`Remove seller access for ${s.email}`}
+                  className="text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.8} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
