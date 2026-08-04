@@ -19,6 +19,8 @@ import {
   LifeBuoy,
   MessageCircle,
   Upload,
+  BarChart3,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
@@ -26,11 +28,17 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
 import {
-  checkAdminAccess,
   grantAdminAccess,
   listAdminUsers,
   revokeAdminAccess,
 } from "@/lib/admin.functions";
+import {
+  checkPanelAccess,
+  fetchAnalytics,
+  fetchSellers,
+  saveSellerProducts,
+} from "@/lib/analytics.functions";
+
 
 import { categories } from "@/lib/products";
 import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from "@/lib/settings";
