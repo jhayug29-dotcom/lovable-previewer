@@ -58,7 +58,7 @@ async function applySalePricing(productId: string, price: number): Promise<numbe
   }
 }
 
-async function applyCoupon(amount: number, code: string | undefined): Promise<number> {
+async function applyCoupon(amount: number, code: string | undefined, productId?: string): Promise<number> {
   if (!code) return amount;
   const { data } = await adminClient()
     .from("coupons")
@@ -66,12 +66,22 @@ async function applyCoupon(amount: number, code: string | undefined): Promise<nu
     .ilike("code", code.trim())
     .eq("active", true)
     .maybeSingle();
-  const coupon = data as { percent_off: number; expires_at: string | null; max_uses: number | null; used_count: number } | null;
+  const coupon = data as {
+    percent_off: number;
+    expires_at: string | null;
+    max_uses: number | null;
+    used_count: number;
+    product_ids?: string[] | null;
+  } | null;
   if (!coupon) return amount;
   if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return amount;
   if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) return amount;
+  // An empty product list means the coupon works store-wide.
+  const scoped = coupon.product_ids ?? [];
+  if (scoped.length > 0 && (!productId || !scoped.includes(productId))) return amount;
   return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
 }
+
 
 export type CreateOrderInput = {
   slug: string;
@@ -88,7 +98,7 @@ export async function createOrder(input: CreateOrderInput) {
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
   const salePrice = await applySalePricing(product.id, Number(product.price));
-  const amount = await applyCoupon(salePrice, input.couponCode);
+  const amount = await applyCoupon(salePrice, input.couponCode, product.id as string);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
 

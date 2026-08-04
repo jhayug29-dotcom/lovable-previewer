@@ -13,6 +13,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Toaster } from "../components/ui/sonner";
+import { PageViewTracker } from "../components/site/PageViewTracker";
+
 
 function NotFoundComponent() {
   return (
@@ -130,8 +132,10 @@ function RootComponent() {
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        <PageViewTracker />
         <Toaster position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
   );
 }
+

@@ -19,6 +19,8 @@ import {
   LifeBuoy,
   MessageCircle,
   Upload,
+  BarChart3,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
@@ -26,25 +28,31 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
 import {
-  checkAdminAccess,
   grantAdminAccess,
   listAdminUsers,
   revokeAdminAccess,
 } from "@/lib/admin.functions";
+import {
+  checkPanelAccess,
+  fetchAnalytics,
+  fetchSellers,
+  saveSellerProducts,
+} from "@/lib/analytics.functions";
+
 
 import { categories } from "@/lib/products";
 import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from "@/lib/settings";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  // Server-verified gate: anyone who isn't an admin gets the standard 404 page,
-  // so the panel's existence is never revealed.
+  // Server-verified gate: anyone who isn't an admin or an assigned seller gets the
+  // standard 404 page, so the panel's existence is never revealed.
   beforeLoad: async () => {
     if (!isSupabaseConfigured || !supabase) return;
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
-    const { admin } = await checkAdminAccess({ data: { accessToken } });
-    if (!admin) throw notFound();
+    const access = await checkPanelAccess({ data: { accessToken } });
+    if (!access.admin && !access.seller) throw notFound();
   },
   head: () => ({
     meta: [
@@ -61,6 +69,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 const TABS = [
+  { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "products", label: "Products", icon: Package },
   { id: "reviews", label: "AI reviews", icon: Sparkles },
   { id: "coupons", label: "Coupons", icon: Ticket },
@@ -68,16 +77,29 @@ const TABS = [
   { id: "sales", label: "Sales", icon: Megaphone },
   { id: "support", label: "Support inbox", icon: MessageCircle },
   { id: "settings", label: "Contact", icon: LifeBuoy },
+  { id: "sellers", label: "Sellers", icon: Store },
   { id: "admins", label: "Admins", icon: Shield },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminPage() {
-  const { loading } = useAuth();
-  const [tab, setTab] = useState<TabId>("products");
+  const { loading, session } = useAuth();
+  const accessToken = session?.access_token;
+  const [tab, setTab] = useState<TabId>("analytics");
 
-  if (loading) {
+  const { data: access } = useQuery({
+    queryKey: ["panel-access", accessToken ?? ""],
+    queryFn: () => checkPanelAccess({ data: { accessToken } }),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const isAdminUser = access?.admin ?? false;
+  const visibleTabs = isAdminUser ? TABS : TABS.filter((t) => t.id === "analytics");
+  const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "analytics";
+
+  if (loading || !access) {
     return (
       <SiteLayout>
         <div className="flex min-h-[50vh] items-center justify-center">
@@ -87,21 +109,26 @@ function AdminPage() {
     );
   }
 
-
   return (
     <SiteLayout>
       <section className="mx-auto max-w-[1600px] px-6 pb-24 lg:px-12">
-        <h1 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-extrabold text-ink">Control panel</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Everything on the storefront, managed from here.</p>
+        <h1 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-extrabold text-ink">
+          {isAdminUser ? "Control panel" : "Seller dashboard"}
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {isAdminUser
+            ? "Everything on the storefront, managed from here."
+            : "Sales and analytics for the products assigned to you."}
+        </p>
 
         <div className="glass mt-7 flex flex-wrap gap-1 rounded-full p-1.5">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-500 ease-[var(--ease-macos)] ${
-                tab === t.id ? "bg-primary text-primary-foreground shadow-lift" : "text-ink/75 hover:bg-white/50"
+                activeTab === t.id ? "bg-primary text-primary-foreground shadow-lift" : "text-ink/75 hover:bg-white/50"
               }`}
             >
               <t.icon className="size-4" strokeWidth={1.8} />
@@ -111,18 +138,21 @@ function AdminPage() {
         </div>
 
         <div className="mt-7">
-          {tab === "products" ? <ProductsTab /> : null}
-          {tab === "reviews" ? <ReviewsTab /> : null}
-          {tab === "coupons" ? <CouponsTab /> : null}
-          {tab === "banners" ? <BannersTab /> : null}
-          {tab === "sales" ? <SalesTab /> : null}
-          {tab === "support" ? <SupportTab /> : null}
-          {tab === "settings" ? <SettingsTab /> : null}
-          {tab === "admins" ? <AdminsTab /> : null}
+          {activeTab === "analytics" ? <AnalyticsTab /> : null}
+          {activeTab === "products" ? <ProductsTab /> : null}
+          {activeTab === "reviews" ? <ReviewsTab /> : null}
+          {activeTab === "coupons" ? <CouponsTab /> : null}
+          {activeTab === "banners" ? <BannersTab /> : null}
+          {activeTab === "sales" ? <SalesTab /> : null}
+          {activeTab === "support" ? <SupportTab /> : null}
+          {activeTab === "settings" ? <SettingsTab /> : null}
+          {activeTab === "sellers" ? <SellersTab /> : null}
+          {activeTab === "admins" ? <AdminsTab /> : null}
         </div>
       </section>
     </SiteLayout>
   );
+
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -528,7 +558,7 @@ function ProductsTab() {
         <MediaField label="Cover image" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
         <MediaField label="Banner image" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
         <MediaField
-          label="Preview video"
+          label="Preview video (optional)"
           accept="video/*"
           value={form.video_url}
           onChange={set("video_url") as (v: string) => void}
@@ -683,15 +713,68 @@ function ReviewList() {
 
 /* ---------------------------------------------------------------- coupons */
 
-type CouponRow = { id: string; code: string; percent_off: number; active: boolean; max_uses: number | null };
+type CouponRow = {
+  id: string;
+  code: string;
+  percent_off: number;
+  active: boolean;
+  max_uses: number | null;
+  product_ids: string[] | null;
+};
+
+/** Checkbox list of products, used for coupon scoping and seller assignment. */
+function ProductPicker({
+  products,
+  selected,
+  onToggle,
+  emptyLabel,
+}: {
+  products: { id: string; title: string; category: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  emptyLabel: string;
+}) {
+  if (products.length === 0) return <p className="text-sm text-muted-foreground">No products yet.</p>;
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {emptyLabel}
+      </span>
+      <div className="max-h-56 space-y-1 overflow-y-auto rounded-2xl bg-white/55 p-2">
+        {products.map((p) => (
+          <label
+            key={p.id}
+            className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink transition-colors hover:bg-white/70"
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(p.id)}
+              onChange={() => onToggle(p.id)}
+              className="size-4 accent-[hsl(var(--primary))]"
+            />
+            <span className="min-w-0 flex-1 truncate">{p.title}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">{p.category}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function CouponsTab() {
   const { data: rows = [] } = useTable<CouponRow>("coupons");
+  const { data: products = [] } = useTable<ProductRow>("products");
   const save = useSave("coupons");
   const remove = useRemove("coupons");
   const [code, setCode] = useState("");
   const [percent, setPercent] = useState("10");
   const [maxUses, setMaxUses] = useState("");
+  const [productIds, setProductIds] = useState<string[]>([]);
+
+  const toggle = (id: string) =>
+    setProductIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+
+  const titleOf = (id: string) => products.find((p) => p.id === id)?.title ?? "product";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -699,6 +782,12 @@ function CouponsTab() {
         <Text label="Code" value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="EDITLY20" />
         <Text label="Discount %" type="number" value={percent} onChange={setPercent} />
         <Text label="Max uses (blank = unlimited)" type="number" value={maxUses} onChange={setMaxUses} />
+        <ProductPicker
+          products={products}
+          selected={productIds}
+          onToggle={toggle}
+          emptyLabel="Works on (leave empty = every product)"
+        />
         <PrimaryButton
           busy={save.isPending}
           onClick={() => {
@@ -710,9 +799,11 @@ function CouponsTab() {
               code: code.trim(),
               percent_off: Number(percent),
               max_uses: maxUses ? Number(maxUses) : null,
+              product_ids: productIds,
               active: true,
             });
             setCode("");
+            setProductIds([]);
           }}
         >
           <Plus className="size-4" strokeWidth={1.9} />
@@ -727,7 +818,10 @@ function CouponsTab() {
             <>
               <span className="font-display font-bold">{c.code}</span>{" "}
               <span className="text-muted-foreground">
-                {c.percent_off}% off · {c.active ? "active" : "off"}
+                {c.percent_off}% off · {c.active ? "active" : "off"} ·{" "}
+                {(c.product_ids ?? []).length === 0
+                  ? "all products"
+                  : (c.product_ids ?? []).map(titleOf).join(", ")}
               </span>
             </>
           )}
@@ -736,6 +830,7 @@ function CouponsTab() {
     </div>
   );
 }
+
 
 /* ---------------------------------------------------------------- banners */
 
@@ -1421,6 +1516,246 @@ function SettingsTab() {
           {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
           Save details
         </button>
+      </Card>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- analytics */
+
+const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="glass animate-rise-in rounded-3xl p-5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-2 font-display text-2xl font-extrabold text-ink">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function AnalyticsTab() {
+  const accessToken = useAccessToken();
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["analytics", accessToken ?? ""],
+    queryFn: () => fetchAnalytics({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (isLoading) return <Loader2 className="size-6 animate-spin text-ink/60" />;
+  if (error || !data)
+    return <p className="text-sm text-muted-foreground">Analytics aren't available yet. Run the latest database upgrade script.</p>;
+
+  const isAdminScope = data.scope === "admin";
+  const peak = Math.max(1, ...data.daily.map((d) => d.revenue));
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat label="Products" value={String(data.productCount)} hint={`${data.activeProductCount} live`} />
+        <Stat label="Total sales" value={String(data.totalOrders)} hint={inr(data.totalRevenue)} />
+        <Stat label="This month" value={String(data.ordersThisMonth)} hint={inr(data.revenueThisMonth)} />
+        <Stat label="This week" value={String(data.ordersThisWeek)} hint={inr(data.revenueThisWeek)} />
+        {isAdminScope ? (
+          <>
+            <Stat label="Visitors (7 days)" value={String(data.visitorsWeek)} hint={`${data.viewsWeek} page views`} />
+            <Stat label="Visitors (30 days)" value={String(data.visitorsMonth)} hint={`${data.viewsMonth} page views`} />
+            <Stat label="Sign-ins (7 days)" value={String(data.signInsWeek)} hint={`${data.signupsWeek} new accounts`} />
+            <Stat
+              label="Sign-ins (30 days)"
+              value={String(data.signInsMonth)}
+              hint={`${data.signupsMonth} new accounts`}
+            />
+          </>
+        ) : null}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <Card title="Sales by product">
+          {data.products.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No products assigned yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {data.products.map((p) => (
+                <li
+                  key={p.productId}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-display font-bold text-ink">{p.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.category} · {p.active ? "live" : "hidden"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display font-bold text-ink">{p.orders} sold</span>
+                    <span className="text-xs text-muted-foreground">{inr(p.revenue)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card title="Sales by category">
+          {data.categories.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing to show yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {data.categories.map((c) => (
+                <li
+                  key={c.category}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm text-ink"
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold">{c.category}</span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display font-bold">{c.orders} sold</span>
+                    <span className="text-xs text-muted-foreground">{inr(c.revenue)}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <Card title="Last 30 days">
+        <div className="flex h-40 items-end gap-1">
+          {data.daily.map((d) => (
+            <div key={d.day} className="group relative flex-1">
+              <div
+                className="w-full rounded-t-md bg-primary/70 transition-all duration-500 group-hover:bg-primary"
+                style={{ height: `${Math.max(2, (d.revenue / peak) * 140)}px` }}
+                title={`${d.day}: ${d.orders} sales · ${inr(d.revenue)}`}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">Daily revenue. Hover a bar for the exact figures.</p>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- sellers */
+
+function SellersTab() {
+  const qc = useQueryClient();
+  const accessToken = useAccessToken();
+  const { data: products = [] } = useTable<ProductRow>("products");
+
+  const { data: users = [] } = useQuery<AdminUserRow[]>({
+    queryKey: ["admin-users"],
+    queryFn: () => listAdminUsers({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: sellers = [], isLoading } = useQuery({
+    queryKey: ["sellers", accessToken ?? ""],
+    queryFn: () => fetchSellers({ data: { accessToken } }),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const [userId, setUserId] = useState("");
+  const [productIds, setProductIds] = useState<string[]>([]);
+
+  const saveSeller = useMutation({
+    mutationFn: (input: { userId: string; productIds: string[] }) =>
+      saveSellerProducts({ data: { accessToken, ...input } }),
+    onSuccess: () => {
+      toast.success("Seller access updated");
+      void qc.invalidateQueries({ queryKey: ["sellers"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Could not save seller access"),
+  });
+
+  const toggle = (id: string) =>
+    setProductIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+
+  const load = (seller: { userId: string; productIds: string[] }) => {
+    setUserId(seller.userId);
+    setProductIds(seller.productIds);
+  };
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+      <Card title="Give seller access">
+        <label className="block">
+          <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Account
+          </span>
+          <select value={userId} onChange={(e) => setUserId(e.target.value)} className={inputCls}>
+            <option value="">Select a user…</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.fullName ? `${u.fullName} — ${u.email}` : u.email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ProductPicker
+          products={products}
+          selected={productIds}
+          onToggle={toggle}
+          emptyLabel="Products this seller can see"
+        />
+        <PrimaryButton
+          busy={saveSeller.isPending}
+          onClick={() => {
+            if (!userId) {
+              toast.error("Pick an account first");
+              return;
+            }
+            saveSeller.mutate({ userId, productIds });
+            setUserId("");
+            setProductIds([]);
+          }}
+        >
+          <Save className="size-4" strokeWidth={1.9} />
+          Save seller access
+        </PrimaryButton>
+        <p className="text-xs text-muted-foreground">
+          Sellers only see the Analytics tab, limited to the products assigned here. Saving with nothing selected
+          removes their access.
+        </p>
+      </Card>
+
+      <Card title={`Sellers (${sellers.length})`}>
+        {isLoading ? (
+          <Loader2 className="size-5 animate-spin text-ink/60" />
+        ) : sellers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No sellers yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {sellers.map((s) => (
+              <li
+                key={s.userId}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
+              >
+                <button type="button" onClick={() => load(s)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate font-display font-bold text-ink">{s.email}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {s.productIds
+                      .map((id) => products.find((p) => p.id === id)?.title ?? "product")
+                      .join(", ")}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveSeller.mutate({ userId: s.userId, productIds: [] })}
+                  aria-label={`Remove seller access for ${s.email}`}
+                  className="text-muted-foreground transition-colors hover:text-destructive"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.8} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </Card>
     </div>
   );
