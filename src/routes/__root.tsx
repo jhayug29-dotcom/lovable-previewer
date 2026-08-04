@@ -13,6 +13,8 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Toaster } from "../components/ui/sonner";
+import { PageViewTracker } from "../components/site/PageViewTracker";
+
 
 function NotFoundComponent() {
   return (
