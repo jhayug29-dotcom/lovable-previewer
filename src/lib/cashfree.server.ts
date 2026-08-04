@@ -98,7 +98,7 @@ export async function createOrder(input: CreateOrderInput) {
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
   const salePrice = await applySalePricing(product.id, Number(product.price));
-  const amount = await applyCoupon(salePrice, input.couponCode);
+  const amount = await applyCoupon(salePrice, input.couponCode, product.id as string);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
 
