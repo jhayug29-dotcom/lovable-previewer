@@ -713,15 +713,68 @@ function ReviewList() {
 
 /* ---------------------------------------------------------------- coupons */
 
-type CouponRow = { id: string; code: string; percent_off: number; active: boolean; max_uses: number | null };
+type CouponRow = {
+  id: string;
+  code: string;
+  percent_off: number;
+  active: boolean;
+  max_uses: number | null;
+  product_ids: string[] | null;
+};
+
+/** Checkbox list of products, used for coupon scoping and seller assignment. */
+function ProductPicker({
+  products,
+  selected,
+  onToggle,
+  emptyLabel,
+}: {
+  products: { id: string; title: string; category: string }[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  emptyLabel: string;
+}) {
+  if (products.length === 0) return <p className="text-sm text-muted-foreground">No products yet.</p>;
+  return (
+    <div>
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {emptyLabel}
+      </span>
+      <div className="max-h-56 space-y-1 overflow-y-auto rounded-2xl bg-white/55 p-2">
+        {products.map((p) => (
+          <label
+            key={p.id}
+            className="flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2 text-sm text-ink transition-colors hover:bg-white/70"
+          >
+            <input
+              type="checkbox"
+              checked={selected.includes(p.id)}
+              onChange={() => onToggle(p.id)}
+              className="size-4 accent-[hsl(var(--primary))]"
+            />
+            <span className="min-w-0 flex-1 truncate">{p.title}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">{p.category}</span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function CouponsTab() {
   const { data: rows = [] } = useTable<CouponRow>("coupons");
+  const { data: products = [] } = useTable<ProductRow>("products");
   const save = useSave("coupons");
   const remove = useRemove("coupons");
   const [code, setCode] = useState("");
   const [percent, setPercent] = useState("10");
   const [maxUses, setMaxUses] = useState("");
+  const [productIds, setProductIds] = useState<string[]>([]);
+
+  const toggle = (id: string) =>
+    setProductIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+
+  const titleOf = (id: string) => products.find((p) => p.id === id)?.title ?? "product";
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -729,6 +782,12 @@ function CouponsTab() {
         <Text label="Code" value={code} onChange={(v) => setCode(v.toUpperCase())} placeholder="EDITLY20" />
         <Text label="Discount %" type="number" value={percent} onChange={setPercent} />
         <Text label="Max uses (blank = unlimited)" type="number" value={maxUses} onChange={setMaxUses} />
+        <ProductPicker
+          products={products}
+          selected={productIds}
+          onToggle={toggle}
+          emptyLabel="Works on (leave empty = every product)"
+        />
         <PrimaryButton
           busy={save.isPending}
           onClick={() => {
@@ -740,9 +799,11 @@ function CouponsTab() {
               code: code.trim(),
               percent_off: Number(percent),
               max_uses: maxUses ? Number(maxUses) : null,
+              product_ids: productIds,
               active: true,
             });
             setCode("");
+            setProductIds([]);
           }}
         >
           <Plus className="size-4" strokeWidth={1.9} />
@@ -757,7 +818,10 @@ function CouponsTab() {
             <>
               <span className="font-display font-bold">{c.code}</span>{" "}
               <span className="text-muted-foreground">
-                {c.percent_off}% off · {c.active ? "active" : "off"}
+                {c.percent_off}% off · {c.active ? "active" : "off"} ·{" "}
+                {(c.product_ids ?? []).length === 0
+                  ? "all products"
+                  : (c.product_ids ?? []).map(titleOf).join(", ")}
               </span>
             </>
           )}
@@ -766,6 +830,7 @@ function CouponsTab() {
     </div>
   );
 }
+
 
 /* ---------------------------------------------------------------- banners */
 
