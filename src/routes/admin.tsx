@@ -558,7 +558,7 @@ function ProductsTab() {
         <MediaField label="Cover image" value={form.cover_url} onChange={set("cover_url") as (v: string) => void} />
         <MediaField label="Banner image" value={form.banner_url} onChange={set("banner_url") as (v: string) => void} />
         <MediaField
-          label="Preview video"
+          label="Preview video (optional)"
           accept="video/*"
           value={form.video_url}
           onChange={set("video_url") as (v: string) => void}
