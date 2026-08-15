@@ -4,34 +4,57 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { PromoBanners } from "@/components/site/PromoBanners";
+import { StoreGreeting } from "@/components/site/StoreGreeting";
 import { SupportChat } from "@/components/site/SupportChat";
 import { categories, type Category } from "@/lib/products";
 import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
 
+import { getCollectionSchema, SITE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/store")({
   loader: async () => ({ products: await getStoreProducts() }),
-  head: () => ({
-    meta: [
-      { title: "Store — After Effects, LUTs, Extensions & SFX | Editly Store" },
-      {
-        name: "description",
-        content:
-          "Browse every Editly Store pack: After Effects project files, Premiere extensions, cinematic LUTs and royalty-free SFX. Search, filter and download instantly.",
-      },
-      { property: "og:title", content: "Editly Store — Browse all packs" },
-      {
-        property: "og:description",
-        content: "Search and filter premium editing assets: After Effects, LUTs, extensions and SFX packs.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    const products = (loaderData as { products: DbProduct[] } | undefined)?.products ?? [];
+    return {
+      links: [{ rel: "canonical", href: `${SITE_URL}/store` }],
+      meta: [
+        { title: "Editly Store — Premium Video Editing Assets & After Effects Presets" },
+        {
+          name: "description",
+          content:
+            "Browse every Editly Store pack: After Effects project files, motion presets, cinematic LUTs, Premiere Pro extensions, and royalty-free SFX. Instant download and commercial license.",
+        },
+        { property: "og:site_name", content: "Editly Store" },
+        {
+          property: "og:title",
+          content: "Editly Store — Premium Video Editing Assets & After Effects Presets",
+        },
+        {
+          property: "og:description",
+          content:
+            "Search and filter premium editing assets: After Effects presets, LUTs, extensions and SFX packs.",
+        },
+        { property: "og:type", content: "website" },
+        { property: "og:url", content: `${SITE_URL}/store` },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:title", content: "Editly Store — Premium Video Editing Assets" },
+        {
+          name: "twitter:description",
+          content:
+            "Search and filter premium editing assets: After Effects presets, LUTs, extensions and SFX packs.",
+        },
+      ],
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(getCollectionSchema(products)),
+        },
+      ],
+    };
+  },
   component: StorePage,
 });
-
 
 type SortKey = "popular" | "price-low" | "price-high" | "rating";
 
@@ -68,20 +91,26 @@ function StorePage() {
     });
   }, [products, query, category, sort]);
 
-
   return (
     <SiteLayout>
       <PromoBanners />
+      <StoreGreeting />
       <section className="mx-auto max-w-[1600px] px-6 pt-6 lg:px-12">
         <h1 className="animate-rise-in max-w-3xl font-display text-[clamp(2.2rem,5vw,4rem)] font-extrabold leading-[1.02] text-ink">
           The store.
         </h1>
-        <p className="animate-rise-in mt-3 max-w-xl text-lg text-ink/75" style={{ animationDelay: "80ms" }}>
+        <p
+          className="animate-rise-in mt-3 max-w-xl text-lg text-ink/75"
+          style={{ animationDelay: "80ms" }}
+        >
           Every pack is a one-time purchase with lifetime updates and instant delivery.
         </p>
 
         {/* Search + filters */}
-        <div className="glass animate-rise-in mt-10 rounded-4xl p-4" style={{ animationDelay: "140ms" }}>
+        <div
+          className="glass animate-rise-in mt-10 rounded-4xl p-4"
+          style={{ animationDelay: "140ms" }}
+        >
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
             <div className="relative flex-1">
               <Search
@@ -153,7 +182,9 @@ function StorePage() {
         ) : (
           <div className="glass mt-6 rounded-4xl px-8 py-20 text-center">
             <h2 className="font-display text-2xl font-extrabold text-ink">Nothing here yet</h2>
-            <p className="mt-2 text-muted-foreground">Try a different search term or clear the filters.</p>
+            <p className="mt-2 text-muted-foreground">
+              Try a different search term or clear the filters.
+            </p>
             <button
               type="button"
               onClick={() => {

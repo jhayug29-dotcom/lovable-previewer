@@ -56,7 +56,6 @@ export function Reveal({ children, delay = 0, className = "", variant = "up" }: 
   );
 }
 
-
 /** Eases a number from 0 to `value` once the element is scrolled into view. */
 export function CountUp({
   value,

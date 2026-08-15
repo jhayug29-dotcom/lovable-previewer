@@ -21,7 +21,10 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
     .maybeSingle();
   if (roleRow) return { admin: true, seller: false, productIds: [] };
 
-  const { data: assigned } = await db.from("seller_products").select("product_id").eq("user_id", user.id);
+  const { data: assigned } = await db
+    .from("seller_products")
+    .select("product_id")
+    .eq("user_id", user.id);
   const productIds = (assigned ?? []).map((r) => r.product_id as string);
   return { admin: false, seller: productIds.length > 0, productIds };
 }
@@ -60,7 +63,8 @@ export type Analytics = {
 };
 
 const DAY = 86_400_000;
-const isPaid = (status: string) => ["PAID", "SUCCESS", "FREE"].includes((status ?? "").toUpperCase());
+const isPaid = (status: string) =>
+  ["PAID", "SUCCESS", "FREE"].includes((status ?? "").toUpperCase());
 
 /** Full analytics for admins; product-scoped analytics for sellers. */
 export async function getAnalytics(accessToken: string | undefined): Promise<Analytics> {
@@ -72,7 +76,9 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
   const weekAgo = new Date(now - 7 * DAY).toISOString();
   const monthAgo = new Date(now - 30 * DAY).toISOString();
 
-  const { data: productRows } = await db.from("products").select("id, title, category, price, active");
+  const { data: productRows } = await db
+    .from("products")
+    .select("id, title, category, price, active");
   const allProducts = (productRows ?? []) as {
     id: string;
     title: string;
@@ -80,20 +86,33 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
     price: number;
     active: boolean;
   }[];
-  const products = access.admin ? allProducts : allProducts.filter((p) => access.productIds.includes(p.id));
+  const products = access.admin
+    ? allProducts
+    : allProducts.filter((p) => access.productIds.includes(p.id));
   const allowed = new Set(products.map((p) => p.id));
 
-  let orderQuery = db.from("orders").select("product_id, amount, status, created_at").order("created_at", {
-    ascending: false,
-  });
-  if (!access.admin) orderQuery = orderQuery.in("product_id", products.map((p) => p.id));
+  let orderQuery = db
+    .from("orders")
+    .select("product_id, amount, status, created_at")
+    .order("created_at", {
+      ascending: false,
+    });
+  if (!access.admin)
+    orderQuery = orderQuery.in(
+      "product_id",
+      products.map((p) => p.id),
+    );
   const { data: orderRows } = await orderQuery;
-  const orders = ((orderRows ?? []) as {
-    product_id: string | null;
-    amount: number | string;
-    status: string;
-    created_at: string;
-  }[]).filter((o) => isPaid(o.status) && (access.admin || (o.product_id && allowed.has(o.product_id))));
+  const orders = (
+    (orderRows ?? []) as {
+      product_id: string | null;
+      amount: number | string;
+      status: string;
+      created_at: string;
+    }[]
+  ).filter(
+    (o) => isPaid(o.status) && (access.admin || (o.product_id && allowed.has(o.product_id))),
+  );
 
   const stats = new Map<string, ProductStat>(
     products.map((p) => [
@@ -149,7 +168,11 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
 
   const categories = new Map<string, { category: string; orders: number; revenue: number }>();
   for (const stat of stats.values()) {
-    const entry = categories.get(stat.category) ?? { category: stat.category, orders: 0, revenue: 0 };
+    const entry = categories.get(stat.category) ?? {
+      category: stat.category,
+      orders: 0,
+      revenue: 0,
+    };
     entry.orders += stat.orders;
     entry.revenue += stat.revenue;
     categories.set(stat.category, entry);
@@ -218,7 +241,12 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
   };
 }
 
-export type SellerRow = { userId: string; email: string; fullName: string | null; productIds: string[] };
+export type SellerRow = {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  productIds: string[];
+};
 
 /** Every account that has at least one assigned product. Admin-only. */
 export async function listSellers(accessToken: string | undefined): Promise<SellerRow[]> {
@@ -239,7 +267,7 @@ export async function listSellers(accessToken: string | undefined): Promise<Sell
     return {
       userId,
       email: u?.email ?? "(unknown account)",
-      fullName: (u?.user_metadata?.['full_name'] as string | undefined) ?? null,
+      fullName: (u?.user_metadata?.["full_name"] as string | undefined) ?? null,
       productIds,
     };
   });

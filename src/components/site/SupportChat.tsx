@@ -14,7 +14,8 @@ const TOPICS: { id: Topic; label: string }[] = [
 
 const GREETING: Record<Topic, string> = {
   question: "Hi! Ask me anything about the packs, licences or downloads.",
-  payment: "Sorry about the trouble. Tell me what happened — include your order ID and the email you paid with.",
+  payment:
+    "Sorry about the trouble. Tell me what happened — include your order ID and the email you paid with.",
   complaint: "I'm listening. Describe the issue and I'll log it for the team right away.",
 };
 
@@ -25,7 +26,9 @@ export function SupportChat() {
   const [email, setEmail] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [messages, setMessages] = useState<Turn[]>([{ role: "assistant", content: GREETING.question }]);
+  const [messages, setMessages] = useState<Turn[]>([
+    { role: "assistant", content: GREETING.question },
+  ]);
   const ask = useServerFn(askSupportBot);
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -59,7 +62,8 @@ export function SupportChat() {
         ...m,
         {
           role: "assistant",
-          content: "I couldn't reach the assistant just now — please email us and we'll pick it up right away.",
+          content:
+            "I couldn't reach the assistant just now — please email us and we'll pick it up right away.",
         },
       ]);
     } finally {
@@ -75,7 +79,11 @@ export function SupportChat() {
         aria-label={open ? "Close support chat" : "Open support chat"}
         className="fixed bottom-6 right-6 z-50 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-float transition-transform duration-500 ease-[var(--ease-macos)] hover:scale-105"
       >
-        {open ? <X className="size-6" strokeWidth={1.9} /> : <MessageCircle className="size-6" strokeWidth={1.9} />}
+        {open ? (
+          <X className="size-6" strokeWidth={1.9} />
+        ) : (
+          <MessageCircle className="size-6" strokeWidth={1.9} />
+        )}
       </button>
 
       {open ? (
@@ -90,7 +98,9 @@ export function SupportChat() {
                   type="button"
                   onClick={() => pickTopic(t.id)}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    topic === t.id ? "bg-primary text-primary-foreground" : "bg-white/60 text-ink/75 hover:bg-white/85"
+                    topic === t.id
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-white/60 text-ink/75 hover:bg-white/85"
                   }`}
                 >
                   {t.label}

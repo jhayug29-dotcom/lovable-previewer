@@ -1,5 +1,16 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Zap, ShieldCheck, Download, Layers, Star, Users, Heart, ShoppingBag } from "lucide-react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import {
+  Zap,
+  ShieldCheck,
+  Download,
+  Layers,
+  Star,
+  Users,
+  Heart,
+  ShoppingBag,
+  X,
+} from "lucide-react";
 import cardFan from "@/assets/card-fan-4k.webp";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
@@ -7,37 +18,75 @@ import { Reveal, CountUp } from "@/components/site/Reveal";
 import { VideoCarousel } from "@/components/site/VideoCarousel";
 import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
+import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 
+import { getOrganizationSchema, SITE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
   loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
-    links: [{ rel: "preload", as: "image", href: cardFan }],
+    links: [
+      { rel: "preload", as: "image", href: cardFan },
+      { rel: "canonical", href: `${SITE_URL}/` },
+    ],
     meta: [
-      { title: "Editly Store — Premium After Effects, LUT & SFX Packs" },
+      { title: "Editly Store — After Effects Presets, Project Files & Editing Assets" },
       {
         name: "description",
         content:
-          "Editly Store sells premium digital assets for editors: After Effects project files, extensions, cinematic LUTs and SFX packs. Instant download after payment.",
+          "Editly Store sells premium digital assets for video editors and motion designers: After Effects presets, project files, LUTs, Premiere extensions, and royalty-free SFX packs with instant download and lifetime updates.",
       },
-      { property: "og:title", content: "Editly Store — Premium Editing Assets" },
+      { property: "og:site_name", content: "Editly Store" },
+      {
+        property: "og:title",
+        content: "Editly Store — After Effects Presets, Project Files & Editing Assets",
+      },
       {
         property: "og:description",
-        content: "After Effects packs, extensions, LUTs and SFX packs for editors who ship fast.",
+        content:
+          "Download After Effects packs, motion graphics templates, cinematic LUTs, and SFX libraries for editors who ship fast.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: `${SITE_URL}/` },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Editly Store — After Effects Presets & Editing Assets" },
+      {
+        name: "twitter:description",
+        content:
+          "Download After Effects packs, motion graphics templates, cinematic LUTs, and SFX libraries for editors who ship fast.",
+      },
+    ],
+    scripts: [
+      {
+        type: "application/ld+json",
+        children: JSON.stringify(getOrganizationSchema()),
+      },
     ],
   }),
   component: Landing,
 });
 
-
 const perks = [
-  { icon: Download, title: "Instant delivery", body: "Your download link lands the second your payment clears." },
-  { icon: ShieldCheck, title: "Commercial licence", body: "Use every asset in client work, ads and monetised videos." },
-  { icon: Zap, title: "Built for speed", body: "Modular presets that drop straight onto your timeline." },
-  { icon: Layers, title: "Lifetime updates", body: "Every future version of a pack you own is free, forever." },
+  {
+    icon: Download,
+    title: "Instant delivery",
+    body: "Your download link lands the second your payment clears.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Commercial licence",
+    body: "Use every asset in client work, ads and monetised videos.",
+  },
+  {
+    icon: Zap,
+    title: "Built for speed",
+    body: "Modular presets that drop straight onto your timeline.",
+  },
+  {
+    icon: Layers,
+    title: "Lifetime updates",
+    body: "Every future version of a pack you own is free, forever.",
+  },
 ];
 
 const stats = [
@@ -46,13 +95,20 @@ const stats = [
   { icon: ShoppingBag, value: 318, label: "Daily sales", sub: "across every pack", suffix: "" },
 ];
 
-
-
 function Landing() {
   const { products } = Route.useLoaderData() as { products: DbProduct[] };
+  const { isIndependenceMode } = useIndependenceMode();
+  const [showModal, setShowModal] = useState(false);
+  const navigate = useNavigate();
+
+  const handleStartLevelUp = (e: React.MouseEvent) => {
+    if (isIndependenceMode) {
+      e.preventDefault();
+      setShowModal(true);
+    }
+  };
 
   return (
-
     <SiteLayout>
       {/* Hero */}
       <section className="relative mx-auto max-w-[1600px] px-6 pb-10 pt-8 lg:px-12">
@@ -71,7 +127,6 @@ function Landing() {
             className="animate-rise-in animate-float-slow absolute right-[6%] -top-3 z-20 rounded-3xl rounded-br-md bg-[#5f9a7a] px-5 py-2.5 font-display text-lg font-semibold text-white shadow-lift sm:text-xl"
             style={{ animationDelay: "460ms", animationDuration: "8.5s" }}
           >
-
             @gracian
           </span>
 
@@ -98,6 +153,7 @@ function Landing() {
         >
           <Link
             to="/store"
+            onClick={handleStartLevelUp}
             className="btn-shine rounded-full bg-primary px-9 py-4 font-display text-base font-semibold text-primary-foreground shadow-float"
           >
             Start Level Up.
@@ -109,6 +165,65 @@ function Landing() {
             Read more
           </Link>
         </div>
+
+        {/* Independence Day Modal */}
+        {showModal && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(8px)" }}
+            onClick={() => setShowModal(false)}
+          >
+            <div
+              className="animate-rise-in relative w-full max-w-lg overflow-hidden rounded-4xl shadow-float"
+              style={{
+                background: "linear-gradient(135deg, #FF9933 0%, #FFFFFF 48%, #138808 100%)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* White content area */}
+              <div className="m-1 rounded-[calc(var(--radius)+12px)] bg-white/92 px-8 py-10 text-center backdrop-blur-xl">
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setShowModal(false)}
+                  className="absolute right-5 top-5 flex size-9 items-center justify-center rounded-full bg-white/70 text-ink/60 transition-colors hover:bg-white hover:text-ink"
+                >
+                  <X className="size-5" strokeWidth={1.8} />
+                </button>
+                <span className="text-6xl" role="img" aria-label="Indian flag">
+                  🇮🇳
+                </span>
+                <h2 className="mt-4 font-display text-3xl font-extrabold text-ink">
+                  Happy 80th Independence Day!
+                </h2>
+                <p className="mt-3 text-base text-ink/70">
+                  Celebrate India's freedom with exclusive creative assets. Level up your
+                  storytelling with our premium packs — now available in the store!
+                </p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowModal(false);
+                      void navigate({ to: "/store" });
+                    }}
+                    className="btn-shine inline-flex items-center justify-center gap-2 rounded-full px-8 py-4 font-display text-base font-semibold text-white shadow-float"
+                    style={{ background: "linear-gradient(135deg, #FF9933, #138808)" }}
+                  >
+                    🛍️ Shop Independence Day Deals
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="rounded-full border border-ink/20 px-8 py-4 font-display text-base font-semibold text-ink/70 transition-colors hover:bg-black/5"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Zero-gravity chips floating below the CTA */}
         <div className="mt-14 flex flex-wrap items-center justify-center gap-4">
@@ -145,7 +260,9 @@ function Landing() {
                 <p className="mt-6 font-display text-[clamp(2.4rem,4vw,3.4rem)] font-extrabold leading-none text-ink">
                   <CountUp value={stat.value} suffix={stat.suffix} />
                 </p>
-                <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">{stat.label}</p>
+                <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">
+                  {stat.label}
+                </p>
                 <p className="mt-1 text-sm text-muted-foreground">{stat.sub}</p>
               </div>
             </Reveal>
@@ -155,7 +272,6 @@ function Landing() {
 
       {/* Product preview videos — optional per product, set in the admin panel */}
       <VideoCarousel products={products} />
-
 
       {/* Perks */}
       <section id="how-it-works" className="mx-auto mt-24 max-w-[1600px] px-6 lg:px-12">
@@ -178,7 +294,9 @@ function Landing() {
       <section className="mx-auto mt-24 max-w-[1600px] px-6 lg:px-12">
         <Reveal className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-deep">Featured</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-deep">
+              Featured
+            </p>
             <h2 className="mt-2 font-display text-4xl font-extrabold text-ink sm:text-5xl">
               Packs editors keep coming back for.
             </h2>
@@ -210,8 +328,8 @@ function Landing() {
               ))}
             </div>
             <p className="mx-auto mt-6 max-w-3xl text-balance-tight font-display text-2xl font-extrabold leading-snug text-ink sm:text-3xl">
-              “I replaced four subscriptions with Editly Store. Everything is clean, fast and it just works in my
-              timeline.”
+              “I replaced four subscriptions with Editly Store. Everything is clean, fast and it
+              just works in my timeline.”
             </p>
             <p className="mt-5 text-sm font-medium text-muted-foreground">
               Ishaan Verma — Motion designer, 8.6k creators served
@@ -219,7 +337,6 @@ function Landing() {
           </div>
         </Reveal>
       </section>
-
     </SiteLayout>
   );
 }

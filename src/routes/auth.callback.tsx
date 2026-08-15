@@ -9,6 +9,7 @@ export const Route = createFileRoute("/auth/callback")({
     meta: [
       { title: "Signing you in — Editly Store" },
       { name: "description", content: "Completing your Editly Store sign-in." },
+      { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Signing you in — Editly Store" },
       { property: "og:description", content: "Completing your Editly Store sign-in." },
       { property: "og:type", content: "website" },

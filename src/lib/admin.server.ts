@@ -24,7 +24,10 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
   await requireAdmin(accessToken);
   const client = adminClient();
 
-  const { data: authData, error: authError } = await client.auth.admin.listUsers({ page: 1, perPage: 200 });
+  const { data: authData, error: authError } = await client.auth.admin.listUsers({
+    page: 1,
+    perPage: 200,
+  });
   if (authError) throw authError;
 
   const { data: roleRows, error: roleError } = await client
@@ -38,7 +41,7 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
   return authData.users.map((u) => ({
     id: u.id,
     email: u.email ?? "(no email)",
-    fullName: (u.user_metadata?.['full_name'] as string | undefined) ?? null,
+    fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
     isAdmin: adminById.has(u.id),
     roleRowId: adminById.get(u.id) ?? null,
   }));
@@ -58,7 +61,11 @@ export async function grantAdmin(accessToken: string | undefined, userId: string
 export async function revokeAdmin(accessToken: string | undefined, userId: string) {
   const me = await requireAdmin(accessToken);
   if (me.id === userId) throw new Error("You cannot remove your own admin access");
-  const { error } = await adminClient().from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
+  const { error } = await adminClient()
+    .from("user_roles")
+    .delete()
+    .eq("user_id", userId)
+    .eq("role", "admin");
   if (error) throw error;
   return { ok: true };
 }

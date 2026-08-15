@@ -15,7 +15,6 @@ import { AuthProvider } from "../contexts/AuthContext";
 import { Toaster } from "../components/ui/sonner";
 import { PageViewTracker } from "../components/site/PageViewTracker";
 
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -81,15 +80,42 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Editly Store" },
-      { name: "description", content: "Premium digital assets for editors and motion designers." },
+      { title: "Editly Store — After Effects Presets, Project Files & Editing Assets" },
+      {
+        name: "description",
+        content:
+          "Editly Store is the premier marketplace for video editors and motion designers. Browse After Effects presets, project files, LUTs, Premiere extensions, and royalty-free SFX packs.",
+      },
       { name: "author", content: "Editly Store" },
-      { property: "og:title", content: "Editly Store" },
-      { property: "og:description", content: "Premium digital assets for editors and motion designers." },
+      { name: "google-site-verification", content: "mPDzO5hFQnrtkNvhHLbcLjrb0DXN2J3BNIkVdZkTnQg" },
+      { name: "google-site-verification", content: "NBh6T0cAEG1ityFRMa8R_EJhWIlQv5s60lrbmVO_-aI" },
+      {
+        name: "robots",
+        content: "index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1",
+      },
+      { property: "og:site_name", content: "Editly Store" },
+      {
+        property: "og:title",
+        content: "Editly Store — After Effects Presets, Project Files & Editing Assets",
+      },
+      {
+        property: "og:description",
+        content:
+          "Editly Store sells premium digital assets for editors: After Effects project files, extensions, cinematic LUTs and SFX packs. Instant download and lifetime updates.",
+      },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://editly-store.vercel.app/" },
+      { property: "og:image", content: "https://editly-store.vercel.app/favicon.png" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "Editly Store — After Effects Presets & Editing Assets" },
+      {
+        name: "twitter:description",
+        content: "Premium digital assets for editors and motion designers.",
+      },
+      { name: "twitter:image", content: "https://editly-store.vercel.app/favicon.png" },
     ],
     links: [
+      { rel: "canonical", href: "https://editly-store.vercel.app/" },
       {
         rel: "stylesheet",
         href: appCss,
@@ -138,4 +164,3 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
-

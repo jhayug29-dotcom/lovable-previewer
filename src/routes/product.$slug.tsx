@@ -8,6 +8,7 @@ import { formatPrice } from "@/lib/products";
 import { getStoreProduct } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
 
+import { getBreadcrumbsSchema, getProductSchema, SITE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
@@ -17,55 +18,104 @@ export const Route = createFileRoute("/product/$slug")({
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;
-    const title = product ? `${product.title} — Editly Store` : "Product — Editly Store";
+    const categorySuffix =
+      product?.category === "After Effects"
+        ? "After Effects Presets & Assets"
+        : `${product?.category ?? "Digital Assets"}`;
+    const title = product
+      ? `${product.title} — ${categorySuffix} | Editly Store`
+      : "Product — Editly Store";
     const description = product
-      ? `${product.tagline}. ${formatPrice(product.price)} one-time, instant download and lifetime updates.`
+      ? `${product.tagline}. ${product.description.slice(0, 140)}... ${formatPrice(product.price)} one-time purchase with instant download and lifetime updates.`
       : "Premium editing assets from Editly Store.";
-    const image = product?.cover?.startsWith("https://") ? product.cover : undefined;
+    const imageUrl = product?.cover?.startsWith("http")
+      ? product.cover
+      : product?.cover
+        ? `${SITE_URL}${product.cover}`
+        : `${SITE_URL}/favicon.png`;
+    const canonicalUrl = product ? `${SITE_URL}/product/${product.slug}` : `${SITE_URL}/store`;
+
+    const breadcrumbs = product
+      ? [
+          { name: "Home", url: `${SITE_URL}/` },
+          { name: "Store", url: `${SITE_URL}/store` },
+          { name: product.title, url: canonicalUrl },
+        ]
+      : [];
+
     return {
+      links: [{ rel: "canonical", href: canonicalUrl }],
       meta: [
         { title },
         { name: "description", content: description },
+        { property: "og:site_name", content: "Editly Store" },
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:type", content: "product" },
+        { property: "og:url", content: canonicalUrl },
+        { property: "og:image", content: imageUrl },
         { name: "twitter:card", content: "summary_large_image" },
-        ...(image
-          ? [
-              { property: "og:image", content: image },
-              { name: "twitter:image", content: image },
-            ]
-          : []),
+        { name: "twitter:title", content: title },
+        { name: "twitter:description", content: description },
+        { name: "twitter:image", content: imageUrl },
       ],
+      scripts: product
+        ? [
+            {
+              type: "application/ld+json",
+              children: JSON.stringify(getProductSchema(product)),
+            },
+            {
+              type: "application/ld+json",
+              children: JSON.stringify(getBreadcrumbsSchema(breadcrumbs)),
+            },
+          ]
+        : [],
     };
   },
   component: ProductPage,
 });
 
 function ProductPage() {
-  const { product, related } = Route.useLoaderData() as { product: DbProduct; related: DbProduct[] };
+  const { product, related } = Route.useLoaderData() as {
+    product: DbProduct;
+    related: DbProduct[];
+  };
   const discount =
     product.originalPrice > 0 ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
-
 
   return (
     <SiteLayout>
       <section className="mx-auto max-w-[1600px] px-6 lg:px-12">
-        <Link
-          to="/store"
-          className="inline-flex items-center gap-2 text-sm font-semibold text-ink/70 transition-colors hover:text-ink"
+        <nav
+          aria-label="Breadcrumbs"
+          className="mb-4 flex flex-wrap items-center gap-2 text-xs font-medium text-ink/70"
         >
-          <ArrowLeft className="size-4" strokeWidth={1.9} />
-          Back to store
-        </Link>
+          <Link to="/" className="transition-colors hover:text-ink">
+            Home
+          </Link>
+          <span className="text-ink/40">/</span>
+          <Link to="/store" className="transition-colors hover:text-ink">
+            Store
+          </Link>
+          <span className="text-ink/40">/</span>
+          <span className="text-ink/60">{product.category}</span>
+          <span className="text-ink/40">/</span>
+          <span
+            className="font-semibold text-ink truncate max-w-[220px] sm:max-w-none"
+            aria-current="page"
+          >
+            {product.title}
+          </span>
+        </nav>
 
-        <div className="mt-6 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="mt-4 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
           {/* Banner */}
           <div className="glass animate-rise-in overflow-hidden rounded-4xl p-3">
             <div className="relative aspect-16/10 overflow-hidden rounded-3xl">
               <img
                 src={product.cover}
-                alt={`${product.title} banner`}
+                alt={`${product.title} - ${product.category} pack preview cover for video editors`}
                 width={1024}
                 height={768}
                 className="size-full object-cover"
@@ -85,10 +135,11 @@ function ProductPage() {
             </div>
           </div>
 
-
-
           {/* Buy box */}
-          <div className="glass animate-rise-in rounded-4xl p-8" style={{ animationDelay: "100ms" }}>
+          <div
+            className="glass animate-rise-in rounded-4xl p-8"
+            style={{ animationDelay: "100ms" }}
+          >
             <h1 className="font-display text-[clamp(1.9rem,3.4vw,2.9rem)] font-extrabold leading-[1.05] text-ink">
               {product.title}
             </h1>
@@ -101,7 +152,9 @@ function ProductPage() {
               </span>
               <span className="text-muted-foreground">{product.reviewCount} reviews</span>
               <span className="text-muted-foreground">•</span>
-              <span className="text-muted-foreground">{product.sales.toLocaleString("en-IN")} sales</span>
+              <span className="text-muted-foreground">
+                {product.sales.toLocaleString("en-IN")} sales
+              </span>
             </div>
 
             <div className="mt-7 flex items-end gap-3">
@@ -120,7 +173,6 @@ function ProductPage() {
               ) : null}
             </div>
 
-
             <BuyButton slug={product.slug} price={product.price} isFree={product.isFree} />
             <button
               type="button"
@@ -134,7 +186,6 @@ function ProductPage() {
               Share this product
             </button>
 
-
             <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
               <ShieldCheck className="size-4" strokeWidth={1.7} />
               Commercial licence included · Secure Cashfree checkout
@@ -142,7 +193,10 @@ function ProductPage() {
 
             <dl className="mt-7 grid grid-cols-2 gap-3">
               {product.fileInfo.map((info) => (
-                <div key={info} className="rounded-2xl bg-white/45 px-4 py-3 text-sm font-medium text-ink/80">
+                <div
+                  key={info}
+                  className="rounded-2xl bg-white/45 px-4 py-3 text-sm font-medium text-ink/80"
+                >
                   {info}
                 </div>
               ))}
@@ -157,7 +211,10 @@ function ProductPage() {
             <p className="mt-4 leading-relaxed text-ink/75">{product.description}</p>
             <ul className="mt-6 grid gap-3 sm:grid-cols-2">
               {product.features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2.5 text-sm font-medium text-ink/85">
+                <li
+                  key={feature}
+                  className="flex items-start gap-2.5 text-sm font-medium text-ink/85"
+                >
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-accent/15 text-accent">
                     <Check className="size-3.5" strokeWidth={2.4} />
                   </span>
@@ -178,7 +235,9 @@ function ProductPage() {
                   </span>
                   <div>
                     <p className="font-display text-base font-bold text-ink">{item.step}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{item.detail}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                      {item.detail}
+                    </p>
                   </div>
                 </li>
               ))}
@@ -189,7 +248,9 @@ function ProductPage() {
         {/* Preview video — only rendered when this product has one */}
         {product.videoUrl ? (
           <div id="preview-video" className="glass animate-rise-in mt-8 rounded-4xl p-4">
-            <h2 className="px-4 pb-4 pt-2 font-display text-2xl font-extrabold text-ink">Preview video</h2>
+            <h2 className="px-4 pb-4 pt-2 font-display text-2xl font-extrabold text-ink">
+              Preview video
+            </h2>
             <div className="overflow-hidden rounded-3xl bg-black/80">
               <video
                 src={product.videoUrl}
@@ -202,8 +263,6 @@ function ProductPage() {
             </div>
           </div>
         ) : null}
-
-
 
         {/* Reviews */}
         <div className="mt-8">
@@ -227,7 +286,8 @@ function ProductPage() {
                 <p className="mt-4 leading-relaxed text-ink/85">“{review.body}”</p>
                 <div className="mt-5 flex items-center justify-between text-sm">
                   <span className="font-semibold text-ink">
-                    {review.name} <span className="font-normal text-muted-foreground">{review.handle}</span>
+                    {review.name}{" "}
+                    <span className="font-normal text-muted-foreground">{review.handle}</span>
                   </span>
                   <span className="text-muted-foreground">{review.date}</span>
                 </div>

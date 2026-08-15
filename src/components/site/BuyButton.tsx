@@ -121,7 +121,11 @@ export function BuyButton({ slug, price, isFree }: Props) {
             disabled={busy}
             className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60"
           >
-            {busy ? <Loader2 className="size-5 animate-spin" /> : <Gift className="size-5" strokeWidth={1.8} />}
+            {busy ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
+              <Gift className="size-5" strokeWidth={1.8} />
+            )}
             Get it free
           </button>
         )}
@@ -141,7 +145,10 @@ export function BuyButton({ slug, price, isFree }: Props) {
           onClick={() => setOpen(true)}
           className="btn-shine group flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 ease-[var(--ease-macos)] hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95"
         >
-          <Download className="size-5 transition-transform duration-500 group-hover:translate-y-0.5" strokeWidth={1.8} />
+          <Download
+            className="size-5 transition-transform duration-500 group-hover:translate-y-0.5"
+            strokeWidth={1.8}
+          />
           Buy now — instant download
         </button>
       ) : (
@@ -190,7 +197,11 @@ export function BuyButton({ slug, price, isFree }: Props) {
             disabled={busy}
             className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60"
           >
-            {busy ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" strokeWidth={1.8} />}
+            {busy ? (
+              <Loader2 className="size-5 animate-spin" />
+            ) : (
+              <Download className="size-5" strokeWidth={1.8} />
+            )}
             Pay {formatPrice(payable)} securely
           </button>
           <button

@@ -24,8 +24,12 @@ export function VideoCarousel({ products }: { products: Product[] }) {
     <section className="mx-auto mt-24 max-w-[1600px] px-6 lg:px-12">
       <Reveal className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-deep">In motion</p>
-          <h2 className="mt-2 font-display text-4xl font-extrabold text-ink sm:text-5xl">See the packs move.</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-deep">
+            In motion
+          </p>
+          <h2 className="mt-2 font-display text-4xl font-extrabold text-ink sm:text-5xl">
+            See the packs move.
+          </h2>
         </div>
         <div className="flex gap-2">
           <button
@@ -58,7 +62,11 @@ export function VideoCarousel({ products }: { products: Product[] }) {
             variant="scale"
             className="min-w-[86%] snap-center sm:min-w-[62%] lg:min-w-[46%]"
           >
-            <Link to="/product/$slug" params={{ slug: product.slug }} className="group glass morph-card block rounded-4xl p-4">
+            <Link
+              to="/product/$slug"
+              params={{ slug: product.slug }}
+              className="group glass morph-card block rounded-4xl p-4"
+            >
               <div className="relative overflow-hidden rounded-3xl bg-black/80">
                 <video
                   src={product.videoUrl ?? undefined}

@@ -6,7 +6,9 @@ export const askSupportBot = createServerFn({ method: "POST" })
     z
       .object({
         messages: z
-          .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(2000) }))
+          .array(
+            z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(2000) }),
+          )
           .min(1)
           .max(20),
         topic: z.enum(["question", "payment", "complaint"]),

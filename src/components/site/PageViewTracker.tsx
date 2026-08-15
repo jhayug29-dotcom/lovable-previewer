@@ -25,7 +25,10 @@ export function PageViewTracker() {
         client
           .from("page_views")
           .insert({ path, session_id: sessionId(), user_id: data.session?.user.id ?? null })
-          .then(() => undefined, () => undefined),
+          .then(
+            () => undefined,
+            () => undefined,
+          ),
       );
     }, 600);
     return () => window.clearTimeout(timer);

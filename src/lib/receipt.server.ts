@@ -59,7 +59,9 @@ export async function sendReceiptEmail(payload: ReceiptPayload): Promise<boolean
       }),
     });
     if (!response.ok) {
-      console.error(new Error(`EmailJS send failed (${response.status}): ${await response.text()}`));
+      console.error(
+        new Error(`EmailJS send failed (${response.status}): ${await response.text()}`),
+      );
       return false;
     }
     return true;

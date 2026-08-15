@@ -6,6 +6,7 @@ import heroBg from "@/assets/hero-bg-4k.jpg";
 import heroBgSmall from "@/assets/hero-bg-1080.jpg";
 import { DEFAULT_SETTINGS, fetchSettings } from "@/lib/settings";
 import { SiteHeader } from "./SiteHeader";
+import { RainingFlags } from "./RainingFlags";
 
 export function SiteLayout({ children }: { children: ReactNode }) {
   const { data: settings = DEFAULT_SETTINGS } = useQuery({
@@ -36,6 +37,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
       </div>
 
       <SiteHeader />
+      <RainingFlags />
       <main>{children}</main>
 
       <footer className="mx-auto mt-24 max-w-[1600px] px-6 pb-12 lg:px-12">
@@ -65,7 +67,9 @@ export function SiteLayout({ children }: { children: ReactNode }) {
 
           <div className="grid gap-8 sm:grid-cols-2">
             <div className="text-sm font-medium text-ink/75">
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">Explore</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">
+                Explore
+              </p>
               <div className="flex flex-col gap-2">
                 <Link to="/store" className="transition-colors hover:text-ink">
                   Store
@@ -83,7 +87,9 @@ export function SiteLayout({ children }: { children: ReactNode }) {
             </div>
 
             <div className="text-sm font-medium text-ink/75">
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">Support</p>
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.18em] text-violet-deep">
+                Support
+              </p>
               <div className="flex flex-col gap-2">
                 <a
                   href={`mailto:${settings.support_email}`}

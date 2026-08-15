@@ -12,13 +12,14 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
     <Link
       to="/product/$slug"
       params={{ slug: product.slug }}
+      aria-label={`View ${product.title} - ${product.category}`}
       className="group glass hover-pop animate-rise-in relative block overflow-hidden rounded-4xl p-3"
       style={{ animationDelay: `${index * 80}ms` }}
     >
       <div className="relative aspect-4/3 overflow-hidden rounded-3xl">
         <img
           src={product.cover}
-          alt={product.title}
+          alt={`${product.title} - ${product.category} preset`}
           loading="lazy"
           width={1024}
           height={768}
@@ -39,7 +40,9 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
 
       <div className="px-3 pb-2 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{product.category}</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {product.category}
+          </p>
           <span className="flex items-center gap-1 text-xs font-semibold text-ink/80">
             <Star className="size-3.5 fill-accent text-accent" strokeWidth={1.6} />
             {product.rating}
@@ -55,7 +58,9 @@ export function ProductCard({ product, index = 0 }: { product: Product; index?: 
               {product.isFree ? "Free" : formatPrice(product.price)}
             </span>
             {discount > 0 ? (
-              <span className="text-sm text-muted-foreground line-through">{formatPrice(product.originalPrice)}</span>
+              <span className="text-sm text-muted-foreground line-through">
+                {formatPrice(product.originalPrice)}
+              </span>
             ) : null}
           </div>
           <span className="flex size-10 items-center justify-center rounded-full bg-primary text-primary-foreground transition-transform duration-500 ease-[var(--ease-macos)] group-hover:scale-110 group-hover:-rotate-12">

@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { CircleUserRound, Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
+import {
+  CircleUserRound,
+  Store,
+  LifeBuoy,
+  Rocket,
+  ShieldCheck,
+  LogOut,
+  Menu,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import logoMark from "@/assets/logo.png";
+import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 
 const navItems = [
   { label: "Store", to: "/store", icon: Store },
@@ -13,6 +23,7 @@ const navItems = [
 
 export function SiteHeader() {
   const { user, isAdmin } = useAuth();
+  const { isIndependenceMode } = useIndependenceMode();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
@@ -24,11 +35,31 @@ export function SiteHeader() {
       <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5 lg:px-12">
         <Link to="/" className="group flex items-center gap-2.5 sm:gap-3">
           <span className="glass flex size-10 items-center justify-center rounded-2xl transition-transform duration-500 group-hover:scale-105">
-            <img src={logoMark} alt="Editly Store logo" className="size-7 object-contain" width={28} height={28} />
+            <img
+              src={logoMark}
+              alt="Editly Store logo"
+              className="size-7 object-contain"
+              width={28}
+              height={28}
+            />
           </span>
-          <span className="font-display text-[1.15rem] font-extrabold tracking-tight text-ink sm:text-[1.35rem]">
-            Editly Store
-          </span>
+          <div className="flex flex-col">
+            <span className="font-display text-[1.15rem] font-extrabold tracking-tight text-ink sm:text-[1.35rem]">
+              Editly Store
+            </span>
+            {isIndependenceMode && (
+              <span
+                className="animate-rise-in font-display text-xs sm:text-sm font-extrabold drop-shadow-md"
+                style={{
+                  background: "linear-gradient(90deg, #FF9933 0%, #FFFFFF 50%, #138808 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                }}
+              >
+                Happy 80th Independence Day
+              </span>
+            )}
+          </div>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -78,7 +109,11 @@ export function SiteHeader() {
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
           >
-            {open ? <X className="size-5" strokeWidth={1.8} /> : <Menu className="size-5" strokeWidth={1.8} />}
+            {open ? (
+              <X className="size-5" strokeWidth={1.8} />
+            ) : (
+              <Menu className="size-5" strokeWidth={1.8} />
+            )}
           </button>
         </div>
       </div>

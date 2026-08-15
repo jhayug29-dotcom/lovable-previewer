@@ -15,8 +15,6 @@ export type { DbProduct, Coupon, Banner, Sale } from "@/lib/catalog-map";
 
 const SELECT = PRODUCT_SELECT;
 
-
-
 /** Products from the database; falls back to the built-in demo catalog until the backend has rows. */
 export async function fetchProducts(): Promise<DbProduct[]> {
   if (!supabase) return fallbackProducts;
@@ -31,7 +29,11 @@ export async function fetchProducts(): Promise<DbProduct[]> {
 
 export async function fetchProduct(slug: string): Promise<DbProduct | undefined> {
   if (!supabase) return fallbackProducts.find((p) => p.slug === slug);
-  const { data, error } = await supabase.from("products").select(SELECT).eq("slug", slug).maybeSingle();
+  const { data, error } = await supabase
+    .from("products")
+    .select(SELECT)
+    .eq("slug", slug)
+    .maybeSingle();
   if (error || !data) return fallbackProducts.find((p) => p.slug === slug);
   return mapProduct(data as Row);
 }

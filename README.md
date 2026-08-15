@@ -28,7 +28,6 @@ npm run dev
 - React
 - Tailwind CSS
 
-
 ## Deploying
 
 The app is platform-agnostic: the frontend is a standard Vite build and the

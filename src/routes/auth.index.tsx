@@ -1,6 +1,15 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Mail, Lock, User as UserIcon, Loader2, ArrowLeft, Store, ShieldCheck, LogOut } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User as UserIcon,
+  Loader2,
+  ArrowLeft,
+  Store,
+  ShieldCheck,
+  LogOut,
+} from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { signIn, signInWithGoogle, signUp, resetPassword } from "@/lib/auth";
@@ -10,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 export const Route = createFileRoute("/auth/")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => {
-    const next = search['redirect'];
+    const next = search["redirect"];
     // Only same-origin paths are honoured.
     return typeof next === "string" && next.startsWith("/") ? { redirect: next } : {};
   },
@@ -21,8 +30,12 @@ export const Route = createFileRoute("/auth/")({
         name: "description",
         content: "Sign in to Editly Store to access your purchases, download links and receipts.",
       },
+      { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Sign in — Editly Store" },
-      { property: "og:description", content: "Access your Editly Store purchases and download links." },
+      {
+        property: "og:description",
+        content: "Access your Editly Store purchases and download links.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -66,12 +79,15 @@ function AuthPage() {
       <SiteLayout>
         <section className="mx-auto flex max-w-[520px] flex-col px-5 pb-24 sm:px-6">
           <div className="glass animate-rise-in rounded-4xl p-7 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Your account</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+              Your account
+            </p>
             <h1 className="mt-2 font-display text-3xl font-extrabold text-ink">
-              {user.user_metadata?.['full_name'] ?? user.email}
+              {user.user_metadata?.["full_name"] ?? user.email}
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              You&apos;re signed in — every purchase, download link and receipt is tied to this email.
+              You&apos;re signed in — every purchase, download link and receipt is tied to this
+              email.
             </p>
 
             <div className="mt-7 flex flex-col gap-2.5">
@@ -145,10 +161,22 @@ function AuthPage() {
             className="hover-pop mt-6 flex w-full items-center justify-center gap-3 rounded-full bg-white/70 px-6 py-4 font-display text-sm font-semibold text-ink"
           >
             <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
-              <path fill="#4285F4" d="M23 12.2c0-.8-.1-1.6-.2-2.3H12v4.4h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.5Z" />
-              <path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1a7 7 0 0 1-6.6-4.8H1.6v3A12 12 0 0 0 12 24Z" />
-              <path fill="#FBBC05" d="M5.4 14.6a7.2 7.2 0 0 1 0-4.6v-3H1.6a12 12 0 0 0 0 10.6l3.8-3Z" />
-              <path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.5 1.8l3.3-3.3A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.6 6l3.8 3A7 7 0 0 1 12 4.8Z" />
+              <path
+                fill="#4285F4"
+                d="M23 12.2c0-.8-.1-1.6-.2-2.3H12v4.4h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.5Z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1a7 7 0 0 1-6.6-4.8H1.6v3A12 12 0 0 0 12 24Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.4 14.6a7.2 7.2 0 0 1 0-4.6v-3H1.6a12 12 0 0 0 0 10.6l3.8-3Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.8c1.8 0 3.3.6 4.5 1.8l3.3-3.3A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.6 6l3.8 3A7 7 0 0 1 12 4.8Z"
+              />
             </svg>
             Continue with Google
           </button>
@@ -161,9 +189,21 @@ function AuthPage() {
 
           <form onSubmit={submit} className="space-y-3">
             {mode === "signup" ? (
-              <Field icon={UserIcon} placeholder="Full name" value={fullName} onChange={setFullName} />
+              <Field
+                icon={UserIcon}
+                placeholder="Full name"
+                value={fullName}
+                onChange={setFullName}
+              />
             ) : null}
-            <Field icon={Mail} type="email" placeholder="Email" value={email} onChange={setEmail} required />
+            <Field
+              icon={Mail}
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={setEmail}
+              required
+            />
             <Field
               icon={Lock}
               type="password"

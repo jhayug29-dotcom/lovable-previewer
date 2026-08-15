@@ -2,7 +2,7 @@
 
 I checked your live database. The `user_roles` table has exactly **one** row, and it is a plain `user` role. Your owner account `growchannel2026@gmail.com` (user id `fb491a45-…`) has **no role row at all**, so the app correctly decides you are not an admin and hides the panel.
 
-Reason: the auto-grant trigger in `schema.sql` only fires when a *new* account is created. Your accounts existed before the schema was run, so nobody was ever granted `admin`.
+Reason: the auto-grant trigger in `schema.sql` only fires when a _new_ account is created. Your accounts existed before the schema was run, so nobody was ever granted `admin`.
 
 ## Plan
 
@@ -13,6 +13,7 @@ A short SQL block you paste into the Supabase SQL editor that inserts the `admin
 **2. Make `/admin` invisible to non-admins**
 
 Currently `/admin` renders an "access denied" card, which confirms the page exists. Change it so the route:
+
 - checks the session and the `has_role(uid,'admin')` result before rendering anything, and
 - throws TanStack's `notFound()` when the visitor is not an admin, so they get the site's standard **Page Not Found** screen — identical to a random bad URL, whether signed out or signed in as a normal user.
 

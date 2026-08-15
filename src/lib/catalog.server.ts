@@ -1,7 +1,13 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { products as fallbackProducts } from "@/lib/products";
 import { mapProduct, PRODUCT_SELECT, type DbProduct, type Row } from "@/lib/catalog-map";
-import { applySaleToAll, isBannerLive, isSaleLive, type StoreBanner, type StoreSale } from "@/lib/sales";
+import {
+  applySaleToAll,
+  isBannerLive,
+  isSaleLive,
+  type StoreBanner,
+  type StoreSale,
+} from "@/lib/sales";
 
 const FALLBACK_URL = "https://wylcbblegcyzunychqqa.supabase.co";
 const FALLBACK_KEY = "sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV";
@@ -12,9 +18,13 @@ function env(name: string, fallback: string): string {
 
 let client: SupabaseClient | null = null;
 function publicClient(): SupabaseClient {
-  client ??= createClient(env("SUPABASE_URL", FALLBACK_URL), env("SUPABASE_PUBLISHABLE_KEY", FALLBACK_KEY), {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  client ??= createClient(
+    env("SUPABASE_URL", FALLBACK_URL),
+    env("SUPABASE_PUBLISHABLE_KEY", FALLBACK_KEY),
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+    },
+  );
   return client;
 }
 

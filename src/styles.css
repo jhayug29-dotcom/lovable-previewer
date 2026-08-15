@@ -109,13 +109,12 @@
 /* Apple-style liquid glass surface — layered highlight + specular edge */
 @utility glass {
   position: relative;
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in oklab, white 72%, transparent),
-      color-mix(in oklab, white 34%, transparent) 48%,
-      color-mix(in oklab, white 52%, transparent)
-    );
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, white 72%, transparent),
+    color-mix(in oklab, white 34%, transparent) 48%,
+    color-mix(in oklab, white 52%, transparent)
+  );
   backdrop-filter: blur(34px) saturate(190%) brightness(1.04);
   border: 1px solid var(--glass-border);
   box-shadow:
@@ -141,7 +140,6 @@
     display: none;
   }
 }
-
 
 @keyframes float-slow {
   0%,
@@ -239,7 +237,12 @@
     position: absolute;
     inset: 0;
     width: 40%;
-    background: linear-gradient(90deg, transparent, color-mix(in oklab, white 55%, transparent), transparent);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, white 55%, transparent),
+      transparent
+    );
     transform: translateX(-140%);
     pointer-events: none;
   }
@@ -342,3 +345,23 @@
   }
 }
 
+@keyframes rain {
+  0% {
+    transform: translateY(-50px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@utility animate-rain {
+  animation: rain linear forwards;
+}

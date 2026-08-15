@@ -3,7 +3,9 @@ type CashfreeCheckout = (options: {
   redirectTarget?: "_self" | "_blank" | "_modal";
 }) => Promise<unknown>;
 
-type CashfreeFactory = (config: { mode: "production" | "sandbox" }) => { checkout: CashfreeCheckout };
+type CashfreeFactory = (config: { mode: "production" | "sandbox" }) => {
+  checkout: CashfreeCheckout;
+};
 
 const SDK_URL = "https://sdk.cashfree.com/js/v3/cashfree.js";
 
@@ -33,7 +35,9 @@ function loadSdk(): Promise<CashfreeFactory> {
 
 /** production unless VITE_CASHFREE_MODE=sandbox — keeps the app portable across environments. */
 const MODE: "production" | "sandbox" =
-  (import.meta.env['VITE_CASHFREE_MODE'] as string | undefined) === "sandbox" ? "sandbox" : "production";
+  (import.meta.env["VITE_CASHFREE_MODE"] as string | undefined) === "sandbox"
+    ? "sandbox"
+    : "production";
 
 /** Opens the Cashfree hosted checkout for a payment session. */
 export async function openCashfreeCheckout(paymentSessionId: string) {

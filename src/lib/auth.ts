@@ -43,4 +43,3 @@ export async function signOut() {
   const { error } = await requireSupabase().auth.signOut();
   if (error) throw error;
 }
-

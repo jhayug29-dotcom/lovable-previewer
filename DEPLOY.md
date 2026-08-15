@@ -20,21 +20,21 @@ Then a second query: paste the entire contents of
 Vercel → your project → **Settings** → **Environment Variables** → for each row below,
 paste the name and the value, tick **Production + Preview + Development**, Save.
 
-| Name | Value |
-| --- | --- |
-| `VITE_SUPABASE_URL` | `https://wylcbblegcyzunychqqa.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV` |
-| `SUPABASE_URL` | `https://wylcbblegcyzunychqqa.supabase.co` |
-| `SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV` |
-| `SUPABASE_SERVICE_ROLE_KEY` | `sb_secret_Y-grezvFAlZJDkZlW96gVA_splbGR9O` |
-| `CASHFREE_APP_ID` | `1348337cd58fd2946007d114ebb7338431` |
-| `CASHFREE_SECRET_KEY` | `cfsk_ma_prod_c0607dab370ee9b4fbd58e8777883cce_36d411fa` |
-| `EMAILJS_PUBLIC_KEY` | `yMInTQ6igoNvRwpNk` |
-| `EMAILJS_PRIVATE_KEY` | `OYOXv27MB1DgFVE53imjc` |
-| `VITE_EMAILJS_PUBLIC_KEY` | `yMInTQ6igoNvRwpNk` |
-| `VITE_EMAILJS_SERVICE_ID` | `service_tbk5flg` |
-| `VITE_EMAILJS_TEMPLATE_ID` | `template_e8uqzpz` |
-| `NITRO_PRESET` | `vercel` |
+| Name                            | Value                                                    |
+| ------------------------------- | -------------------------------------------------------- |
+| `VITE_SUPABASE_URL`             | `https://wylcbblegcyzunychqqa.supabase.co`               |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV`         |
+| `SUPABASE_URL`                  | `https://wylcbblegcyzunychqqa.supabase.co`               |
+| `SUPABASE_PUBLISHABLE_KEY`      | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV`         |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `sb_secret_Y-grezvFAlZJDkZlW96gVA_splbGR9O`              |
+| `CASHFREE_APP_ID`               | `1348337cd58fd2946007d114ebb7338431`                     |
+| `CASHFREE_SECRET_KEY`           | `cfsk_ma_prod_c0607dab370ee9b4fbd58e8777883cce_36d411fa` |
+| `EMAILJS_PUBLIC_KEY`            | `yMInTQ6igoNvRwpNk`                                      |
+| `EMAILJS_PRIVATE_KEY`           | `OYOXv27MB1DgFVE53imjc`                                  |
+| `VITE_EMAILJS_PUBLIC_KEY`       | `yMInTQ6igoNvRwpNk`                                      |
+| `VITE_EMAILJS_SERVICE_ID`       | `service_tbk5flg`                                        |
+| `VITE_EMAILJS_TEMPLATE_ID`      | `template_e8uqzpz`                                       |
+| `NITRO_PRESET`                  | `vercel`                                                 |
 
 Leave `CASHFREE_MODE` **unset** for live payments. Set it to `sandbox` (and
 `VITE_CASHFREE_MODE=sandbox`) only while testing.

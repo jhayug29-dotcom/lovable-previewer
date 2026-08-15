@@ -40,7 +40,8 @@ const inr = (n: number) => n;
 export const products: Product[] = [
   {
     slug: "aurora-motion-pack",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+    videoUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
     title: "Aurora Motion Pack",
     tagline: "120 cinematic After Effects transitions & titles",
     category: "After Effects",
@@ -61,10 +62,22 @@ export const products: Product[] = [
       "Lifetime free updates",
     ],
     howToUse: [
-      { step: "Download & unzip", detail: "Extract the pack anywhere on your drive — no installer needed." },
-      { step: "Open the master project", detail: "Launch Aurora_Master.aep in After Effects CC 2020 or newer." },
-      { step: "Drag a preset in", detail: "Pull any composition onto your timeline and it snaps to your footage." },
-      { step: "Restyle instantly", detail: "Use the Control layer to change color, speed and grain globally." },
+      {
+        step: "Download & unzip",
+        detail: "Extract the pack anywhere on your drive — no installer needed.",
+      },
+      {
+        step: "Open the master project",
+        detail: "Launch Aurora_Master.aep in After Effects CC 2020 or newer.",
+      },
+      {
+        step: "Drag a preset in",
+        detail: "Pull any composition onto your timeline and it snaps to your footage.",
+      },
+      {
+        step: "Restyle instantly",
+        detail: "Use the Control layer to change color, speed and grain globally.",
+      },
     ],
     reviews: [
       {
@@ -92,7 +105,8 @@ export const products: Product[] = [
   },
   {
     slug: "halcyon-lut-collection",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    videoUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
     title: "Halcyon LUT Collection",
     tagline: "60 film-emulation LUTs graded on real scans",
     category: "LUTs",
@@ -113,9 +127,18 @@ export const products: Product[] = [
       "Skin-tone safe roll-off",
     ],
     howToUse: [
-      { step: "Pick your variant", detail: "Use the Log folder for flat footage, Rec.709 for standard profiles." },
-      { step: "Load into your NLE", detail: "Apply as a Lumetri / Color Space Transform LUT on an adjustment layer." },
-      { step: "Balance first", detail: "Set exposure and white balance before the LUT for the cleanest result." },
+      {
+        step: "Pick your variant",
+        detail: "Use the Log folder for flat footage, Rec.709 for standard profiles.",
+      },
+      {
+        step: "Load into your NLE",
+        detail: "Apply as a Lumetri / Color Space Transform LUT on an adjustment layer.",
+      },
+      {
+        step: "Balance first",
+        detail: "Set exposure and white balance before the LUT for the cleanest result.",
+      },
       { step: "Dial the intensity", detail: "Drop opacity to 60–80% for a subtle, premium look." },
     ],
     reviews: [
@@ -137,7 +160,8 @@ export const products: Product[] = [
   },
   {
     slug: "flowdeck-extension",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    videoUrl:
+      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
     title: "Flowdeck Extension",
     tagline: "A control deck panel for Premiere & After Effects",
     category: "Extensions",
@@ -157,10 +181,19 @@ export const products: Product[] = [
       "Free updates for 12 months",
     ],
     howToUse: [
-      { step: "Run the installer", detail: "Pick the installer for macOS or Windows and follow the prompts." },
+      {
+        step: "Run the installer",
+        detail: "Pick the installer for macOS or Windows and follow the prompts.",
+      },
       { step: "Restart your host app", detail: "Flowdeck appears under Window → Extensions." },
-      { step: "Dock the panel", detail: "Drag it beside your Effect Controls for the fastest workflow." },
-      { step: "Sync your presets", detail: "Point Flowdeck at any folder to index it into the library." },
+      {
+        step: "Dock the panel",
+        detail: "Drag it beside your Effect Controls for the fastest workflow.",
+      },
+      {
+        step: "Sync your presets",
+        detail: "Point Flowdeck at any folder to index it into the library.",
+      },
     ],
     reviews: [
       {
@@ -202,9 +235,18 @@ export const products: Product[] = [
     ],
     howToUse: [
       { step: "Unzip the library", detail: "Keep the folder structure so tags stay searchable." },
-      { step: "Index in your NLE", detail: "Add the folder to your media browser or Soundly library." },
-      { step: "Search by intent", detail: "Filenames use plain words like riser, click, impact, texture." },
-      { step: "Layer for depth", detail: "Stack a texture under any impact for a cinematic finish." },
+      {
+        step: "Index in your NLE",
+        detail: "Add the folder to your media browser or Soundly library.",
+      },
+      {
+        step: "Search by intent",
+        detail: "Filenames use plain words like riser, click, impact, texture.",
+      },
+      {
+        step: "Layer for depth",
+        detail: "Stack a texture under any impact for a cinematic finish.",
+      },
     ],
     reviews: [
       {

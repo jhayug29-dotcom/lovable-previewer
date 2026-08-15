@@ -29,7 +29,9 @@ export function PromoBanners() {
             {sale.sale_type === "flat"
               ? `Everything in the offer at ₹${sale.flat_price ?? 0}`
               : `${sale.percent_off ?? 0}% off`}
-            {sale.ends_at ? ` · ends ${new Date(sale.ends_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}` : ""}
+            {sale.ends_at
+              ? ` · ends ${new Date(sale.ends_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+              : ""}
           </p>
         </div>
       ) : null}
@@ -58,7 +60,9 @@ export function PromoBanners() {
               {banner.emoji ? <span className="text-3xl">{banner.emoji}</span> : null}
               <div className="min-w-0 flex-1">
                 <p className="font-display text-lg font-extrabold sm:text-2xl">{banner.title}</p>
-                {banner.subtitle ? <p className="mt-1 text-sm opacity-90">{banner.subtitle}</p> : null}
+                {banner.subtitle ? (
+                  <p className="mt-1 text-sm opacity-90">{banner.subtitle}</p>
+                ) : null}
               </div>
               {banner.cta_label ? (
                 <span className="rounded-full bg-white/25 px-5 py-2.5 font-display text-sm font-semibold backdrop-blur">

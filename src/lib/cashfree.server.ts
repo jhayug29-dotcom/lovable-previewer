@@ -58,7 +58,11 @@ async function applySalePricing(productId: string, price: number): Promise<numbe
   }
 }
 
-async function applyCoupon(amount: number, code: string | undefined, productId?: string): Promise<number> {
+async function applyCoupon(
+  amount: number,
+  code: string | undefined,
+  productId?: string,
+): Promise<number> {
   if (!code) return amount;
   const { data } = await adminClient()
     .from("coupons")
@@ -81,7 +85,6 @@ async function applyCoupon(amount: number, code: string | undefined, productId?:
   if (scoped.length > 0 && (!productId || !scoped.includes(productId))) return amount;
   return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
 }
-
 
 export type CreateOrderInput = {
   slug: string;
@@ -127,22 +130,23 @@ export async function createOrder(input: CreateOrderInput) {
     throw new Error(payload.message ?? "Could not start the payment");
   }
 
-  await adminClient().from("orders").insert({
-    user_id: user?.id ?? null,
-    product_id: product.id,
-    cf_order_id: cfOrderId,
-    amount,
-    status: "PENDING",
-    coupon_code: input.couponCode ?? null,
-    customer_email: input.customerEmail,
-    customer_name: input.customerName,
-    customer_phone: input.customerPhone,
-    origin: input.origin,
-  });
+  await adminClient()
+    .from("orders")
+    .insert({
+      user_id: user?.id ?? null,
+      product_id: product.id,
+      cf_order_id: cfOrderId,
+      amount,
+      status: "PENDING",
+      coupon_code: input.couponCode ?? null,
+      customer_email: input.customerEmail,
+      customer_name: input.customerName,
+      customer_phone: input.customerPhone,
+      origin: input.origin,
+    });
 
   return { orderId: cfOrderId, paymentSessionId: payload.payment_session_id, amount };
 }
-
 
 type SettleRow = {
   id: string;
@@ -192,7 +196,10 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
         .maybeSingle();
       const found = coupon as { id: string; used_count: number } | null;
       if (found) {
-        await db.from("coupons").update({ used_count: (found.used_count ?? 0) + 1 }).eq("id", found.id);
+        await db
+          .from("coupons")
+          .update({ used_count: (found.used_count ?? 0) + 1 })
+          .eq("id", found.id);
       }
     }
   }
@@ -208,7 +215,10 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       downloadLink: link ?? fallback,
     });
     if (sent) {
-      await db.from("orders").update({ receipt_sent_at: new Date().toISOString() }).eq("id", row.id);
+      await db
+        .from("orders")
+        .update({ receipt_sent_at: new Date().toISOString() })
+        .eq("id", row.id);
     }
   }
 
@@ -236,7 +246,11 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   if (!response.ok) throw new Error(payload.message ?? "Could not verify the payment");
 
   const paid = payload.order_status === "PAID";
-  const status: VerifiedOrder["status"] = paid ? "PAID" : payload.order_status === "ACTIVE" ? "PENDING" : "FAILED";
+  const status: VerifiedOrder["status"] = paid
+    ? "PAID"
+    : payload.order_status === "ACTIVE"
+      ? "PENDING"
+      : "FAILED";
 
   const row = await loadOrder(cfOrderId);
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
@@ -258,16 +272,18 @@ export async function claimFree(slug: string, accessToken: string | undefined) {
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
 
-  await adminClient().from("orders").insert({
-    user_id: user.id,
-    product_id: product.id,
-    cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    amount: 0,
-    status: "PAID",
-    customer_email: user.email ?? null,
-    download_link: product.download_link,
-    paid_at: new Date().toISOString(),
-  });
+  await adminClient()
+    .from("orders")
+    .insert({
+      user_id: user.id,
+      product_id: product.id,
+      cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      amount: 0,
+      status: "PAID",
+      customer_email: user.email ?? null,
+      download_link: product.download_link,
+      paid_at: new Date().toISOString(),
+    });
 
   return { downloadLink: product.download_link, productTitle: product.title };
 }

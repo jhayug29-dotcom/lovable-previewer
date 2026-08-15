@@ -24,7 +24,9 @@ export const verifyCashfreeOrder = createServerFn({ method: "POST" })
   .handler(async ({ data }) => verifyOrder(data.orderId));
 
 export const claimFreeProduct = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ slug: z.string().min(1), accessToken: z.string().optional() }).parse(data))
+  .inputValidator((data) =>
+    z.object({ slug: z.string().min(1), accessToken: z.string().optional() }).parse(data),
+  )
   .handler(async ({ data }) => claimFree(data.slug, data.accessToken));
 
 export const generateAiReviews = createServerFn({ method: "POST" })

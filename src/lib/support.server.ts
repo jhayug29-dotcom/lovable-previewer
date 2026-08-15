@@ -13,30 +13,46 @@ export type SupportInput = {
 
 const TOPIC_HINT: Record<SupportInput["topic"], string> = {
   question: "The visitor has a general question about the store, products or downloads.",
-  payment: "The visitor has a payment or download problem. Be reassuring, ask for their order id and the email used at checkout, and tell them the team verifies payments and re-sends download links.",
-  complaint: "The visitor is filing a complaint. Apologise once, be concise, collect the details, and confirm the team will reply by email.",
+  payment:
+    "The visitor has a payment or download problem. Be reassuring, ask for their order id and the email used at checkout, and tell them the team verifies payments and re-sends download links.",
+  complaint:
+    "The visitor is filing a complaint. Apologise once, be concise, collect the details, and confirm the team will reply by email.",
 };
 
 async function storeContext(): Promise<string> {
   try {
     const db = adminClient();
     const [products, settings, sale] = await Promise.all([
-      db.from("products").select("title, category, price, is_free, tagline").eq("active", true).limit(40),
+      db
+        .from("products")
+        .select("title, category, price, is_free, tagline")
+        .eq("active", true)
+        .limit(40),
       db.from("site_settings").select("*").eq("id", "global").maybeSingle(),
-      db.from("sales").select("title, sale_type, percent_off, flat_price").eq("active", true).limit(1).maybeSingle(),
+      db
+        .from("sales")
+        .select("title, sale_type, percent_off, flat_price")
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle(),
     ]);
     const list = (products.data ?? [])
-      .map((p) => `- ${String(p['title'])} (${String(p['category'])}) — ${p['is_free'] ? "Free" : `₹${String(p['price'])}`}: ${String(p['tagline'] ?? "")}`)
+      .map(
+        (p) =>
+          `- ${String(p["title"])} (${String(p["category"])}) — ${p["is_free"] ? "Free" : `₹${String(p["price"])}`}: ${String(p["tagline"] ?? "")}`,
+      )
       .join("\n");
     const s = settings.data as Record<string, string> | null;
     const saleLine = sale.data
-      ? `Live sale: ${String(sale.data['title'])} (${sale.data['sale_type'] === "flat" ? `flat ₹${String(sale.data['flat_price'])}` : `${String(sale.data['percent_off'])}% off`}).`
+      ? `Live sale: ${String(sale.data["title"])} (${sale.data["sale_type"] === "flat" ? `flat ₹${String(sale.data["flat_price"])}` : `${String(sale.data["percent_off"])}% off`}).`
       : "No sale is running right now.";
     return [
       `Catalog:\n${list || "(catalog unavailable)"}`,
       saleLine,
-      s ? `Support email: ${s['support_email'] || s['contact_email'] || ""}. Support hours: ${s['support_hours'] || ""}. WhatsApp: ${s['whatsapp'] || "n/a"}.` : "",
-      s?.['refund_policy'] ? `Refund policy: ${s['refund_policy']}` : "",
+      s
+        ? `Support email: ${s["support_email"] || s["contact_email"] || ""}. Support hours: ${s["support_hours"] || ""}. WhatsApp: ${s["whatsapp"] || "n/a"}.`
+        : "",
+      s?.["refund_policy"] ? `Refund policy: ${s["refund_policy"]}` : "",
     ]
       .filter(Boolean)
       .join("\n\n");
@@ -80,28 +96,36 @@ ${context}`;
             model: "google/gemini-3.6-flash",
             messages: [
               { role: "system", content: system },
-              ...history.map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content })),
+              ...history.map((m) => ({
+                role: m.role === "user" ? "user" : "assistant",
+                content: m.content,
+              })),
             ],
             max_completion_tokens: 400,
           }),
         });
-        const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
+        const payload = (await response.json()) as {
+          choices?: { message?: { content?: string } }[];
+        };
         reply = payload.choices?.[0]?.message?.content?.trim() ?? "";
       }
 
       if (!reply && apiKey) {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents: history.map((m) => ({
-              role: m.role === "user" ? "user" : "model",
-              parts: [{ text: m.content }],
-            })),
-            generationConfig: { temperature: 0.6, maxOutputTokens: 400 },
-          }),
-        });
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: system }] },
+              contents: history.map((m) => ({
+                role: m.role === "user" ? "user" : "model",
+                parts: [{ text: m.content }],
+              })),
+              generationConfig: { temperature: 0.6, maxOutputTokens: 400 },
+            }),
+          },
+        );
         const payload = (await response.json()) as {
           candidates?: { content?: { parts?: { text?: string }[] } }[];
         };
@@ -111,7 +135,6 @@ ${context}`;
       reply = "";
     }
   }
-
 
   if (!reply) reply = fallbackReply(input.topic);
 

@@ -57,7 +57,8 @@ export function applySale(product: DbProduct, sale: StoreSale | null): DbProduct
 
   const base = product.price;
   let next = base;
-  if (sale.sale_type === "flat" && sale.flat_price !== null) next = Math.max(0, Math.round(sale.flat_price));
+  if (sale.sale_type === "flat" && sale.flat_price !== null)
+    next = Math.max(0, Math.round(sale.flat_price));
   else if (sale.percent_off) next = Math.max(0, Math.round(base * (1 - sale.percent_off / 100)));
 
   if (next >= base) return product;

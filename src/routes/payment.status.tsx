@@ -13,14 +13,21 @@ type Search = { order_id?: string };
 export const Route = createFileRoute("/payment/status")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>): Search => ({
-    ...(typeof search['order_id'] === "string" ? { order_id: search['order_id'] } : {}),
+    ...(typeof search["order_id"] === "string" ? { order_id: search["order_id"] } : {}),
   }),
   head: () => ({
     meta: [
       { title: "Payment status — Editly Store" },
-      { name: "description", content: "Your Editly Store payment status and instant download link." },
+      {
+        name: "description",
+        content: "Your Editly Store payment status and instant download link.",
+      },
+      { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Payment status — Editly Store" },
-      { property: "og:description", content: "Your Editly Store payment status and download link." },
+      {
+        property: "og:description",
+        content: "Your Editly Store payment status and download link.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -64,7 +71,8 @@ function PaymentStatusPage() {
               productName: data.productTitle,
               amount: data.amount,
               orderId,
-              downloadLink: data.downloadLink ?? `${window.location.origin}/product/${data.productSlug}`,
+              downloadLink:
+                data.downloadLink ?? `${window.location.origin}/product/${data.productSlug}`,
             }).catch(() => false);
             if (!cancelled) setEmailed(ok);
           }
@@ -95,18 +103,24 @@ function PaymentStatusPage() {
           {error ? (
             <>
               <XCircle className="mx-auto size-12 text-destructive" strokeWidth={1.6} />
-              <h1 className="mt-5 font-display text-3xl font-extrabold text-ink">Something went wrong</h1>
+              <h1 className="mt-5 font-display text-3xl font-extrabold text-ink">
+                Something went wrong
+              </h1>
               <p className="mt-2 text-sm text-muted-foreground">{error}</p>
             </>
           ) : !result ? (
             <>
               <Loader2 className="mx-auto size-10 animate-spin text-ink/60" />
-              <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">Confirming your payment…</h1>
+              <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">
+                Confirming your payment…
+              </h1>
             </>
           ) : result.status === "PAID" ? (
             <>
               <CheckCircle2 className="mx-auto size-14 text-accent" strokeWidth={1.6} />
-              <h1 className="mt-5 font-display text-3xl font-extrabold text-ink">Payment successful</h1>
+              <h1 className="mt-5 font-display text-3xl font-extrabold text-ink">
+                Payment successful
+              </h1>
               <p className="mt-2 text-sm text-muted-foreground">
                 {result.productTitle} · {formatPrice(result.amount)}
               </p>
@@ -145,7 +159,10 @@ function PaymentStatusPage() {
           )}
 
           <div className="mt-8">
-            <Link to="/store" className="text-sm font-semibold text-ink/75 transition-colors hover:text-ink">
+            <Link
+              to="/store"
+              className="text-sm font-semibold text-ink/75 transition-colors hover:text-ink"
+            >
               Back to store
             </Link>
           </div>

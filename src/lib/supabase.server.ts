@@ -7,8 +7,7 @@ const PUBLIC_FALLBACK: Record<string, string | undefined> = {
 };
 
 function env(name: string): string {
-  const value =
-    process.env[name] ?? process.env[`STORE_${name}`] ?? PUBLIC_FALLBACK[name];
+  const value = process.env[name] ?? process.env[`STORE_${name}`] ?? PUBLIC_FALLBACK[name];
   if (!value) {
     throw new Error(
       "The store backend isn't connected yet. Add the Supabase environment variables " +
@@ -17,7 +16,6 @@ function env(name: string): string {
   }
   return value;
 }
-
 
 /** Service-role client — bypasses RLS. Server-only, privileged work only. */
 export function adminClient(): SupabaseClient {
