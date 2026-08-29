@@ -20,6 +20,7 @@ import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 
+import { AuroraBars } from "@/components/site/AuroraBars";
 import { getOrganizationSchema, SITE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
@@ -110,6 +111,12 @@ function Landing() {
 
   return (
     <SiteLayout>
+      {/* Aurora bars background — fixed so it never scrolls away, opaque so it
+          covers the shared hero image from SiteLayout on this page only */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
+        <AuroraBars />
+      </div>
+
       {/* Hero */}
       <section className="relative mx-auto max-w-[1600px] px-6 pb-10 pt-8 lg:px-12">
         <h1 className="animate-rise-in mx-auto max-w-5xl text-balance-tight text-center font-display text-[clamp(2.6rem,7.2vw,5.6rem)] font-extrabold leading-[0.98] text-ink">
