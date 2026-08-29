@@ -1,0 +1,11 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    { "name": "SUPABASE_SERVICE_ROLE_KEY", "description": "Supabase service role key (server-side admin/checkout work)", "requiredAtBoot": false },
+    { "name": "CASHFREE_APP_ID", "description": "Cashfree PG app id (sandbox for testing)", "requiredAtBoot": false },
+    { "name": "CASHFREE_SECRET_KEY", "description": "Cashfree PG secret key", "requiredAtBoot": false },
+    { "name": "GEMINI_API_KEY", "description": "Gemini key for AI review generator and support chat", "requiredAtBoot": false }
+  ]
+}
