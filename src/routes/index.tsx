@@ -10,12 +10,14 @@ import {
   Heart,
   ShoppingBag,
   X,
+  ArrowUpRight,
 } from "lucide-react";
-import cardFan from "@/assets/card-fan-4k.webp";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
 import { Reveal, CountUp } from "@/components/site/Reveal";
 import { VideoCarousel } from "@/components/site/VideoCarousel";
+import { AuroraBars } from "@/components/site/AuroraBars";
+import { HeroShowcase } from "@/components/site/HeroShowcase";
 import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
@@ -25,10 +27,6 @@ import { getOrganizationSchema, SITE_URL } from "@/lib/seo";
 export const Route = createFileRoute("/")({
   loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
-    links: [
-      { rel: "preload", as: "image", href: cardFan },
-      { rel: "canonical", href: `${SITE_URL}/` },
-    ],
     meta: [
       { title: "Editly Store — After Effects Presets, Project Files & Editing Assets" },
       {
@@ -95,6 +93,8 @@ const stats = [
   { icon: ShoppingBag, value: 318, label: "Daily sales", sub: "across every pack", suffix: "" },
 ];
 
+const AURORA_COLORS = ["#ffd6eb", "#ff9acb", "#ff5aa6", "#ff2d78", "#00000000"];
+
 function Landing() {
   const { products } = Route.useLoaderData() as { products: DbProduct[] };
   const { isIndependenceMode } = useIndependenceMode();
@@ -110,63 +110,81 @@ function Landing() {
 
   return (
     <SiteLayout>
-      {/* Hero */}
-      <section className="relative mx-auto max-w-[1600px] px-6 pb-10 pt-8 lg:px-12">
-        <h1 className="animate-rise-in mx-auto max-w-5xl text-balance-tight text-center font-display text-[clamp(2.6rem,7.2vw,5.6rem)] font-extrabold leading-[0.98] text-ink">
-          A place to level up your skills.
-        </h1>
-
-        <div className="relative mx-auto mt-6 max-w-5xl">
-          <span
-            className="animate-rise-in animate-float-slow absolute left-[8%] -top-8 z-20 rounded-3xl rounded-bl-md bg-[#2f7bff] px-5 py-2.5 font-display text-lg font-semibold text-white shadow-lift sm:text-xl"
-            style={{ animationDelay: "300ms" }}
-          >
-            @accio
-          </span>
-          <span
-            className="animate-rise-in animate-float-slow absolute right-[6%] -top-3 z-20 rounded-3xl rounded-br-md bg-[#5f9a7a] px-5 py-2.5 font-display text-lg font-semibold text-white shadow-lift sm:text-xl"
-            style={{ animationDelay: "460ms", animationDuration: "8.5s" }}
-          >
-            @gracian
-          </span>
-
-          <img
-            src={cardFan}
-            alt="A fan of artwork covers from the Editly Store asset library"
-            width={3840}
-            height={1060}
-            className="animate-rise-in animate-drift relative z-10 w-full select-none drop-shadow-[0_40px_70px_rgba(70,40,120,0.35)]"
-            style={{ animationDelay: "160ms" }}
-          />
-        </div>
-
-        <p
-          className="animate-rise-in mt-8 text-center text-lg font-medium text-ink/80 sm:text-xl"
-          style={{ animationDelay: "520ms" }}
-        >
-          Stop wasting time creating everything from scratch.
-        </p>
-
+      {/* Cinematic hero — black aurora + real-product floating showcase */}
+      <section className="relative -mt-[72px] min-h-[100svh] overflow-hidden bg-black text-white sm:-mt-20">
+        {/* z0 — Aurora bars */}
+        <AuroraBars
+          className="z-[0]"
+          barCount={24}
+          colors={AURORA_COLORS}
+          maxHeightRatio={0.92}
+          minHeightRatio={0.18}
+          speed={0.5}
+          gap={3}
+          blur={0}
+          background="#000000"
+        />
+        {/* z1 — dark overlay */}
         <div
-          className="animate-rise-in mt-8 flex flex-wrap items-center justify-center gap-6"
-          style={{ animationDelay: "620ms" }}
-        >
-          <Link
-            to="/store"
-            onClick={handleStartLevelUp}
-            className="btn-shine rounded-full bg-primary px-9 py-4 font-display text-base font-semibold text-primary-foreground shadow-float"
+          className="pointer-events-none absolute inset-0 z-[1]"
+          style={{ background: "rgba(0,0,0,0.30)" }}
+        />
+        {/* z2 — real product imagery */}
+        <HeroShowcase products={products} />
+        {/* z2 — bottom fade into the next (black) section */}
+        <div
+          className="pointer-events-none absolute inset-0 z-[2]"
+          style={{
+            background: "linear-gradient(to bottom, transparent 55%, #000000 100%)",
+          }}
+        />
+
+        {/* z3 — hero content */}
+        <div className="relative z-[3] flex min-h-[100svh] flex-col items-center justify-center px-6 pb-32 pt-32 text-center sm:pt-40">
+          <span className="animate-rise-in liquid-glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.28em] text-white/60">
+            The Editor's Digital Store
+          </span>
+
+          <h1 className="animate-rise-in mt-6 max-w-5xl font-display text-[clamp(2.7rem,7.4vw,6rem)] font-extrabold leading-[0.98] text-white text-balance-tight [text-shadow:0_10px_40px_rgba(0,0,0,0.5)]">
+            Upgrade Your Edits.
+            <br />
+            Create Without{" "}
+            <span className="font-serif italic font-normal text-white">Limits.</span>
+          </h1>
+
+          <p
+            className="animate-rise-in mt-6 max-w-2xl text-balance-tight text-base text-white/70 sm:text-lg"
+            style={{ animationDelay: "120ms" }}
           >
-            Start Level Up.
-          </Link>
-          <Link
-            to="/read-more"
-            className="text-base font-semibold text-ink/85 underline-offset-8 transition-colors hover:text-ink hover:underline"
+            Premium presets, transitions, SFX and creative assets built to make your
+            editing workflow faster, cleaner and more powerful.
+          </p>
+
+          <div
+            className="animate-rise-in mt-10 flex flex-wrap items-center justify-center gap-4"
+            style={{ animationDelay: "220ms" }}
           >
-            Read more
-          </Link>
+            <Link
+              to="/store"
+              onClick={handleStartLevelUp}
+              className="btn-shine group inline-flex items-center gap-2 rounded-full bg-white px-8 py-4 font-display text-sm font-bold uppercase tracking-wider text-black shadow-[0_20px_50px_-18px_rgba(255,255,255,0.5)]"
+            >
+              Explore products
+              <ArrowUpRight
+                className="size-4 transition-transform duration-500 ease-[var(--ease-macos)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+                strokeWidth={2.2}
+              />
+            </Link>
+            <Link
+              to="/store"
+              className="liquid-glass inline-flex items-center gap-2 rounded-full px-8 py-4 font-display text-sm font-bold uppercase tracking-wider text-white transition-transform duration-500 hover:scale-[1.03] active:scale-95"
+            >
+              View bundles
+            </Link>
+          </div>
         </div>
 
-        {/* Independence Day Modal */}
+        {/* Independence Day Modal (preserved from the previous hero) */}
         {showModal && (
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -224,28 +242,6 @@ function Landing() {
             </div>
           </div>
         )}
-
-        {/* Zero-gravity chips floating below the CTA */}
-        <div className="mt-14 flex flex-wrap items-center justify-center gap-4">
-          {[
-            "After Effects packs",
-            "Cinematic LUTs",
-            "Panel extensions",
-            "SFX libraries",
-            "Instant download",
-          ].map((chip, i) => (
-            <span
-              key={chip}
-              className="glass animate-rise-in animate-zero-g press-pop rounded-full px-6 py-3 font-display text-sm font-semibold text-ink"
-              style={{
-                animationDelay: `${700 + i * 110}ms, ${i * 900}ms`,
-                animationDuration: `0.8s, ${12 + i * 1.4}s`,
-              }}
-            >
-              {chip}
-            </span>
-          ))}
-        </div>
       </section>
 
       {/* Stats — numbers count up when this section scrolls into view */}
