@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, fetchSettings } from "@/lib/settings";
 import { SiteHeader } from "./SiteHeader";
 import { RainingFlags } from "./RainingFlags";
 
-export function SiteLayout({ children }: { children: ReactNode }) {
+export function SiteLayout({ children, background }: { children: ReactNode; background?: ReactNode }) {
   const { data: settings = DEFAULT_SETTINGS } = useQuery({
     queryKey: ["site-settings"],
     queryFn: fetchSettings,
@@ -25,15 +25,17 @@ export function SiteLayout({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen overflow-x-hidden">
       {/* Single fixed background shared by the whole page — never scrolls away */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
-        <img
-          src={heroBg}
-          srcSet={`${heroBgSmall} 1920w, ${heroBg} 3840w`}
-          sizes="100vw"
-          alt=""
-          fetchPriority="high"
-          decoding="async"
-          className="size-full object-cover object-center"
-        />
+        {background ?? (
+          <img
+            src={heroBg}
+            srcSet={`${heroBgSmall} 1920w, ${heroBg} 3840w`}
+            sizes="100vw"
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+            className="size-full object-cover object-center"
+          />
+        )}
       </div>
 
       <SiteHeader />
