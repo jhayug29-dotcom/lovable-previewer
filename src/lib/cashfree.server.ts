@@ -34,7 +34,11 @@ async function loadProduct(slug: string): Promise<ProductRow> {
     .select("id, slug, title, price, is_free, download_link")
     .eq("slug", slug)
     .maybeSingle();
-  if (error || !data) throw new Error("Product not found");
+  if (error) {
+    console.error("Supabase loadProduct error:", error);
+    throw new Error("Database error while looking up product");
+  }
+  if (!data) throw new Error("Product unavailable. Please refresh and try again.");
   return data as ProductRow;
 }
 
@@ -114,20 +118,22 @@ export async function createOrder(input: CreateOrderInput) {
       order_currency: "INR",
       customer_details: {
         customer_id: user?.id ?? `guest_${Date.now()}`,
-        customer_name: input.customerName,
+        customer_name: input.customerName.slice(0, 100),
         customer_email: input.customerEmail,
-        customer_phone: input.customerPhone,
+        customer_phone: input.customerPhone.replace(/\D/g, "").slice(-10).padStart(10, "0"),
       },
       order_meta: {
         return_url: `${input.origin}/payment/status?order_id=${cfOrderId}`,
       },
-      order_note: product.title,
+      order_note: product.title.slice(0, 50),
     }),
   });
 
   const payload = (await response.json()) as { payment_session_id?: string; message?: string };
   if (!response.ok || !payload.payment_session_id) {
-    throw new Error(payload.message ?? "Could not start the payment");
+    throw new Error(
+      payload.message ?? "Could not start the payment (Cashfree rejected order creation)",
+    );
   }
 
   await adminClient()

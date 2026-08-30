@@ -1,6 +1,0 @@
-{
-  "name": "Lovable Previewer",
-  "description": "A lovable previewer imported from GitHub.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

@@ -124,32 +124,28 @@ function Landing() {
           playsInline
           preload="auto"
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-[center_50%]"
+          className="absolute inset-0 h-full w-full object-cover object-[center_63%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_15%,black_100%)] sm:object-[center_68%] md:object-[center_73%]"
         >
           <source src={HERO_VIDEO} type="video/mp4" />
         </video>
-        {/* Dark behind the headline (top), clears through the middle-lower so the
-            scene shows, then hands off to the closing fade below. This layer no
-            longer tries to finish the job at its own last stop — it used to end at
-            `background/80`, which left the video ~20% visible right at the clip
-            edge and produced a hard horizontal line across the page. */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-background/85 from-[8%] via-background/20 via-[52%] to-background/25 to-[100%]" />
-        {/* The closing fade: a tall five-stop ramp that reaches fully opaque black
-            exactly at the section's bottom edge, so the scene dissolves into the
-            black section below instead of being cut off by it. Five stops rather
-            than three — a linear ramp still shows a knee where it hits black,
-            because perceived brightness is not linear in alpha. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-80 bg-[linear-gradient(to_top,#000_0%,rgba(0,0,0,0.94)_16%,rgba(0,0,0,0.7)_38%,rgba(0,0,0,0.34)_64%,rgba(0,0,0,0.1)_84%,transparent_100%)] md:h-[26rem]" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 pt-28 text-center sm:px-8 md:pt-32">
+        {/* Top fade to make the headline text readable against the background */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,#000_0%,#000_15%,rgba(0,0,0,0.8)_35%,transparent_60%)]" />
+
+        {/* The closing fade: precise bottom feather starting at the reference line */}
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_76%,rgba(0,0,0,0.15)_82%,rgba(0,0,0,0.5)_90%,#000_100%)]" />
+
+        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 pt-20 text-center sm:px-8 md:pt-24 lg:pt-28">
           {/* Avatar stack */}
-          <motion.div {...heroReveal(0)} className="mb-6 flex items-center justify-center gap-3">
+          <motion.div {...heroReveal(0)} className="mb-5 flex items-center justify-center gap-3">
             <AvatarCircles avatarUrls={HERO_AVATARS} />
-            <span className="text-sm text-muted-foreground">500+ editors already creating</span>
+            <span className="text-xs text-muted-foreground sm:text-sm">
+              500+ editors already creating
+            </span>
           </motion.div>
 
           {/* Two lines, each revealed on its own beat: "Create" / "without limits". */}
-          <h1 className="text-5xl font-medium leading-[1.02] tracking-[-2px] md:text-7xl lg:text-8xl">
+          <h1 className="text-5xl font-medium leading-[1.02] tracking-[-2px] md:text-6xl lg:text-7xl">
             <motion.span {...heroReveal(0.12)} className="block">
               Create
             </motion.span>
@@ -160,7 +156,7 @@ function Landing() {
 
           <motion.p
             {...heroReveal(0.42)}
-            className="mx-auto mt-6 max-w-xl text-lg"
+            className="mx-auto mt-6 max-w-[280px] text-xs font-light opacity-80 sm:max-w-[340px] sm:text-[13px] md:max-w-[380px] md:text-sm"
             style={{ color: "hsl(var(--hero-subtitle))", willChange: "transform, opacity, filter" }}
           >
             Premium assets for editors and motion designers — presets, LUTs, extensions and SFX,
@@ -191,12 +187,18 @@ function Landing() {
       </section>
 
       {/* ============================================ 2 · EDITING HAS CHANGED */}
-      <section id="how-it-works" className="px-5 pb-6 pt-24 sm:px-8 md:px-16 md:pb-9 md:pt-32 lg:px-28">
+      <section
+        id="how-it-works"
+        className="px-5 pb-6 pt-24 sm:px-8 md:px-16 md:pb-9 md:pt-32 lg:px-28"
+      >
         <div className="mx-auto max-w-5xl text-center">
           <h2 className="text-5xl leading-[1.02] tracking-[-1px] md:text-7xl lg:text-8xl">
             <KineticText text="Editing has changed. Have you?" highlight={["changed."]} />
           </h2>
-          <motion.p {...fadeUp(0.1)} className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground">
+          <motion.p
+            {...fadeUp(0.1)}
+            className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground"
+          >
             The tools moved on. The assets that feed them should too — built for the way editors
             actually work in 2026.
           </motion.p>
@@ -215,9 +217,9 @@ function Landing() {
           images={wheelImages}
           autoplay
           turns={2}
-          itemWidth={212}
-          itemHeight={146}
-          yaw={32}
+          itemWidth={320}
+          itemHeight={220}
+          yaw={0}
           autoplayDuration={190}
           blur={0}
           dim={100}
@@ -285,9 +287,12 @@ function Landing() {
           >
             Solution
           </motion.p>
-          <motion.h2 {...fadeUp(0.08)} className="mt-4 max-w-3xl text-4xl tracking-tight md:text-6xl">
-            The store for{" "}
-            <span className="font-instrument font-normal italic">meaningful</span> assets
+          <motion.h2
+            {...fadeUp(0.08)}
+            className="mt-4 max-w-3xl text-4xl tracking-tight md:text-6xl"
+          >
+            The store for <span className="font-instrument font-normal italic">meaningful</span>{" "}
+            assets
           </motion.h2>
 
           <motion.div {...fadeUp(0.16)} className="mt-14 overflow-hidden rounded-2xl">
@@ -316,12 +321,15 @@ function Landing() {
       </section>
 
       {/* ============================================ 5 · COLLECTIONS (real products) */}
-      <section id="collections" className="border-t border-border/30 px-5 py-32 sm:px-8 md:px-16 md:py-44 lg:px-28">
+      <section
+        id="collections"
+        className="border-t border-border/30 px-5 py-32 sm:px-8 md:px-16 md:py-44 lg:px-28"
+      >
         <div className="mx-auto max-w-6xl">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <motion.h2 {...fadeUp(0)} className="text-4xl tracking-tight md:text-6xl">
-              Packs editors{" "}
-              <span className="font-instrument font-normal italic">keep</span> reaching for
+              Packs editors <span className="font-instrument font-normal italic">keep</span>{" "}
+              reaching for
             </motion.h2>
             <motion.div {...fadeUp(0.08)}>
               <Link
@@ -406,13 +414,10 @@ function Landing() {
             overlay: a soft black text-shadow travels with the glyphs, so it holds
             up wherever the ribbon's near-white crease happens to pass behind them
             and the background stays clean everywhere else. */}
-        <div
-          className="relative z-10 mx-auto flex max-w-2xl flex-col items-center text-center [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_2px_22px_rgba(0,0,0,0.85)]"
-        >
+        <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center text-center [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_2px_22px_rgba(0,0,0,0.85)]">
           <LoopMark outer="w-10 h-10" inner="w-5 h-5" />
           <h2 className="mt-8 text-4xl tracking-tight md:text-6xl">
-            Start your{" "}
-            <span className="font-instrument font-normal italic">journey</span>
+            Start your <span className="font-instrument font-normal italic">journey</span>
           </h2>
           <p className="mt-5 max-w-lg text-foreground/85">
             Join thousands of editors leveling up their craft with assets built to move fast and
@@ -478,7 +483,9 @@ function DarkProductCard({ product }: { product: DbProduct }) {
       </div>
       <div className="relative z-10 p-5">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">{product.category}</p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">
+            {product.category}
+          </p>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Star className="h-3 w-3 fill-foreground text-foreground" strokeWidth={1.4} />
             {product.rating}

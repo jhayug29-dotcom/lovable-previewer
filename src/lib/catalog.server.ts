@@ -44,11 +44,11 @@ async function queryProducts(): Promise<DbProduct[]> {
       .eq("active", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
-    if (error || !data || data.length === 0) return fallbackProducts as DbProduct[];
+    if (error || !data || data.length === 0) return [];
     return (data as Row[]).map(mapProduct);
-  } catch {
-    // Never let a backend hiccup take the storefront down.
-    return fallbackProducts as DbProduct[];
+  } catch (err) {
+    console.error("Failed to load products:", err);
+    return [];
   }
 }
 
