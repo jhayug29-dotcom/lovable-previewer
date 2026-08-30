@@ -124,7 +124,7 @@ function Landing() {
           playsInline
           preload="auto"
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-[center_63%] sm:object-[center_68%] md:object-[center_73%]"
+          className="absolute inset-0 h-full w-full object-cover object-[center_63%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_15%,black_100%)] sm:object-[center_68%] md:object-[center_73%]"
         >
           <source src={HERO_VIDEO} type="video/mp4" />
         </video>
@@ -156,7 +156,7 @@ function Landing() {
 
           <motion.p
             {...heroReveal(0.42)}
-            className="mx-auto mt-6 max-w-xl text-sm font-light opacity-90 sm:text-base"
+            className="mx-auto mt-6 max-w-[280px] text-xs font-light opacity-80 sm:max-w-[340px] sm:text-[13px] md:max-w-[380px] md:text-sm"
             style={{ color: "hsl(var(--hero-subtitle))", willChange: "transform, opacity, filter" }}
           >
             Premium assets for editors and motion designers — presets, LUTs, extensions and SFX,
