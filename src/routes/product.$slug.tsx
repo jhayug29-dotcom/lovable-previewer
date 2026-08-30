@@ -85,7 +85,7 @@ function ProductPage() {
     product.originalPrice > 0 ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <section className="mx-auto max-w-[1600px] px-6 lg:px-12">
         <nav
           aria-label="Breadcrumbs"

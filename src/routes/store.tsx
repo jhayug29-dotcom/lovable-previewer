@@ -92,7 +92,7 @@ function StorePage() {
   }, [products, query, category, sort]);
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <PromoBanners />
       <StoreGreeting />
       <section className="mx-auto max-w-[1600px] px-6 pt-6 lg:px-12">

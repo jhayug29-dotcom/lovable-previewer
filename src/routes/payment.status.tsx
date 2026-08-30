@@ -97,7 +97,7 @@ function PaymentStatusPage() {
   }, [orderId, verify]);
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <section className="mx-auto max-w-[640px] px-6 pb-24">
         <div className="glass animate-rise-in rounded-4xl p-10 text-center">
           {error ? (

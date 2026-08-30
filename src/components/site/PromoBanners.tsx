@@ -37,7 +37,39 @@ export function PromoBanners() {
       ) : null}
 
       {banners.map((banner, i) => {
-        const content = (
+        const content = banner.image_url ? (
+          // Image banners render as a 16:9 media card (capped on wide screens).
+          <div
+            className="animate-rise-in relative aspect-video max-h-[440px] w-full overflow-hidden rounded-4xl shadow-lift transition-transform duration-500 hover:-translate-y-0.5"
+            style={{ animationDelay: `${i * 70}ms`, color: banner.text_color || "#FFFFFF" }}
+          >
+            <img
+              src={banner.image_url}
+              alt=""
+              aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+              className="absolute inset-0 size-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+            <div className="relative flex h-full flex-col justify-end gap-2 p-6 sm:p-8">
+              <div className="flex flex-wrap items-center gap-4">
+                {banner.emoji ? <span className="text-3xl">{banner.emoji}</span> : null}
+                <div className="min-w-0 flex-1">
+                  <p className="font-display text-lg font-extrabold sm:text-2xl">{banner.title}</p>
+                  {banner.subtitle ? (
+                    <p className="mt-1 text-sm opacity-90">{banner.subtitle}</p>
+                  ) : null}
+                </div>
+                {banner.cta_label ? (
+                  <span className="rounded-full bg-white/25 px-5 py-2.5 font-display text-sm font-semibold backdrop-blur">
+                    {banner.cta_label}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div
             className="animate-rise-in relative overflow-hidden rounded-4xl px-7 py-6 shadow-lift transition-transform duration-500 hover:-translate-y-0.5"
             style={{
@@ -46,16 +78,6 @@ export function PromoBanners() {
               color: banner.text_color || "#FFFFFF",
             }}
           >
-            {banner.image_url ? (
-              <img
-                src={banner.image_url}
-                alt=""
-                aria-hidden="true"
-                loading="lazy"
-                decoding="async"
-                className="absolute inset-0 size-full object-cover opacity-30"
-              />
-            ) : null}
             <div className="relative flex flex-wrap items-center gap-4">
               {banner.emoji ? <span className="text-3xl">{banner.emoji}</span> : null}
               <div className="min-w-0 flex-1">

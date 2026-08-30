@@ -9,7 +9,10 @@ export interface MetaTag {
   charSet?: string;
   name?: string;
   property?: string;
-  content: string;
+  /** A document title. TanStack renders `{ title }` as `<title>`, and such a tag
+   *  carries no `content` — which is why `content` is optional below. */
+  title?: string;
+  content?: string;
 }
 
 export interface LinkTag {

@@ -5,10 +5,11 @@ import { Mail, Phone, Instagram, Youtube, Twitter } from "lucide-react";
 import heroBg from "@/assets/hero-bg-4k.jpg";
 import heroBgSmall from "@/assets/hero-bg-1080.jpg";
 import { DEFAULT_SETTINGS, fetchSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
 import { SiteHeader } from "./SiteHeader";
 import { RainingFlags } from "./RainingFlags";
 
-export function SiteLayout({ children }: { children: ReactNode }) {
+export function SiteLayout({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
   const { data: settings = DEFAULT_SETTINGS } = useQuery({
     queryKey: ["site-settings"],
     queryFn: fetchSettings,
@@ -22,18 +23,28 @@ export function SiteLayout({ children }: { children: ReactNode }) {
   ].filter((s) => s.href);
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
-      {/* Single fixed background shared by the whole page — never scrolls away */}
+    <div
+      className={cn(
+        "relative min-h-screen overflow-x-hidden",
+        dark && "mindloop bg-background text-foreground",
+      )}
+    >
+      {/* Single fixed background shared by the whole page — never scrolls away.
+          On dark pages it's solid black to match the landing. */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
-        <img
-          src={heroBg}
-          srcSet={`${heroBgSmall} 1920w, ${heroBg} 3840w`}
-          sizes="100vw"
-          alt=""
-          fetchPriority="high"
-          decoding="async"
-          className="size-full object-cover object-center"
-        />
+        {dark ? (
+          <div className="size-full bg-background" />
+        ) : (
+          <img
+            src={heroBg}
+            srcSet={`${heroBgSmall} 1920w, ${heroBg} 3840w`}
+            sizes="100vw"
+            alt=""
+            fetchPriority="high"
+            decoding="async"
+            className="size-full object-cover object-center"
+          />
+        )}
       </div>
 
       <SiteHeader />

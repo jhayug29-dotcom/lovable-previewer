@@ -37,11 +37,17 @@ export type Product = {
 
 const inr = (n: number) => n;
 
+// Preview clips for the offline fallback catalogue. These point at the same
+// self-hosted MP4s the landing page uses (public/media) rather than a third-party
+// sample bucket, so the fallback works with nothing but this repository.
+const PREVIEW_AE = "/media/solution.mp4";
+const PREVIEW_LUTS = "/media/mission.mp4";
+const PREVIEW_EXTENSION = "/media/hero.mp4";
+
 export const products: Product[] = [
   {
     slug: "aurora-motion-pack",
-    videoUrl:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4",
+    videoUrl: PREVIEW_AE,
     title: "Aurora Motion Pack",
     tagline: "120 cinematic After Effects transitions & titles",
     category: "After Effects",
@@ -105,8 +111,7 @@ export const products: Product[] = [
   },
   {
     slug: "halcyon-lut-collection",
-    videoUrl:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+    videoUrl: PREVIEW_LUTS,
     title: "Halcyon LUT Collection",
     tagline: "60 film-emulation LUTs graded on real scans",
     category: "LUTs",
@@ -160,8 +165,7 @@ export const products: Product[] = [
   },
   {
     slug: "flowdeck-extension",
-    videoUrl:
-      "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4",
+    videoUrl: PREVIEW_EXTENSION,
     title: "Flowdeck Extension",
     tagline: "A control deck panel for Premiere & After Effects",
     category: "Extensions",

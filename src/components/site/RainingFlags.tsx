@@ -25,6 +25,7 @@ export function RainingFlags() {
       return () => clearTimeout(timer);
     } else {
       setShow(false);
+      return undefined; // nothing to tear down on this branch
     }
   }, [isIndependenceMode]);
 

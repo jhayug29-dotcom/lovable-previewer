@@ -76,7 +76,7 @@ function AuthPage() {
 
   if (user) {
     return (
-      <SiteLayout>
+      <SiteLayout dark>
         <section className="mx-auto flex max-w-[520px] flex-col px-5 pb-24 sm:px-6">
           <div className="glass animate-rise-in rounded-4xl p-7 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
@@ -93,7 +93,7 @@ function AuthPage() {
             <div className="mt-7 flex flex-col gap-2.5">
               <Link
                 to="/store"
-                className="hover-pop flex items-center gap-3 rounded-3xl bg-white/70 px-5 py-4 font-display text-sm font-semibold text-ink"
+                className="hover-pop flex items-center gap-3 rounded-3xl bg-white/10 px-5 py-4 font-display text-sm font-semibold text-ink"
               >
                 <Store className="size-5" strokeWidth={1.7} />
                 Browse the store
@@ -101,7 +101,7 @@ function AuthPage() {
               {isAdmin ? (
                 <Link
                   to="/admin"
-                  className="hover-pop flex items-center gap-3 rounded-3xl bg-white/70 px-5 py-4 font-display text-sm font-semibold text-ink"
+                  className="hover-pop flex items-center gap-3 rounded-3xl bg-white/10 px-5 py-4 font-display text-sm font-semibold text-ink"
                 >
                   <ShieldCheck className="size-5" strokeWidth={1.7} />
                   Open admin panel
@@ -125,7 +125,7 @@ function AuthPage() {
   }
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <section className="mx-auto flex max-w-[520px] flex-col px-5 pb-24 sm:px-6">
         <Link
           to="/"
@@ -158,7 +158,7 @@ function AuthPage() {
                 toast.error(err instanceof Error ? err.message : "Google sign-in failed"),
               );
             }}
-            className="hover-pop mt-6 flex w-full items-center justify-center gap-3 rounded-full bg-white/70 px-6 py-4 font-display text-sm font-semibold text-ink"
+            className="hover-pop mt-6 flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-4 font-display text-sm font-semibold text-black"
           >
             <svg viewBox="0 0 24 24" className="size-5" aria-hidden="true">
               <path
@@ -269,7 +269,7 @@ function Field({
   required?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-3 rounded-2xl bg-white/60 px-5 py-4 transition-colors focus-within:bg-white/85">
+    <label className="flex items-center gap-3 rounded-2xl bg-white/60 px-5 py-4 transition-colors focus-within:bg-white/15">
       <Icon className="size-4 text-muted-foreground" strokeWidth={1.8} />
       <input
         {...rest}

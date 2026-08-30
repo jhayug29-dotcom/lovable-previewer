@@ -144,7 +144,7 @@ function ReadMore() {
   ].filter(Boolean) as { icon: typeof Mail; label: string; value: string; href: string | null }[];
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <section className="mx-auto max-w-[1100px] px-6 pb-6 pt-10 lg:px-12">
         <Reveal variant="blur">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-violet-deep">

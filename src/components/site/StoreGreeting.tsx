@@ -14,7 +14,7 @@ export function StoreGreeting() {
         <div className="relative">
           <span className="mb-4 inline-block text-5xl animate-bounce">🇮🇳</span>
           <h2 className="font-display text-3xl font-extrabold text-ink sm:text-4xl">
-            Welcome back, {user.user_metadata?.name || "Explorer"}!
+            Welcome back, {user.user_metadata?.["name"] || "Explorer"}!
           </h2>
           <p className="mt-3 text-lg font-medium text-ink/80">
             Happy 80th Independence Day! Celebrate freedom with our exclusive assets to elevate your

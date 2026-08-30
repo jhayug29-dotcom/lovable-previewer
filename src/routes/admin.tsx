@@ -100,7 +100,7 @@ function AdminPage() {
 
   if (loading || !access) {
     return (
-      <SiteLayout>
+      <SiteLayout dark>
         <div className="flex min-h-[50vh] items-center justify-center">
           <Loader2 className="size-6 animate-spin text-ink/60" />
         </div>
@@ -109,7 +109,7 @@ function AdminPage() {
   }
 
   return (
-    <SiteLayout>
+    <SiteLayout dark>
       <section className="mx-auto max-w-[1600px] px-6 pb-24 lg:px-12">
         <h1 className="font-display text-[clamp(2rem,3.5vw,3rem)] font-extrabold text-ink">
           {isAdminUser ? "Control panel" : "Seller dashboard"}

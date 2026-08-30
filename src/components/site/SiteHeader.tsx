@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  CircleUserRound,
   Store,
   LifeBuoy,
   Rocket,
@@ -14,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import logoMark from "@/assets/logo.png";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
+import { AccountMenu } from "@/components/site/AccountMenu";
 
 const navItems = [
   { label: "Store", to: "/store", icon: Store },
@@ -38,7 +38,7 @@ export function SiteHeader() {
             <img
               src={logoMark}
               alt="Editly Store logo"
-              className="size-7 object-contain"
+              className="site-logo-mark size-7 object-contain"
               width={28}
               height={28}
             />
@@ -84,24 +84,10 @@ export function SiteHeader() {
               <ShieldCheck className="size-5" strokeWidth={1.6} />
             </Link>
           ) : null}
-          <Link
-            to="/auth"
-            className="glass flex h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-ink transition-transform duration-500 hover:scale-105 active:scale-95"
-            aria-label={user ? "Your account" : "Sign in"}
-          >
-            <CircleUserRound className="size-5" strokeWidth={1.6} />
-            <span className="hidden sm:inline">{user ? "Account" : "Sign in"}</span>
-          </Link>
-          {user ? (
-            <button
-              type="button"
-              onClick={() => void signOut()}
-              className="glass hidden size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95 sm:flex"
-              aria-label="Sign out"
-            >
-              <LogOut className="size-5" strokeWidth={1.6} />
-            </button>
-          ) : null}
+          {/* Signed out: a link to /auth. Signed in: a disclosure that reveals the
+              profile and every pack the user owns, with its download link. The
+              old standalone sign-out button now lives inside that panel. */}
+          <AccountMenu />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
