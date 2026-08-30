@@ -131,7 +131,9 @@ export async function createOrder(input: CreateOrderInput) {
 
   const payload = (await response.json()) as { payment_session_id?: string; message?: string };
   if (!response.ok || !payload.payment_session_id) {
-    throw new Error(payload.message ?? "Could not start the payment (Cashfree rejected order creation)");
+    throw new Error(
+      payload.message ?? "Could not start the payment (Cashfree rejected order creation)",
+    );
   }
 
   await adminClient()
