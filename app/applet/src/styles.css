@@ -1,0 +1,670 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Editly Store design system — premium light theme, lavender/violet dusk palette
+ * tuned to the fixed hero background. All colors are oklch semantic tokens.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-ink: var(--ink);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  --color-lilac: var(--lilac);
+  --color-peach: var(--peach);
+  --color-violet-deep: var(--violet-deep);
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --shadow-glass: 0 1px 1px oklch(1 0 0 / 55%) inset, 0 18px 50px -20px oklch(0.35 0.09 290 / 35%);
+  --shadow-float: 0 30px 70px -30px oklch(0.35 0.09 290 / 45%);
+  --shadow-lift: 0 14px 34px -18px oklch(0.35 0.09 290 / 40%);
+  --ease-macos: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root {
+  --radius: 1.25rem;
+  --background: oklch(0.965 0.015 300);
+  --foreground: oklch(0.16 0.03 290);
+  --card: oklch(1 0 0 / 62%);
+  --card-foreground: oklch(0.16 0.03 290);
+  --popover: oklch(0.99 0.005 300);
+  --popover-foreground: oklch(0.16 0.03 290);
+  --primary: oklch(0.18 0.02 290);
+  --primary-foreground: oklch(0.985 0.005 300);
+  --secondary: oklch(1 0 0 / 55%);
+  --secondary-foreground: oklch(0.22 0.03 290);
+  --muted: oklch(0.94 0.015 300);
+  --muted-foreground: oklch(0.45 0.04 290);
+  --accent: oklch(0.62 0.19 295);
+  --accent-foreground: oklch(0.985 0.005 300);
+  --destructive: oklch(0.6 0.22 20);
+  --destructive-foreground: oklch(0.985 0.005 300);
+  --border: oklch(1 0 0 / 45%);
+  --input: oklch(1 0 0 / 60%);
+  --ring: oklch(0.62 0.19 295);
+
+  --ink: oklch(0.14 0.02 290);
+  --glass: oklch(1 0 0 / 55%);
+  --glass-border: oklch(1 0 0 / 70%);
+  --lilac: oklch(0.82 0.08 300);
+  --peach: oklch(0.9 0.06 45);
+  --violet-deep: oklch(0.42 0.13 292);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+}
+
+/* Apple-style liquid glass surface — layered highlight + specular edge */
+@utility glass {
+  position: relative;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, white 72%, transparent),
+    color-mix(in oklab, white 34%, transparent) 48%,
+    color-mix(in oklab, white 52%, transparent)
+  );
+  backdrop-filter: blur(34px) saturate(190%) brightness(1.04);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 70%) inset,
+    0 -1px 0 oklch(1 0 0 / 25%) inset,
+    0 22px 60px -26px oklch(0.35 0.09 290 / 38%);
+}
+
+@utility glass-soft {
+  background: color-mix(in oklab, white 38%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid color-mix(in oklab, white 55%, transparent);
+}
+
+@utility text-balance-tight {
+  text-wrap: balance;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes float-slow {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-14px) rotate(-0.6deg);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes shimmer-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(220%);
+  }
+}
+
+@utility animate-float-slow {
+  animation: float-slow 7s var(--ease-macos) infinite;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -18px, 0) rotate(-0.8deg);
+  }
+}
+
+/* Slow, smooth floating for the hero artwork */
+@utility animate-drift {
+  animation: drift 11s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+@utility animate-rise-in {
+  animation: rise-in 0.8s var(--ease-macos) both;
+}
+
+@utility hover-lift {
+  transition:
+    transform 0.5s var(--ease-macos),
+    box-shadow 0.5s var(--ease-macos);
+  &:hover {
+    transform: translateY(-6px);
+    box-shadow: var(--shadow-float);
+  }
+}
+
+/* Quick, snappy pop for cards / columns on hover */
+@utility hover-pop {
+  transition:
+    transform 0.24s cubic-bezier(0.22, 1.2, 0.36, 1),
+    box-shadow 0.24s var(--ease-macos),
+    border-color 0.24s ease;
+  will-change: transform;
+  &:hover {
+    transform: translateY(-10px) scale(1.025);
+    box-shadow: var(--shadow-float);
+  }
+  &:active {
+    transform: translateY(-4px) scale(1.005);
+  }
+}
+
+/* Button with a light sweep on hover */
+@utility btn-shine {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.24s cubic-bezier(0.22, 1.2, 0.36, 1);
+  &:hover {
+    transform: translateY(-2px) scale(1.03);
+  }
+  &:active {
+    transform: scale(0.96);
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 40%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in oklab, white 55%, transparent),
+      transparent
+    );
+    transform: translateX(-140%);
+    pointer-events: none;
+  }
+  &:hover::after {
+    animation: shimmer-sweep 0.9s var(--ease-macos);
+  }
+}
+
+/* ---------------------------------------------- zero-gravity + morph motion */
+
+@keyframes zero-g {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate3d(6px, -12px, 0) rotate(0.7deg) scale(1.006);
+  }
+  50% {
+    transform: translate3d(-4px, -20px, 0) rotate(-0.6deg) scale(1.01);
+  }
+  75% {
+    transform: translate3d(-7px, -9px, 0) rotate(0.4deg) scale(1.004);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+}
+
+/* Weightless drifting — elements look suspended in mid-air */
+@utility animate-zero-g {
+  animation: zero-g 13s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+/* Dynamic-Island style morph: bouncy scale + radius + shadow on hover */
+@utility morph-card {
+  transition:
+    transform 0.55s cubic-bezier(0.18, 1.35, 0.28, 1),
+    border-radius 0.55s cubic-bezier(0.18, 1.35, 0.28, 1),
+    box-shadow 0.55s var(--ease-macos);
+  will-change: transform;
+  &:hover {
+    transform: translateY(-10px) scale(1.028);
+    border-radius: calc(var(--radius) + 30px);
+    box-shadow: var(--shadow-float);
+  }
+  &:active {
+    transform: translateY(-3px) scale(0.995);
+  }
+}
+
+/* Springy press feedback for icon buttons */
+@utility press-pop {
+  transition: transform 0.4s cubic-bezier(0.18, 1.4, 0.3, 1);
+  &:hover {
+    transform: scale(1.09);
+  }
+  &:active {
+    transform: scale(0.9);
+  }
+}
+
+/* Scroll reveal states (driven by the Reveal component) */
+@utility reveal {
+  opacity: 0;
+  transition:
+    opacity 0.9s var(--ease-macos),
+    transform 0.9s cubic-bezier(0.2, 1.15, 0.32, 1),
+    filter 0.9s var(--ease-macos);
+  &.is-in {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@utility reveal-up {
+  transform: translateY(38px);
+}
+
+@utility reveal-scale {
+  transform: translateY(24px) scale(0.94);
+}
+
+@utility reveal-blur {
+  transform: translateY(18px);
+  filter: blur(10px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-drift,
+  .animate-float-slow,
+  .animate-zero-g {
+    animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+@keyframes rain {
+  0% {
+    transform: translateY(-50px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@utility animate-rain {
+  animation: rain linear forwards;
+}
+
+/* ============================================================================
+ * Mindloop dark landing skin — scoped to `.mindloop` only.
+ * Pure black / white monochrome, Inter + Instrument Serif. Nothing here leaks
+ * into the rest of the (light) store: every rule is namespaced or additive.
+ * ========================================================================== */
+
+@utility font-inter {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Instrument Serif — used for the italic accent words in headings. */
+@utility font-instrument {
+  font-family: "Instrument Serif", ui-serif, Georgia, "Times New Roman", serif;
+}
+
+.mindloop {
+  color-scheme: dark;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+
+  /* Scoped monochrome tokens — these override the global light palette ONLY
+   * inside `.mindloop`, so every semantic utility (text-foreground, bg-card,
+   * border-border, text-muted-foreground …) renders black/white here while the
+   * rest of the store keeps its light theme. Full color values (project stores
+   * colors unwrapped, so we wrap the spec's HSL triplets in hsl()). */
+  --background: hsl(0 0% 0%);
+  --foreground: hsl(0 0% 100%);
+  --card: hsl(0 0% 5%);
+  --card-foreground: hsl(0 0% 100%);
+  --popover: hsl(0 0% 5%);
+  --popover-foreground: hsl(0 0% 100%);
+  --primary: hsl(0 0% 100%);
+  --primary-foreground: hsl(0 0% 0%);
+  --secondary: hsl(0 0% 12%);
+  --secondary-foreground: hsl(0 0% 85%);
+  --muted: hsl(0 0% 15%);
+  --muted-foreground: hsl(0 0% 65%);
+  --accent: hsl(170 15% 45%);
+  --accent-foreground: hsl(0 0% 100%);
+  --border: hsl(0 0% 20%);
+  --input: hsl(0 0% 18%);
+  --ring: hsl(0 0% 40%);
+  /* store-specific tokens, remapped so any reused component stays monochrome */
+  --ink: hsl(0 0% 100%);
+  --violet-deep: hsl(0 0% 78%);
+  /* raw triplet — consumed as hsl(var(--hero-subtitle)) in inline styles */
+  --hero-subtitle: 210 17% 95%;
+}
+
+/* Override the global display font on the landing so headings render in Inter. */
+.mindloop :is(h1, h2, h3, h4) {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* Apple-style "liquid glass" — near-invisible fill + specular gradient edge. */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.01);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.4px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0) 40%,
+    rgba(255, 255, 255, 0) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.45) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * Kinetic text — zero-reflow letter ripple (see KineticText.tsx).
+ *
+ * Hovering a letter animates its weight to 900. If the glyph itself occupied the
+ * box, that would widen the line under the cursor and the last word could wrap
+ * mid-hover. So each letter box is sized ONCE by a hidden `::before` ghost and
+ * the visible glyph is painted by an absolutely positioned child that is out of
+ * flow. Weight can then animate freely: the box never changes, nothing re-wraps.
+ *
+ * The ghost is pinned to the *resting* weight (not the hover weight), so the
+ * line measures exactly like a plain heading of the same weight and tracks
+ * normally. The swollen glyph simply overflows its own box — it is out of flow,
+ * so that costs nothing in layout and reads as the letters crowding together.
+ * ========================================================================== */
+.kt-letter {
+  position: relative;
+  display: inline-block;
+}
+
+.kt-letter::before {
+  content: attr(data-ch);
+  display: block;
+  visibility: hidden;
+  font-weight: var(--kt-rest-weight, 400);
+  pointer-events: none;
+}
+
+.kt-letter > span {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: inherit;
+  -webkit-text-stroke-color: inherit;
+  -webkit-text-stroke-width: inherit;
+}
+
+/* ============================================================================
+ * Orbital image wheel — nothing is layered over the cards. The arc is sized from
+ * the ring geometry (see OrbitalImageWheel.tsx) so it needs no black gradient to
+ * hide a clipped edge; the product art is shown clean, edge to edge.
+ * ========================================================================== */
+
+/* Lenis smooth scrolling (landing only). While Lenis owns the scroll it adds
+ * `.lenis` to <html>; we hand control to JS and disable the native CSS smooth
+ * behavior so the two don't fight (the base layer sets scroll-behavior: smooth
+ * globally). `.lenis-stopped` freezes scroll for the mobile-menu lock path. */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+html.lenis {
+  scroll-behavior: auto !important;
+}
+.lenis [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+/* ============================================================================
+ * Store dark skin — scoped to `.mindloop` so the reused (light-themed) store
+ * components read correctly on the solid-black store page. Semantic tokens are
+ * already remapped by `.mindloop`; these rules cover the utilities that bake in
+ * literal white (glass surfaces, search field, filter chips).
+ * ========================================================================== */
+.mindloop .glass {
+  background: rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 22px 60px -30px rgba(0, 0, 0, 0.85);
+}
+
+.mindloop .glass-soft {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mindloop
+  :is(
+    .bg-white\/40,
+    .bg-white\/45,
+    .bg-white\/55,
+    .bg-white\/60,
+    .bg-white\/65,
+    .bg-white\/70,
+    .bg-white\/75
+  ) {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.mindloop :is(.border-white\/50, .border-white\/60) {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.mindloop
+  :is(
+    .hover\:bg-white\/45,
+    .hover\:bg-white\/50,
+    .hover\:bg-white\/70,
+    .hover\:bg-white\/75,
+    .hover\:bg-white\/80,
+    .hover\:bg-white\/85,
+    .hover\:bg-white\/90
+  ):hover {
+  background-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.mindloop :is(.focus\:bg-white\/90):focus {
+  background-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.mindloop input,
+.mindloop select,
+.mindloop textarea {
+  color: hsl(0 0% 100%);
+}
+
+.mindloop input::placeholder {
+  color: hsl(0 0% 55%);
+}
+
+/* The header's raster logo is a colour mark. On the monochrome dark pages it
+ * reads as an off-brand splash of violet, so it's flattened to greyscale to sit
+ * with the landing's LoopMark. */
+.mindloop .site-logo-mark {
+  filter: grayscale(1) brightness(1.85) contrast(1.05);
+}
+
+/* ============================================================================
+ * Shimmer button — a conic-gradient spark orbits behind the surface and shows
+ * through a `--cut`-wide rim left uncovered by the backdrop, so the light reads
+ * as a highlight travelling around the border. Nothing is painted over the
+ * label: the spark sits at -z-30, the backdrop at -z-20, content on top.
+ * ========================================================================== */
+@keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
+}
+
+@keyframes shimmer-spin {
+  0% {
+    transform: translateZ(0) rotate(0deg);
+  }
+  15%,
+  35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%,
+  85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+
+@utility animate-shimmer-slide {
+  animation: shimmer-slide var(--speed, 3s) ease-in-out infinite alternate;
+}
+
+@utility animate-shimmer-spin {
+  animation: shimmer-spin calc(var(--speed, 3s) * 2) infinite linear;
+}
+
+/* ============================================================================
+ * Meteors — a hairline streak rotated by `--angle` and flung along its own axis.
+ * Grey by design (see Meteors.tsx): the landing is monochrome, so the shower
+ * reads as depth rather than colour.
+ * ========================================================================== */
+@keyframes meteor {
+  0% {
+    transform: rotate(var(--angle)) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle)) translateX(calc(-1 * var(--meteor-travel, 300px)));
+    opacity: 0;
+  }
+}
+
+@utility animate-meteor {
+  animation: meteor var(--meteor-duration, 5s) linear var(--meteor-delay, 0s) infinite;
+}
+
+/* ============================================================================
+ * Magic card — the cursor-tracked orb glow. Green to sit with the landing's
+ * monochrome skin (a desaturated emerald, not a candy green), and painted on a
+ * layer *below* the card content so it lights the box without washing the text.
+ * ========================================================================== */
+:root {
+  --magic-glow-from: hsl(152 62% 52%);
+  --magic-glow-to: hsl(168 55% 26%);
+  --magic-glow-ring: hsl(152 55% 45%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-meteor,
+  .animate-shimmer-slide,
+  .animate-shimmer-spin {
+    animation: none;
+  }
+}
