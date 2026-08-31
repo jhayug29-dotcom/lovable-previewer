@@ -43,11 +43,22 @@ export const Route = createFileRoute("/admin")({
   // Server-verified gate: anyone who isn't an admin or an assigned seller gets the
   // standard 404 page, so the panel's existence is never revealed.
   beforeLoad: async () => {
-    if (!isSupabaseConfigured || !supabase) return;
+    if (!isSupabaseConfigured || !supabase) {
+      throw notFound();
+    }
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
-    const access = await checkPanelAccess({ data: { accessToken } });
-    if (!access.admin && !access.seller) throw notFound();
+    if (!accessToken) {
+      throw notFound();
+    }
+    try {
+      const access = await checkPanelAccess({ data: { accessToken } });
+      if (!access.admin && !access.seller) {
+        throw notFound();
+      }
+    } catch {
+      throw notFound();
+    }
   },
   head: () => ({
     meta: [
