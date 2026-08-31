@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,10 @@ import {
   Upload,
   BarChart3,
   Store,
+  ShieldAlert,
+  LogIn,
+  LogOut,
+  ArrowLeft,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
@@ -40,22 +44,6 @@ import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
-  // Server-verified gate: anyone who isn't an admin or an assigned seller gets the
-  // standard 404 page, so the panel's existence is never revealed.
-  beforeLoad: async () => {
-    if (!isSupabaseConfigured || !supabase) return;
-    const { data } = await supabase.auth.getSession();
-    const email = data.session?.user?.email;
-    if (isMasterAdminEmail(email)) return;
-    const accessToken = data.session?.access_token;
-    if (!accessToken) throw notFound();
-    try {
-      const access = await checkPanelAccess({ data: { accessToken } });
-      if (!access.admin && !access.seller) throw notFound();
-    } catch {
-      if (!isMasterAdminEmail(email)) throw notFound();
-    }
-  },
   head: () => ({
     meta: [
       { title: "Admin — Editly Store" },
@@ -90,14 +78,18 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminPage() {
-  const { user, loading, session, isAdmin } = useAuth();
+  const { user, loading, session, isAdmin, signOut } = useAuth();
+  const navigate = useNavigate();
   const accessToken = session?.access_token;
   const isMaster = isMasterAdminEmail(user?.email);
   const [tab, setTab] = useState<TabId>("analytics");
 
-  const { data: access } = useQuery({
+  const { data: access, isLoading: accessLoading } = useQuery({
     queryKey: ["panel-access", accessToken ?? "", user?.email ?? ""],
     queryFn: async () => {
+      if (!accessToken && !isMaster) {
+        return { admin: false, seller: false, productIds: [] };
+      }
       try {
         const res = await checkPanelAccess({ data: { accessToken } });
         if (isMaster) return { ...res, admin: true };
@@ -106,20 +98,104 @@ function AdminPage() {
         return { admin: isMaster || isAdmin, seller: false, productIds: [] };
       }
     },
+    enabled: Boolean(user),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
   const isAdminUser = isMaster || isAdmin || (access?.admin ?? false);
+  const isSellerUser = Boolean(access?.seller && (access?.productIds?.length ?? 0) > 0);
+  const isAuthorized = isAdminUser || isSellerUser;
+
   const visibleTabs = isAdminUser ? TABS : TABS.filter((t) => t.id === "analytics");
   const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "analytics";
 
-  if (loading || (!access && !isMaster && !isAdmin)) {
+  if (loading || (user && accessLoading && !isMaster && !isAdmin)) {
     return (
       <SiteLayout dark>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-ink/60" />
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+          <Loader2 className="size-8 animate-spin text-ink/60" />
+          <p className="text-sm font-medium text-muted-foreground">Authenticating control panel…</p>
         </div>
+      </SiteLayout>
+    );
+  }
+
+  // Not signed in state
+  if (!user) {
+    return (
+      <SiteLayout dark>
+        <section className="mx-auto flex max-w-[500px] flex-col px-5 pb-24 pt-10 sm:px-6">
+          <div className="glass animate-rise-in rounded-4xl p-8 text-center sm:p-10">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-white/15 text-ink">
+              <Shield className="size-7" strokeWidth={1.8} />
+            </div>
+            <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">
+              Admin control panel
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Sign in with your authorized administrator Google account (e.g. yjha019@gmail.com) to
+              access the store management dashboard.
+            </p>
+            <div className="mt-8 flex flex-col gap-3">
+              <Link
+                to="/auth"
+                className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 font-display text-sm font-semibold text-primary-foreground shadow-float transition-transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <LogIn className="size-4" strokeWidth={2} />
+                Sign in to continue
+              </Link>
+              <Link
+                to="/"
+                className="flex items-center justify-center gap-2 rounded-full bg-white/10 px-5 py-3 text-sm font-medium text-ink transition-colors hover:bg-white/20"
+              >
+                <ArrowLeft className="size-4" strokeWidth={1.8} />
+                Back to storefront
+              </Link>
+            </div>
+          </div>
+        </section>
+      </SiteLayout>
+    );
+  }
+
+  // Signed in but not authorized
+  if (!isAuthorized) {
+    return (
+      <SiteLayout dark>
+        <section className="mx-auto flex max-w-[520px] flex-col px-5 pb-24 pt-10 sm:px-6">
+          <div className="glass animate-rise-in rounded-4xl p-8 text-center sm:p-10">
+            <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-destructive/15 text-destructive">
+              <ShieldAlert className="size-7" strokeWidth={1.8} />
+            </div>
+            <h1 className="mt-5 font-display text-2xl font-extrabold text-ink">
+              Access restricted
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              You are signed in as <span className="font-semibold text-ink">{user.email}</span>.
+              This account does not have administrator privileges for Editly Store.
+            </p>
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  void signOut().then(() => navigate({ to: "/auth" }));
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white/15 px-6 py-3.5 font-display text-sm font-semibold text-ink transition-colors hover:bg-white/25"
+              >
+                <LogOut className="size-4" strokeWidth={1.8} />
+                Sign in with another account
+              </button>
+              <Link
+                to="/"
+                className="flex items-center justify-center gap-2 rounded-full bg-white/5 px-5 py-3 text-sm font-medium text-ink/70 transition-colors hover:bg-white/15 hover:text-ink"
+              >
+                <ArrowLeft className="size-4" strokeWidth={1.8} />
+                Return to storefront
+              </Link>
+            </div>
+          </div>
+        </section>
       </SiteLayout>
     );
   }

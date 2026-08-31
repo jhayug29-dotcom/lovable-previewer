@@ -171,6 +171,7 @@ export function AccountMenu() {
         <AccountPanel
           {...{ name, avatar, since, purchases, isPending, isAdmin: effectiveAdmin }}
           email={user.email ?? ""}
+          onClose={() => setOpen(false)}
         />
       ) : null}
     </div>
@@ -186,6 +187,7 @@ function AccountPanel({
   purchases,
   isPending,
   isAdmin,
+  onClose,
 }: {
   name: string;
   email: string;
@@ -194,6 +196,7 @@ function AccountPanel({
   purchases: PurchaseRow[];
   isPending: boolean;
   isAdmin: boolean;
+  onClose?: () => void;
 }) {
   /* Placement is breakpoint-dependent. From `sm` up the panel hangs off the
      button's right edge, which is what you want next to a header control. On a
@@ -279,6 +282,7 @@ function AccountPanel({
           <Link
             to="/admin"
             role="menuitem"
+            onClick={onClose}
             className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
           >
             <ShieldCheck className="size-4" strokeWidth={1.7} />
@@ -288,6 +292,7 @@ function AccountPanel({
           <Link
             to="/store"
             role="menuitem"
+            onClick={onClose}
             className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
           >
             <Package className="size-4" strokeWidth={1.7} />
@@ -297,7 +302,10 @@ function AccountPanel({
         <button
           type="button"
           role="menuitem"
-          onClick={() => void signOut()}
+          onClick={() => {
+            onClose?.();
+            void signOut();
+          }}
           className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <LogOut className="size-4" strokeWidth={1.7} />

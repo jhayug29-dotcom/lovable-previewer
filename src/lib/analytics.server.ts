@@ -1,4 +1,10 @@
-import { adminClient, requireAdmin, requireUser, isMasterAdminEmail } from "./supabase.server";
+import {
+  adminClient,
+  userClient,
+  requireAdmin,
+  requireUser,
+  isMasterAdminEmail,
+} from "./supabase.server";
 
 export type PanelAccess = { admin: boolean; seller: boolean; productIds: string[] };
 
@@ -13,13 +19,22 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
     return empty;
   }
 
-  // Master admin fast-path
+  // Master admin fast-path + sync role in database
   if (isMasterAdminEmail(user.email)) {
+    try {
+      const db = adminClient();
+      await db.from("profiles").upsert({ id: user.id, email: user.email }, { onConflict: "id" });
+      await db
+        .from("user_roles")
+        .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id,role" });
+    } catch {
+      // Ignore background sync errors
+    }
     return { admin: true, seller: false, productIds: [] };
   }
 
   try {
-    const db = adminClient();
+    const db = userClient(accessToken);
     const { data: roleRow } = await db
       .from("user_roles")
       .select("role")
@@ -218,13 +233,21 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
     visitorsMonth = monthSessions.size;
     visitorsWeek = weekSessions.size;
 
-    const { data: userList } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    for (const u of userList?.users ?? []) {
-      if (u.created_at >= monthAgo) signupsMonth += 1;
-      if (u.created_at >= weekAgo) signupsWeek += 1;
-      const last = u.last_sign_in_at;
-      if (last && last >= monthAgo) signInsMonth += 1;
-      if (last && last >= weekAgo) signInsWeek += 1;
+    try {
+      const { data: userList } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      for (const u of userList?.users ?? []) {
+        if (u.created_at >= monthAgo) signupsMonth += 1;
+        if (u.created_at >= weekAgo) signupsWeek += 1;
+        const last = u.last_sign_in_at;
+        if (last && last >= monthAgo) signInsMonth += 1;
+        if (last && last >= weekAgo) signInsWeek += 1;
+      }
+    } catch {
+      const { data: profileList } = await db.from("profiles").select("created_at");
+      for (const p of profileList ?? []) {
+        if (p.created_at && p.created_at >= monthAgo) signupsMonth += 1;
+        if (p.created_at && p.created_at >= weekAgo) signupsWeek += 1;
+      }
     }
   }
 
@@ -272,9 +295,21 @@ export async function listSellers(accessToken: string | undefined): Promise<Sell
   }
   if (byUser.size === 0) return [];
 
-  const { data: userList } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  let userList: { id: string; email?: string; user_metadata?: Record<string, unknown> }[] = [];
+  try {
+    const { data: authData } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    userList = authData?.users ?? [];
+  } catch {
+    const { data: profileRows } = await db.from("profiles").select("id, email, full_name");
+    userList = (profileRows ?? []).map((p) => ({
+      id: p.id,
+      email: p.email,
+      user_metadata: { full_name: p.full_name },
+    }));
+  }
+
   return [...byUser.entries()].map(([userId, productIds]) => {
-    const u = userList?.users.find((x) => x.id === userId);
+    const u = userList.find((x) => x.id === userId);
     return {
       userId,
       email: u?.email ?? "(unknown account)",

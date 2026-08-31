@@ -66,9 +66,12 @@ export async function requireUser(accessToken: string | undefined): Promise<Auth
 export async function requireAdmin(accessToken: string | undefined): Promise<AuthedUser> {
   const user = await requireUser(accessToken);
   if (isMasterAdminEmail(user.email)) {
-    // Proactively try to ensure the role row exists in public.user_roles if possible
+    // Proactively try to ensure the role row exists in public.user_roles and profiles
     try {
       const client = adminClient();
+      await client
+        .from("profiles")
+        .upsert({ id: user.id, email: user.email }, { onConflict: "id" });
       await client
         .from("user_roles")
         .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id,role" });
@@ -78,7 +81,7 @@ export async function requireAdmin(accessToken: string | undefined): Promise<Aut
     return user;
   }
   try {
-    const { data } = await adminClient()
+    const { data } = await userClient(accessToken!)
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
