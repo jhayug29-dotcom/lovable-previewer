@@ -94,13 +94,64 @@ export async function loadPromos(): Promise<Promos> {
   return promos;
 }
 
+export function normalizeSlug(s: string): string {
+  try {
+    return decodeURIComponent(s)
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, "-");
+  } catch {
+    return s
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_]+/g, "-");
+  }
+}
+
 /** Catalog with any live sale already priced in. */
 export async function loadProducts(): Promise<DbProduct[]> {
   const [products, { sale }] = await Promise.all([loadRawProducts(), loadPromos()]);
-  return applySaleToAll(products, sale);
+  const activeProducts =
+    products.length > 0 ? products : fallbackProducts.map((p) => ({ ...p, id: p.slug }));
+  return applySaleToAll(activeProducts, sale);
 }
 
 export async function loadProduct(slug: string): Promise<DbProduct | null> {
+  if (!slug) return null;
   const all = await loadProducts();
-  return all.find((p) => p.slug === slug) ?? null;
+  const norm = normalizeSlug(slug);
+  const trimmed = slug.trim();
+  const lower = trimmed.toLowerCase();
+
+  // 1. Match from the active/live catalog
+  const found = all.find(
+    (p) =>
+      p.id === trimmed ||
+      p.slug === trimmed ||
+      p.slug.toLowerCase() === lower ||
+      normalizeSlug(p.slug) === norm,
+  );
+  if (found) return found;
+
+  // 2. Direct fallback lookup from fallback catalog
+  const fallback = fallbackProducts.find(
+    (p) => p.slug === trimmed || p.slug.toLowerCase() === lower || normalizeSlug(p.slug) === norm,
+  );
+  if (fallback) {
+    return { ...fallback, id: fallback.slug } as DbProduct;
+  }
+
+  // 3. Fallback direct DB query in case cache is fresh/stale
+  try {
+    const { data } = await publicClient()
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .or(`slug.ilike.${trimmed},id.eq.${trimmed}`)
+      .maybeSingle();
+    if (data) return mapProduct(data as Row);
+  } catch {
+    // Ignore query error
+  }
+
+  return null;
 }

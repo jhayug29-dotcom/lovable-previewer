@@ -1,21 +1,38 @@
-import { adminClient, requireUser } from "./supabase.server";
+import { adminClient, publicClient, requireUser, userClient } from "./supabase.server";
 import { sendReceiptEmail } from "./receipt.server";
 
 const CF_BASE =
-  process.env["CASHFREE_MODE"] === "sandbox"
+  (process.env["CASHFREE_MODE"] ??
+    process.env["STORE_CASHFREE_MODE"] ??
+    process.env["VITE_CASHFREE_MODE"]) === "sandbox"
     ? "https://sandbox.cashfree.com/pg"
     : "https://api.cashfree.com/pg";
 const CF_VERSION = "2023-08-01";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(id: string | null | undefined): boolean {
+  return typeof id === "string" && UUID_REGEX.test(id);
+}
+
 function cfHeaders() {
-  const appId = process.env["CASHFREE_APP_ID"];
-  const secret = process.env["CASHFREE_SECRET_KEY"];
-  if (!appId || !secret) throw new Error("Cashfree keys are not configured");
+  const appId =
+    process.env["CASHFREE_APP_ID"] ??
+    process.env["STORE_CASHFREE_APP_ID"] ??
+    process.env["VITE_CASHFREE_APP_ID"];
+  const secret =
+    process.env["CASHFREE_SECRET_KEY"] ??
+    process.env["STORE_CASHFREE_SECRET_KEY"] ??
+    process.env["VITE_CASHFREE_SECRET_KEY"];
+  if (!appId || !secret) {
+    throw new Error(
+      "Cashfree payment gateway is not configured. Please provide CASHFREE_APP_ID and CASHFREE_SECRET_KEY.",
+    );
+  }
   return {
     "Content-Type": "application/json",
     "x-api-version": CF_VERSION,
-    "x-client-id": appId,
-    "x-client-secret": secret,
+    "x-client-id": appId.trim(),
+    "x-client-secret": secret.trim(),
   };
 }
 
@@ -29,17 +46,19 @@ export type ProductRow = {
 };
 
 async function loadProduct(slug: string): Promise<ProductRow> {
-  const { data, error } = await adminClient()
-    .from("products")
-    .select("id, slug, title, price, is_free, download_link")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (error) {
-    console.error("Supabase loadProduct error:", error);
-    throw new Error("Database error while looking up product");
+  const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
+  const product = await fetchCatalogProduct(slug);
+  if (!product) {
+    throw new Error(`Product "${slug}" could not be found. Please refresh the page and try again.`);
   }
-  if (!data) throw new Error("Product unavailable. Please refresh and try again.");
-  return data as ProductRow;
+  return {
+    id: product.id || product.slug,
+    slug: product.slug,
+    title: product.title,
+    price: Number(product.price),
+    is_free: Boolean(product.isFree),
+    download_link: product.downloadLink ?? null,
+  };
 }
 
 /** Honours the live store-wide / per-product sale so checkout matches the storefront. */
@@ -68,26 +87,35 @@ async function applyCoupon(
   productId?: string,
 ): Promise<number> {
   if (!code) return amount;
-  const { data } = await adminClient()
-    .from("coupons")
-    .select("*")
-    .ilike("code", code.trim())
-    .eq("active", true)
-    .maybeSingle();
-  const coupon = data as {
-    percent_off: number;
-    expires_at: string | null;
-    max_uses: number | null;
-    used_count: number;
-    product_ids?: string[] | null;
-  } | null;
-  if (!coupon) return amount;
-  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return amount;
-  if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) return amount;
-  // An empty product list means the coupon works store-wide.
-  const scoped = coupon.product_ids ?? [];
-  if (scoped.length > 0 && (!productId || !scoped.includes(productId))) return amount;
-  return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
+  try {
+    const client =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
+        ? adminClient()
+        : publicClient();
+    const { data } = await client
+      .from("coupons")
+      .select("*")
+      .ilike("code", code.trim())
+      .eq("active", true)
+      .maybeSingle();
+    const coupon = data as {
+      percent_off: number;
+      expires_at: string | null;
+      max_uses: number | null;
+      used_count: number;
+      product_ids?: string[] | null;
+    } | null;
+    if (!coupon) return amount;
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return amount;
+    if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) return amount;
+    // An empty product list means the coupon works store-wide.
+    const scoped = coupon.product_ids ?? [];
+    if (scoped.length > 0 && (!productId || !scoped.includes(productId))) return amount;
+    return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
+  } catch (err) {
+    console.error("Coupon lookup error:", err);
+    return amount;
+  }
 }
 
 export type CreateOrderInput = {
@@ -109,6 +137,10 @@ export async function createOrder(input: CreateOrderInput) {
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
 
+  const cleanPhone = input.customerPhone.replace(/\D/g, "").slice(-10).padStart(10, "0");
+  const cleanEmail = input.customerEmail.trim();
+  const cleanName = (input.customerName.trim() || "Customer").slice(0, 100);
+
   const response = await fetch(`${CF_BASE}/orders`, {
     method: "POST",
     headers: cfHeaders(),
@@ -118,9 +150,9 @@ export async function createOrder(input: CreateOrderInput) {
       order_currency: "INR",
       customer_details: {
         customer_id: user?.id ?? `guest_${Date.now()}`,
-        customer_name: input.customerName.slice(0, 100),
-        customer_email: input.customerEmail,
-        customer_phone: input.customerPhone.replace(/\D/g, "").slice(-10).padStart(10, "0"),
+        customer_name: cleanName,
+        customer_email: cleanEmail,
+        customer_phone: cleanPhone,
       },
       order_meta: {
         return_url: `${input.origin}/payment/status?order_id=${cfOrderId}`,
@@ -136,20 +168,30 @@ export async function createOrder(input: CreateOrderInput) {
     );
   }
 
-  await adminClient()
-    .from("orders")
-    .insert({
+  // Attempt to record the pending order in the database.
+  try {
+    const db =
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
+        ? adminClient()
+        : input.accessToken
+          ? userClient(input.accessToken)
+          : adminClient();
+
+    await db.from("orders").insert({
       user_id: user?.id ?? null,
-      product_id: product.id,
+      product_id: isValidUuid(product.id) ? product.id : null,
       cf_order_id: cfOrderId,
       amount,
       status: "PENDING",
       coupon_code: input.couponCode ?? null,
-      customer_email: input.customerEmail,
-      customer_name: input.customerName,
-      customer_phone: input.customerPhone,
+      customer_email: cleanEmail,
+      customer_name: cleanName,
+      customer_phone: cleanPhone,
       origin: input.origin,
     });
+  } catch (dbErr) {
+    console.error("Order insertion warning (will be settled on verification):", dbErr);
+  }
 
   return { orderId: cfOrderId, paymentSessionId: payload.payment_session_id, amount };
 }
@@ -163,19 +205,25 @@ type SettleRow = {
   customer_name: string | null;
   origin: string | null;
   receipt_sent_at: string | null;
+  product_id?: string | null;
   products: { slug: string; title: string; download_link: string | null } | null;
 };
 
 const ORDER_COLUMNS =
-  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(slug, title, download_link)";
+  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, product_id, products(slug, title, download_link)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
-  const { data } = await adminClient()
-    .from("orders")
-    .select(ORDER_COLUMNS)
-    .eq("cf_order_id", cfOrderId)
-    .maybeSingle();
-  return (data as SettleRow | null) ?? null;
+  try {
+    const { data } = await adminClient()
+      .from("orders")
+      .select(ORDER_COLUMNS)
+      .eq("cf_order_id", cfOrderId)
+      .maybeSingle();
+    return (data as SettleRow | null) ?? null;
+  } catch (err) {
+    console.error("loadOrder error:", err);
+    return null;
+  }
 }
 
 /**
@@ -185,7 +233,24 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
  */
 async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<string | null> {
   const db = adminClient();
-  const link = row.products?.download_link ?? null;
+  let link = row.products?.download_link ?? null;
+  let title = row.products?.title ?? "Editly Store purchase";
+  let slug = row.products?.slug ?? "";
+
+  // If products relation was null (e.g. product_id was not a DB uuid or wasn't joined), look it up in catalog
+  if (!link && row.product_id) {
+    try {
+      const { loadProduct: fetchProduct } = await import("./catalog.server");
+      const p = await fetchProduct(row.product_id);
+      if (p) {
+        link = p.downloadLink ?? null;
+        title = p.title;
+        slug = p.slug;
+      }
+    } catch {
+      // Ignore
+    }
+  }
 
   if (row.status !== "PAID") {
     await db
@@ -211,11 +276,11 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
   }
 
   if (!row.receipt_sent_at && row.customer_email) {
-    const fallback = row.origin ? `${row.origin}/product/${row.products?.slug ?? ""}` : "";
+    const fallback = row.origin && slug ? `${row.origin}/product/${slug}` : "";
     const sent = await sendReceiptEmail({
       toEmail: row.customer_email,
       customerName: row.customer_name ?? row.customer_email.split("@")[0] ?? "there",
-      productName: row.products?.title ?? "Editly Store purchase",
+      productName: title,
       amount: Number(row.amount ?? 0),
       orderId: cfOrderId,
       downloadLink: link ?? fallback,
@@ -278,18 +343,21 @@ export async function claimFree(slug: string, accessToken: string | undefined) {
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
 
-  await adminClient()
-    .from("orders")
-    .insert({
-      user_id: user.id,
-      product_id: product.id,
-      cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      amount: 0,
-      status: "PAID",
-      customer_email: user.email ?? null,
-      download_link: product.download_link,
-      paid_at: new Date().toISOString(),
-    });
+  const db =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
+      ? adminClient()
+      : userClient(accessToken!);
+
+  await db.from("orders").insert({
+    user_id: user.id,
+    product_id: isValidUuid(product.id) ? product.id : null,
+    cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    amount: 0,
+    status: "PAID",
+    customer_email: user.email ?? null,
+    download_link: product.download_link,
+    paid_at: new Date().toISOString(),
+  });
 
   return { downloadLink: product.download_link, productTitle: product.title };
 }

@@ -31,6 +31,13 @@ function env(name: string): string {
   return value;
 }
 
+/** Publishable-key client for public queries (products, active sales, active coupons) */
+export function publicClient(): SupabaseClient {
+  return createClient(env("SUPABASE_URL"), env("SUPABASE_PUBLISHABLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 /** Service-role client — bypasses RLS. Server-only, privileged work only. */
 export function adminClient(): SupabaseClient {
   const serviceKey =
