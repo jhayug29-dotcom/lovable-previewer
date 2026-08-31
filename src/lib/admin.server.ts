@@ -83,7 +83,11 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
 /** Grant the admin role to another account. Admin-only. */
 export async function grantAdmin(accessToken: string | undefined, userId: string) {
   await requireAdmin(accessToken);
-  const { error } = await adminClient()
+  const client =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
+      ? adminClient()
+      : userClient(accessToken!);
+  const { error } = await client
     .from("user_roles")
     .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
   if (error) throw error;
@@ -94,7 +98,11 @@ export async function grantAdmin(accessToken: string | undefined, userId: string
 export async function revokeAdmin(accessToken: string | undefined, userId: string) {
   const me = await requireAdmin(accessToken);
   if (me.id === userId) throw new Error("You cannot remove your own admin access");
-  const { error } = await adminClient()
+  const client =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
+      ? adminClient()
+      : userClient(accessToken!);
+  const { error } = await client
     .from("user_roles")
     .delete()
     .eq("user_id", userId)
