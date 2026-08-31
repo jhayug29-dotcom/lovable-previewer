@@ -61,3 +61,39 @@ create policy "admins read page views" on public.page_views for select to authen
 -- Helpful indexes for the analytics queries.
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
 create index if not exists orders_product_id_idx on public.orders (product_id);
+
+-- ---------- 4. Profiles & Admin Roles Synchronization ------------------------
+alter table public.profiles add column if not exists last_sign_in_at timestamptz default now();
+alter table public.profiles add column if not exists updated_at timestamptz default now();
+
+grant select, insert, update on public.profiles to authenticated;
+grant all on public.profiles to service_role;
+
+drop policy if exists "own profile read" on public.profiles;
+create policy "own profile read" on public.profiles for select to authenticated
+  using (auth.uid() = id or public.is_admin());
+
+drop policy if exists "own profile insert" on public.profiles;
+create policy "own profile insert" on public.profiles for insert to authenticated
+  with check (auth.uid() = id or public.is_admin());
+
+drop policy if exists "own profile update" on public.profiles;
+create policy "own profile update" on public.profiles for update to authenticated
+  using (auth.uid() = id or public.is_admin());
+
+-- Update is_admin function to recognize master admin emails directly
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.user_roles where user_id = auth.uid() and role = 'admin'
+  ) or exists (
+    select 1 from auth.users where id = auth.uid() and lower(email) in ('yjha019@gmail.com', 'growchannel2026@gmail.com')
+  )
+$$;
+
+-- Seed admin roles for master accounts if users exist
+insert into public.user_roles (user_id, role)
+select id, 'admin'::public.app_role from auth.users
+where lower(email) in ('yjha019@gmail.com', 'growchannel2026@gmail.com')
+on conflict (user_id, role) do nothing;
+

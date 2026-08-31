@@ -1,6 +1,6 @@
 {
-  "name": "Lovable Previewer",
-  "description": "A lovable previewer imported from GitHub.",
+  "name": "Editly Store",
+  "description": "Digital storefront and admin analytics dashboard for video editing assets and presets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

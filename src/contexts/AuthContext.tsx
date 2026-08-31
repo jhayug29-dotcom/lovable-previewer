@@ -82,6 +82,31 @@ async function isUserAdmin(
   return request;
 }
 
+async function syncUserProfile(client: NonNullable<typeof supabase>, user: User) {
+  try {
+    const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+    const fullName =
+      (meta["full_name"] as string | undefined) ??
+      (meta["name"] as string | undefined) ??
+      user.email?.split("@")[0] ??
+      "User";
+    const avatarUrl = (meta["avatar_url"] as string | undefined) ?? null;
+    await client.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        full_name: fullName,
+        avatar_url: avatarUrl,
+        last_sign_in_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+  } catch {
+    // Non-blocking sync
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -119,6 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session ?? null);
+      if (data.session?.user) {
+        void syncUserProfile(client, data.session.user);
+      }
       await loadRole(data.session?.user.id, data.session?.user.email);
       if (active) setLoading(false);
     });
@@ -128,11 +156,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = client.auth.onAuthStateChange((event, next) => {
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
         setSession(next ?? null);
+        if (next?.user) {
+          void syncUserProfile(client, next.user);
+        }
         void loadRole(next?.user.id, next?.user.email);
         return;
       }
       setSession(next ?? null);
       setLoading(false);
+      if (next?.user) {
+        void syncUserProfile(client, next.user);
+      }
       void loadRole(next?.user.id, next?.user.email);
     });
 

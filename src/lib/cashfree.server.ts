@@ -1,4 +1,4 @@
-import { adminClient, publicClient, requireUser, userClient } from "./supabase.server";
+import { adminClient, getDbClient, publicClient, requireUser, userClient } from "./supabase.server";
 import { sendReceiptEmail } from "./receipt.server";
 
 const CF_BASE =
@@ -258,6 +258,24 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       .update({ status: "PAID", download_link: link, paid_at: new Date().toISOString() })
       .eq("id", row.id);
 
+    if (row.product_id) {
+      try {
+        const { data: prod } = await db
+          .from("products")
+          .select("id, sales")
+          .eq("id", row.product_id)
+          .maybeSingle();
+        if (prod) {
+          await db
+            .from("products")
+            .update({ sales: ((prod as { sales?: number }).sales ?? 0) + 1 })
+            .eq("id", row.product_id);
+        }
+      } catch {
+        // Non-blocking
+      }
+    }
+
     if (row.coupon_code) {
       // Redeem the coupon only for real, paid orders.
       const { data: coupon } = await db
@@ -343,10 +361,7 @@ export async function claimFree(slug: string, accessToken: string | undefined) {
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
 
-  const db =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
-      ? adminClient()
-      : userClient(accessToken!);
+  const db = getDbClient(accessToken);
 
   await db.from("orders").insert({
     user_id: user.id,
@@ -358,6 +373,24 @@ export async function claimFree(slug: string, accessToken: string | undefined) {
     download_link: product.download_link,
     paid_at: new Date().toISOString(),
   });
+
+  if (isValidUuid(product.id)) {
+    try {
+      const { data: prod } = await db
+        .from("products")
+        .select("id, sales")
+        .eq("id", product.id)
+        .maybeSingle();
+      if (prod) {
+        await db
+          .from("products")
+          .update({ sales: ((prod as { sales?: number }).sales ?? 0) + 1 })
+          .eq("id", product.id);
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
 
   return { downloadLink: product.download_link, productTitle: product.title };
 }

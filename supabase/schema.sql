@@ -14,8 +14,13 @@ create table if not exists public.profiles (
   email text,
   full_name text,
   avatar_url text,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  last_sign_in_at timestamptz default now(),
+  updated_at timestamptz default now()
 );
+
+alter table public.profiles add column if not exists last_sign_in_at timestamptz default now();
+alter table public.profiles add column if not exists updated_at timestamptz default now();
 
 create table if not exists public.user_roles (
   id uuid primary key default gen_random_uuid(),
@@ -25,7 +30,7 @@ create table if not exists public.user_roles (
   unique (user_id, role)
 );
 
-grant select, update on public.profiles to authenticated;
+grant select, insert, update on public.profiles to authenticated;
 grant all on public.profiles to service_role;
 grant select on public.user_roles to authenticated;
 grant all on public.user_roles to service_role;
@@ -40,15 +45,20 @@ $$;
 
 create or replace function public.is_admin()
 returns boolean language sql stable security definer set search_path = public as $$
-  select public.has_role(auth.uid(), 'admin')
+  select public.has_role(auth.uid(), 'admin') or exists (
+    select 1 from auth.users where id = auth.uid() and lower(email) in ('yjha019@gmail.com', 'growchannel2026@gmail.com')
+  )
 $$;
 
 drop policy if exists "own profile read" on public.profiles;
 create policy "own profile read" on public.profiles for select to authenticated
   using (auth.uid() = id or public.is_admin());
+drop policy if exists "own profile insert" on public.profiles;
+create policy "own profile insert" on public.profiles for insert to authenticated
+  with check (auth.uid() = id or public.is_admin());
 drop policy if exists "own profile update" on public.profiles;
 create policy "own profile update" on public.profiles for update to authenticated
-  using (auth.uid() = id);
+  using (auth.uid() = id or public.is_admin());
 
 drop policy if exists "read own roles" on public.user_roles;
 create policy "read own roles" on public.user_roles for select to authenticated

@@ -31,6 +31,11 @@ function env(name: string): string {
   return value;
 }
 
+export function hasServiceRoleKey(): boolean {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.STORE_SUPABASE_SERVICE_ROLE_KEY;
+  return Boolean(key && key.trim().length > 0);
+}
+
 /** Publishable-key client for public queries (products, active sales, active coupons) */
 export function publicClient(): SupabaseClient {
   return createClient(env("SUPABASE_URL"), env("SUPABASE_PUBLISHABLE_KEY"), {
@@ -56,6 +61,22 @@ export function userClient(accessToken: string): SupabaseClient {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
+}
+
+/**
+ * Returns the best available authenticated database client:
+ * 1. Admin/service-role client if service key exists (bypasses RLS).
+ * 2. Scoped user client with Authorization header if accessToken is provided (RLS evaluates as user).
+ * 3. Public client if neither is available.
+ */
+export function getDbClient(accessToken?: string | undefined): SupabaseClient {
+  if (hasServiceRoleKey()) {
+    return adminClient();
+  }
+  if (accessToken && accessToken.trim().length > 0) {
+    return userClient(accessToken);
+  }
+  return publicClient();
 }
 
 export type AuthedUser = { id: string; email: string | undefined };

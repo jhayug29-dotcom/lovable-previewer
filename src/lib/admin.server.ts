@@ -1,5 +1,7 @@
 import {
   adminClient,
+  userClient,
+  getDbClient,
   requireAdmin,
   isMasterAdminEmail,
   MASTER_ADMIN_EMAILS,
@@ -27,55 +29,134 @@ export async function isAdminToken(accessToken: string | undefined): Promise<boo
 /** Every signed-up account plus its admin state. Admin-only. */
 export async function listUsers(accessToken: string | undefined): Promise<AdminUser[]> {
   const me = await requireAdmin(accessToken);
-  const client = adminClient();
+  const db = getDbClient(accessToken);
 
-  let usersList: { id: string; email?: string; user_metadata?: Record<string, unknown> }[] = [];
+  type RawUser = {
+    id: string;
+    email?: string;
+    fullName?: string | null;
+    createdAt?: string;
+  };
 
+  const userMap = new Map<string, RawUser>();
+
+  // 1. Try auth.admin.listUsers if privileged client available
   try {
-    const { data: authData, error: authError } = await client.auth.admin.listUsers({
+    const { data: authData, error: authError } = await db.auth.admin.listUsers({
       page: 1,
-      perPage: 200,
+      perPage: 500,
     });
-    if (authError) throw authError;
-    usersList = authData?.users ?? [];
-  } catch (err) {
-    console.warn("auth.admin.listUsers fallback to profiles:", err);
-    // Fallback: query public.profiles if auth.admin fails
-    const { data: profileRows } = await client.from("profiles").select("id, email, full_name");
-    if (profileRows && profileRows.length > 0) {
-      usersList = profileRows.map((p) => ({
-        id: p.id,
-        email: p.email,
-        user_metadata: { full_name: p.full_name },
-      }));
-    } else {
-      usersList = [
-        {
-          id: me.id,
-          email: me.email ?? "yjha019@gmail.com",
-          user_metadata: { full_name: "Admin" },
-        },
-      ];
+    if (!authError && authData?.users) {
+      for (const u of authData.users) {
+        if (u.id) {
+          const meta = (u.user_metadata ?? {}) as Record<string, unknown>;
+          userMap.set(u.id, {
+            id: u.id,
+            email: u.email,
+            fullName:
+              (meta["full_name"] as string | undefined) ??
+              (meta["name"] as string | undefined) ??
+              null,
+            createdAt: u.created_at,
+          });
+        }
+      }
     }
+  } catch {
+    // Non-privileged client fallback
   }
 
-  const { data: roleRows } = await client
-    .from("user_roles")
-    .select("id, user_id, role")
-    .eq("role", "admin");
+  // 2. Query public.profiles
+  try {
+    const { data: profileRows } = await db
+      .from("profiles")
+      .select("id, email, full_name, created_at");
+    if (profileRows) {
+      for (const p of profileRows as {
+        id: string;
+        email?: string;
+        full_name?: string;
+        created_at?: string;
+      }[]) {
+        const existing = userMap.get(p.id);
+        if (!existing) {
+          userMap.set(p.id, {
+            id: p.id,
+            email: p.email,
+            fullName: p.full_name ?? null,
+            createdAt: p.created_at,
+          });
+        } else if (!existing.fullName && p.full_name) {
+          existing.fullName = p.full_name;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("profiles query warning in listUsers:", err);
+  }
 
-  const adminById = new Map((roleRows ?? []).map((r) => [r.user_id as string, r.id as string]));
+  // 3. Include purchasing customer emails from orders if not in profiles
+  try {
+    const { data: orderRows } = await db
+      .from("orders")
+      .select("user_id, customer_email, customer_name, created_at")
+      .order("created_at", { ascending: false });
+    if (orderRows) {
+      for (const o of orderRows as {
+        user_id?: string | null;
+        customer_email?: string | null;
+        customer_name?: string | null;
+        created_at?: string | null;
+      }[]) {
+        if (o.user_id && !userMap.has(o.user_id)) {
+          userMap.set(o.user_id, {
+            id: o.user_id,
+            email: o.customer_email ?? undefined,
+            fullName: o.customer_name ?? null,
+            createdAt: o.created_at ?? undefined,
+          });
+        }
+      }
+    }
+  } catch {
+    // Ignore
+  }
 
-  return usersList.map((u) => {
+  // 4. Ensure current admin is always in list
+  if (me.id && !userMap.has(me.id)) {
+    userMap.set(me.id, {
+      id: me.id,
+      email: me.email ?? "admin@editly.store",
+      fullName: "Admin",
+    });
+  }
+
+  // 5. Query user roles
+  let roleRows: { id: string; user_id: string; role: string }[] = [];
+  try {
+    const { data: roles } = await db
+      .from("user_roles")
+      .select("id, user_id, role")
+      .eq("role", "admin");
+    if (roles) {
+      roleRows = roles as { id: string; user_id: string; role: string }[];
+    }
+  } catch (err) {
+    console.warn("user_roles query warning in listUsers:", err);
+  }
+
+  const adminByUserId = new Map(roleRows.map((r) => [r.user_id, r.id]));
+
+  return [...userMap.values()].map((u) => {
     const email = u.email ?? "(no email)";
     const isMaster = isMasterAdminEmail(email);
-    const hasAdminRole = adminById.has(u.id);
+    const hasAdminRole = adminByUserId.has(u.id);
     return {
       id: u.id,
       email,
-      fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
+      fullName: u.fullName ?? null,
       isAdmin: isMaster || hasAdminRole,
-      roleRowId: adminById.get(u.id) ?? (isMaster ? "master-admin" : null),
+      roleRowId: adminByUserId.get(u.id) ?? (isMaster ? "master-admin" : null),
     };
   });
 }
@@ -83,10 +164,7 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
 /** Grant the admin role to another account. Admin-only. */
 export async function grantAdmin(accessToken: string | undefined, userId: string) {
   await requireAdmin(accessToken);
-  const client =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
-      ? adminClient()
-      : userClient(accessToken!);
+  const client = getDbClient(accessToken);
   const { error } = await client
     .from("user_roles")
     .upsert({ user_id: userId, role: "admin" }, { onConflict: "user_id,role" });
@@ -98,10 +176,7 @@ export async function grantAdmin(accessToken: string | undefined, userId: string
 export async function revokeAdmin(accessToken: string | undefined, userId: string) {
   const me = await requireAdmin(accessToken);
   if (me.id === userId) throw new Error("You cannot remove your own admin access");
-  const client =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.STORE_SUPABASE_SERVICE_ROLE_KEY
-      ? adminClient()
-      : userClient(accessToken!);
+  const client = getDbClient(accessToken);
   const { error } = await client
     .from("user_roles")
     .delete()
