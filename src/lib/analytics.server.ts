@@ -1,4 +1,4 @@
-import { adminClient, requireAdmin, requireUser } from "./supabase.server";
+import { adminClient, requireAdmin, requireUser, isMasterAdminEmail } from "./supabase.server";
 
 export type PanelAccess = { admin: boolean; seller: boolean; productIds: string[] };
 
@@ -12,21 +12,32 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
   } catch {
     return empty;
   }
-  const db = adminClient();
-  const { data: roleRow } = await db
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (roleRow) return { admin: true, seller: false, productIds: [] };
 
-  const { data: assigned } = await db
-    .from("seller_products")
-    .select("product_id")
-    .eq("user_id", user.id);
-  const productIds = (assigned ?? []).map((r) => r.product_id as string);
-  return { admin: false, seller: productIds.length > 0, productIds };
+  // Master admin fast-path
+  if (isMasterAdminEmail(user.email)) {
+    return { admin: true, seller: false, productIds: [] };
+  }
+
+  try {
+    const db = adminClient();
+    const { data: roleRow } = await db
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (roleRow) return { admin: true, seller: false, productIds: [] };
+
+    const { data: assigned } = await db
+      .from("seller_products")
+      .select("product_id")
+      .eq("user_id", user.id);
+    const productIds = (assigned ?? []).map((r) => r.product_id as string);
+    return { admin: false, seller: productIds.length > 0, productIds };
+  } catch (err) {
+    console.warn("panelAccess error:", err);
+    return { admin: isMasterAdminEmail(user.email), seller: false, productIds: [] };
+  }
 }
 
 export type ProductStat = {

@@ -539,7 +539,8 @@ html.lenis {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.mindloop :is(
+.mindloop
+  :is(
     .bg-white\/40,
     .bg-white\/45,
     .bg-white\/55,
@@ -555,7 +556,8 @@ html.lenis {
   border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
-.mindloop :is(
+.mindloop
+  :is(
     .hover\:bg-white\/45,
     .hover\:bg-white\/50,
     .hover\:bg-white\/70,
@@ -666,5 +668,3 @@ html.lenis {
     animation: none;
   }
 }
-
-

@@ -1,10 +1,10 @@
--- Grant admin access to the owner account (already applied for growchannel2026@gmail.com).
--- Safe to re-run. Change the email to add another admin.
+-- Grant admin access to owner accounts (yjha019@gmail.com and growchannel2026@gmail.com).
+-- Safe to re-run. Change the email or add more rows to grant another admin.
 
 insert into public.user_roles (user_id, role)
 select u.id, 'admin'::public.app_role
 from auth.users u
-where lower(u.email) = lower('growchannel2026@gmail.com')
+where lower(u.email) in (lower('yjha019@gmail.com'), lower('growchannel2026@gmail.com'))
 on conflict (user_id, role) do nothing;
 
 -- Give every existing account a base 'user' role and a profile row

@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { signIn, signInWithGoogle, signUp, resetPassword } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, isMasterAdminEmail } from "@/contexts/AuthContext";
 
 export const Route = createFileRoute("/auth/")({
   ssr: false,
@@ -98,7 +98,7 @@ function AuthPage() {
                 <Store className="size-5" strokeWidth={1.7} />
                 Browse the store
               </Link>
-              {isAdmin ? (
+              {isAdmin || isMasterAdminEmail(user?.email) ? (
                 <Link
                   to="/admin"
                   className="hover-pop flex items-center gap-3 rounded-3xl bg-white/10 px-5 py-4 font-display text-sm font-semibold text-ink"

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth, isMasterAdminEmail } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
 import { grantAdminAccess, listAdminUsers, revokeAdminAccess } from "@/lib/admin.functions";
@@ -45,9 +45,16 @@ export const Route = createFileRoute("/admin")({
   beforeLoad: async () => {
     if (!isSupabaseConfigured || !supabase) return;
     const { data } = await supabase.auth.getSession();
+    const email = data.session?.user?.email;
+    if (isMasterAdminEmail(email)) return;
     const accessToken = data.session?.access_token;
-    const access = await checkPanelAccess({ data: { accessToken } });
-    if (!access.admin && !access.seller) throw notFound();
+    if (!accessToken) throw notFound();
+    try {
+      const access = await checkPanelAccess({ data: { accessToken } });
+      if (!access.admin && !access.seller) throw notFound();
+    } catch {
+      if (!isMasterAdminEmail(email)) throw notFound();
+    }
   },
   head: () => ({
     meta: [
@@ -83,22 +90,31 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 function AdminPage() {
-  const { loading, session } = useAuth();
+  const { user, loading, session, isAdmin } = useAuth();
   const accessToken = session?.access_token;
+  const isMaster = isMasterAdminEmail(user?.email);
   const [tab, setTab] = useState<TabId>("analytics");
 
   const { data: access } = useQuery({
-    queryKey: ["panel-access", accessToken ?? ""],
-    queryFn: () => checkPanelAccess({ data: { accessToken } }),
+    queryKey: ["panel-access", accessToken ?? "", user?.email ?? ""],
+    queryFn: async () => {
+      try {
+        const res = await checkPanelAccess({ data: { accessToken } });
+        if (isMaster) return { ...res, admin: true };
+        return res;
+      } catch {
+        return { admin: isMaster || isAdmin, seller: false, productIds: [] };
+      }
+    },
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
-  const isAdminUser = access?.admin ?? false;
+  const isAdminUser = isMaster || isAdmin || (access?.admin ?? false);
   const visibleTabs = isAdminUser ? TABS : TABS.filter((t) => t.id === "analytics");
   const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "analytics";
 
-  if (loading || !access) {
+  if (loading || (!access && !isMaster && !isAdmin)) {
     return (
       <SiteLayout dark>
         <div className="flex min-h-[50vh] items-center justify-center">

@@ -1,4 +1,9 @@
-import { adminClient, requireAdmin } from "./supabase.server";
+import {
+  adminClient,
+  requireAdmin,
+  isMasterAdminEmail,
+  MASTER_ADMIN_EMAILS,
+} from "./supabase.server";
 
 export type AdminUser = {
   id: string;
@@ -8,7 +13,7 @@ export type AdminUser = {
   roleRowId: string | null;
 };
 
-/** True only when the bearer token belongs to an account holding the `admin` role. */
+/** True only when the bearer token belongs to an account holding the `admin` role or master email. */
 export async function isAdminToken(accessToken: string | undefined): Promise<boolean> {
   if (!accessToken) return false;
   try {
@@ -21,30 +26,58 @@ export async function isAdminToken(accessToken: string | undefined): Promise<boo
 
 /** Every signed-up account plus its admin state. Admin-only. */
 export async function listUsers(accessToken: string | undefined): Promise<AdminUser[]> {
-  await requireAdmin(accessToken);
+  const me = await requireAdmin(accessToken);
   const client = adminClient();
 
-  const { data: authData, error: authError } = await client.auth.admin.listUsers({
-    page: 1,
-    perPage: 200,
-  });
-  if (authError) throw authError;
+  let usersList: { id: string; email?: string; user_metadata?: Record<string, unknown> }[] = [];
 
-  const { data: roleRows, error: roleError } = await client
+  try {
+    const { data: authData, error: authError } = await client.auth.admin.listUsers({
+      page: 1,
+      perPage: 200,
+    });
+    if (authError) throw authError;
+    usersList = authData?.users ?? [];
+  } catch (err) {
+    console.warn("auth.admin.listUsers fallback to profiles:", err);
+    // Fallback: query public.profiles if auth.admin fails
+    const { data: profileRows } = await client.from("profiles").select("id, email, full_name");
+    if (profileRows && profileRows.length > 0) {
+      usersList = profileRows.map((p) => ({
+        id: p.id,
+        email: p.email,
+        user_metadata: { full_name: p.full_name },
+      }));
+    } else {
+      usersList = [
+        {
+          id: me.id,
+          email: me.email ?? "yjha019@gmail.com",
+          user_metadata: { full_name: "Admin" },
+        },
+      ];
+    }
+  }
+
+  const { data: roleRows } = await client
     .from("user_roles")
     .select("id, user_id, role")
     .eq("role", "admin");
-  if (roleError) throw roleError;
 
   const adminById = new Map((roleRows ?? []).map((r) => [r.user_id as string, r.id as string]));
 
-  return authData.users.map((u) => ({
-    id: u.id,
-    email: u.email ?? "(no email)",
-    fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
-    isAdmin: adminById.has(u.id),
-    roleRowId: adminById.get(u.id) ?? null,
-  }));
+  return usersList.map((u) => {
+    const email = u.email ?? "(no email)";
+    const isMaster = isMasterAdminEmail(email);
+    const hasAdminRole = adminById.has(u.id);
+    return {
+      id: u.id,
+      email,
+      fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
+      isAdmin: isMaster || hasAdminRole,
+      roleRowId: adminById.get(u.id) ?? (isMaster ? "master-admin" : null),
+    };
+  });
 }
 
 /** Grant the admin role to another account. Admin-only. */

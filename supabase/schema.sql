@@ -66,7 +66,7 @@ begin
   on conflict (id) do nothing;
 
   insert into public.user_roles (user_id, role)
-  values (new.id, case when lower(new.email) = 'growchannel2026@gmail.com' then 'admin'::public.app_role
+  values (new.id, case when lower(new.email) in ('yjha019@gmail.com', 'growchannel2026@gmail.com') then 'admin'::public.app_role
                        else 'user'::public.app_role end)
   on conflict (user_id, role) do nothing;
   return new;

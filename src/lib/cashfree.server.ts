@@ -29,17 +29,17 @@ export type ProductRow = {
 };
 
 async function loadProduct(slug: string): Promise<ProductRow> {
-  const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
-  const product = await fetchCatalogProduct(slug);
-  if (!product) throw new Error("Product unavailable. Please refresh and try again.");
-  return {
-    id: product.id!,
-    slug: product.slug,
-    title: product.title,
-    price: product.price,
-    is_free: product.isFree,
-    download_link: product.downloadLink ?? null,
-  };
+  const { data, error } = await adminClient()
+    .from("products")
+    .select("id, slug, title, price, is_free, download_link")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) {
+    console.error("Supabase loadProduct error:", error);
+    throw new Error("Database error while looking up product");
+  }
+  if (!data) throw new Error("Product unavailable. Please refresh and try again.");
+  return data as ProductRow;
 }
 
 /** Honours the live store-wide / per-product sale so checkout matches the storefront. */
@@ -167,7 +167,7 @@ type SettleRow = {
 };
 
 const ORDER_COLUMNS =
-  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
+  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(slug, title, download_link)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   const { data } = await adminClient()

@@ -1,15 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  Store,
-  LifeBuoy,
-  Rocket,
-  ShieldCheck,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
+import { useAuth, isMasterAdminEmail } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import logoMark from "@/assets/logo.png";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
@@ -23,6 +15,7 @@ const navItems = [
 
 export function SiteHeader() {
   const { user, isAdmin } = useAuth();
+  const effectiveAdmin = isAdmin || isMasterAdminEmail(user?.email);
   const { isIndependenceMode } = useIndependenceMode();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -75,7 +68,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-2.5">
-          {isAdmin ? (
+          {effectiveAdmin ? (
             <Link
               to="/admin"
               className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95"

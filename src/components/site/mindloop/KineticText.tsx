@@ -54,10 +54,7 @@ export function KineticText({
   highlightClassName,
 }: KineticTextProps) {
   const words = useMemo(() => text.split(" "), [text]);
-  const highlightSet = useMemo(
-    () => new Set(highlight.map((w) => w.toLowerCase())),
-    [highlight],
-  );
+  const highlightSet = useMemo(() => new Set(highlight.map((w) => w.toLowerCase())), [highlight]);
 
   return (
     <span

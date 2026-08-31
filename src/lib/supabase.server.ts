@@ -6,6 +6,20 @@ const PUBLIC_FALLBACK: Record<string, string | undefined> = {
   SUPABASE_PUBLISHABLE_KEY: "sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV",
 };
 
+export const MASTER_ADMIN_EMAILS = [
+  "yjha019@gmail.com",
+  "growchannel2026@gmail.com",
+  ...(process.env.ADMIN_EMAILS
+    ? process.env.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase())
+    : []),
+];
+
+export function isMasterAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === normalized);
+}
+
 function env(name: string): string {
   const value = process.env[name] ?? process.env[`STORE_${name}`] ?? PUBLIC_FALLBACK[name];
   if (!value) {
@@ -19,7 +33,12 @@ function env(name: string): string {
 
 /** Service-role client — bypasses RLS. Server-only, privileged work only. */
 export function adminClient(): SupabaseClient {
-  return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ??
+    process.env.STORE_SUPABASE_SERVICE_ROLE_KEY ??
+    PUBLIC_FALLBACK.SUPABASE_PUBLISHABLE_KEY;
+  const url = env("SUPABASE_URL");
+  return createClient(url, serviceKey ?? env("SUPABASE_PUBLISHABLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -46,12 +65,28 @@ export async function requireUser(accessToken: string | undefined): Promise<Auth
 
 export async function requireAdmin(accessToken: string | undefined): Promise<AuthedUser> {
   const user = await requireUser(accessToken);
-  const { data } = await adminClient()
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (!data) throw new Error("Admin access required");
-  return user;
+  if (isMasterAdminEmail(user.email)) {
+    // Proactively try to ensure the role row exists in public.user_roles if possible
+    try {
+      const client = adminClient();
+      await client
+        .from("user_roles")
+        .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id,role" });
+    } catch {
+      // Ignore background sync errors
+    }
+    return user;
+  }
+  try {
+    const { data } = await adminClient()
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (data) return user;
+  } catch (err) {
+    console.error("requireAdmin user_roles check:", err);
+  }
+  throw new Error("Admin access required");
 }

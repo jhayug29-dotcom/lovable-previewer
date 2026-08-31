@@ -18,6 +18,14 @@ const AuthContext = createContext<AuthState>({
   signOut: async () => {},
 });
 
+export const MASTER_ADMIN_EMAILS = ["yjha019@gmail.com", "growchannel2026@gmail.com"];
+
+export function isMasterAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  return MASTER_ADMIN_EMAILS.some((adm) => adm.toLowerCase() === normalized);
+}
+
 /**
  * Module-level cache for the "is this user an admin?" lookup.
  *
@@ -35,7 +43,16 @@ const AuthContext = createContext<AuthState>({
 const roleCache = new Map<string, boolean>();
 const inflight = new Map<string, Promise<boolean>>();
 
-async function isUserAdmin(client: NonNullable<typeof supabase>, userId: string) {
+async function isUserAdmin(
+  client: NonNullable<typeof supabase>,
+  userId: string,
+  userEmail?: string | null,
+) {
+  if (isMasterAdminEmail(userEmail)) {
+    roleCache.set(userId, true);
+    return true;
+  }
+
   const cached = roleCache.get(userId);
   if (cached !== undefined) return cached;
 
@@ -43,18 +60,22 @@ async function isUserAdmin(client: NonNullable<typeof supabase>, userId: string)
   if (pending) return pending;
 
   const request = (async () => {
-    const { data, error } = await client
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    // Only a definitive answer is cached. A network/RLS failure must stay
-    // uncached so the next event can retry instead of pinning `false`.
-    if (error) return false;
-    const admin = Boolean(data);
-    roleCache.set(userId, admin);
-    return admin;
+    try {
+      const { data, error } = await client
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      // Only a definitive answer is cached. A network/RLS failure must stay
+      // uncached so the next event can retry instead of pinning `false`.
+      if (error) return isMasterAdminEmail(userEmail);
+      const admin = Boolean(data) || isMasterAdminEmail(userEmail);
+      roleCache.set(userId, admin);
+      return admin;
+    } catch {
+      return isMasterAdminEmail(userEmail);
+    }
   })().finally(() => inflight.delete(userId));
 
   inflight.set(userId, request);
@@ -75,15 +96,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // user is a no-op rather than another query.
     let resolvedFor: string | null = null;
 
-    const loadRole = async (userId: string | undefined) => {
+    const loadRole = async (userId: string | undefined, userEmail?: string | null) => {
       if (!userId) {
         resolvedFor = null;
         if (active) setIsAdmin(false);
         return;
       }
+      if (isMasterAdminEmail(userEmail)) {
+        resolvedFor = userId;
+        roleCache.set(userId, true);
+        if (active) setIsAdmin(true);
+        return;
+      }
       if (userId === resolvedFor) return;
       resolvedFor = userId;
-      const admin = await isUserAdmin(client, userId);
+      const admin = await isUserAdmin(client, userId, userEmail);
       // Re-check: a sign-out or a switch to another account while this was in
       // flight must win over a late answer for the previous user.
       if (active && resolvedFor === userId) setIsAdmin(admin);
@@ -92,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     client.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session ?? null);
-      await loadRole(data.session?.user.id);
+      await loadRole(data.session?.user.id, data.session?.user.email);
       if (active) setLoading(false);
     });
 
@@ -101,11 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = client.auth.onAuthStateChange((event, next) => {
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
         setSession(next ?? null);
+        void loadRole(next?.user.id, next?.user.email);
         return;
       }
       setSession(next ?? null);
       setLoading(false);
-      void loadRole(next?.user.id);
+      void loadRole(next?.user.id, next?.user.email);
     });
 
     return () => {
