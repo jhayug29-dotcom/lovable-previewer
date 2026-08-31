@@ -1,14 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  Store,
-  LifeBuoy,
-  Rocket,
-  ShieldCheck,
-  LogOut,
-  Menu,
-  X,
-} from "lucide-react";
+import { Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import logoMark from "@/assets/logo.png";

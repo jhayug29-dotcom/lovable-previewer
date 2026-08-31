@@ -33,11 +33,11 @@ async function loadProduct(slug: string): Promise<ProductRow> {
   const product = await fetchCatalogProduct(slug);
   if (!product) throw new Error("Product unavailable. Please refresh and try again.");
   return {
-    id: product.id!,
+    id: product.id ?? product.slug,
     slug: product.slug,
     title: product.title,
     price: product.price,
-    is_free: product.isFree,
+    is_free: Boolean(product.isFree),
     download_link: product.downloadLink ?? null,
   };
 }

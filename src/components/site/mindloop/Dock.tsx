@@ -10,13 +10,7 @@
  */
 
 import { cva, type VariantProps } from "class-variance-authority";
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useTransform,
-  type MotionValue,
-} from "motion/react";
+import { motion, useMotionValue, useSpring, useTransform, type MotionValue } from "motion/react";
 import React, { useRef } from "react";
 import { cn } from "@/lib/utils";
 
@@ -96,11 +90,7 @@ export function DockIcon({
     return val - bounds.x - bounds.width / 2;
   });
 
-  const scaleTarget = useTransform(
-    distanceCalc,
-    [-distance, 0, distance],
-    [1, magnification, 1],
-  );
+  const scaleTarget = useTransform(distanceCalc, [-distance, 0, distance], [1, magnification, 1]);
   const scale = useSpring(scaleTarget, { mass: 0.1, stiffness: 150, damping: 12 });
 
   return (

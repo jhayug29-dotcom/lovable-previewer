@@ -30,7 +30,11 @@ type PurchaseRow = {
 };
 
 type AccountData = {
-  profile: { full_name: string | null; avatar_url: string | null; created_at: string | null } | null;
+  profile: {
+    full_name: string | null;
+    avatar_url: string | null;
+    created_at: string | null;
+  } | null;
   purchases: PurchaseRow[];
 };
 
@@ -161,7 +165,12 @@ export function AccountMenu() {
         <span className="hidden sm:inline">Account</span>
       </button>
 
-      {open ? <AccountPanel {...{ name, avatar, since, purchases, isPending, isAdmin }} email={user.email ?? ""} /> : null}
+      {open ? (
+        <AccountPanel
+          {...{ name, avatar, since, purchases, isPending, isAdmin }}
+          email={user.email ?? ""}
+        />
+      ) : null}
     </div>
   );
 }
@@ -244,8 +253,7 @@ function AccountPanel({
         ) : purchases.length === 0 ? (
           <div className="px-2 py-5 text-sm text-muted-foreground">
             <Package className="mb-2 size-5" strokeWidth={1.6} />
-            Nothing here yet. Every pack you buy shows up in this list with its
-            download link.
+            Nothing here yet. Every pack you buy shows up in this list with its download link.
             <Link
               to="/store"
               className="mt-3 flex w-fit items-center gap-1.5 text-sm font-semibold text-foreground hover:underline"
@@ -339,9 +347,7 @@ function PurchaseItem({ order }: { order: PurchaseRow }) {
             {product.title}
           </Link>
         ) : (
-          <p className="truncate text-sm font-semibold text-foreground">
-            Purchase
-          </p>
+          <p className="truncate text-sm font-semibold text-foreground">Purchase</p>
         )}
         <p className="truncate text-[0.7rem] text-muted-foreground">
           {[
@@ -373,6 +379,3 @@ function PurchaseItem({ order }: { order: PurchaseRow }) {
     </li>
   );
 }
-
-
-

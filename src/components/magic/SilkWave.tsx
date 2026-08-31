@@ -163,9 +163,10 @@ export function SilkWave({ speed = 1, className }: SilkWaveProps) {
     if (!canvas) return undefined;
 
     const gl =
-      (canvas.getContext("webgl", { antialias: false, alpha: false }) as
-        | WebGLRenderingContext
-        | null) ?? null;
+      (canvas.getContext("webgl", {
+        antialias: false,
+        alpha: false,
+      }) as WebGLRenderingContext | null) ?? null;
     if (!gl) return undefined; // no WebGL: the host's CSS fallback shows instead
 
     const vs = compile(gl, gl.VERTEX_SHADER, VERT);
@@ -271,4 +272,3 @@ export function SilkWave({ speed = 1, className }: SilkWaveProps) {
     />
   );
 }
-

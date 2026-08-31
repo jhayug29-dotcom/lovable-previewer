@@ -7,7 +7,9 @@ import { Dock, DockIcon } from "./Dock";
 /** Concentric-circles brand mark — pure monochrome, scales via props. */
 function LoopMark({ outer = "w-7 h-7", inner = "w-3 h-3" }: { outer?: string; inner?: string }) {
   return (
-    <span className={`relative flex items-center justify-center rounded-full border-2 border-foreground/60 ${outer}`}>
+    <span
+      className={`relative flex items-center justify-center rounded-full border-2 border-foreground/60 ${outer}`}
+    >
       <span className={`rounded-full border border-foreground/60 ${inner}`} />
     </span>
   );
@@ -100,7 +102,11 @@ export function MindloopNav() {
           aria-expanded={open}
           className="liquid-glass flex h-10 w-10 items-center justify-center rounded-full text-foreground lg:hidden"
         >
-          {open ? <X className="h-5 w-5" strokeWidth={1.8} /> : <Menu className="h-5 w-5" strokeWidth={1.8} />}
+          {open ? (
+            <X className="h-5 w-5" strokeWidth={1.8} />
+          ) : (
+            <Menu className="h-5 w-5" strokeWidth={1.8} />
+          )}
         </button>
       </div>
 

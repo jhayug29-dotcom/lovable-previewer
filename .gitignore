@@ -39,6 +39,11 @@ dist-ssr
 
 # Local agent/editor session state — machine-specific, not part of the site.
 .claude/
+.aistudio/
+metadata.json
+*.tsbuildinfo
+node-compile-cache/
+.next/
 
 # Local verification helpers. These read the live Supabase/Cashfree credentials
 # out of the environment, so they stay out of the repo to keep key handling in

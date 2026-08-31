@@ -107,8 +107,7 @@ const DEFAULT_YAW_DEG = 30; // peak rotateY at the far ends of the arc
  * measured from the card's own centre, so `rotateY` foreshortens it in place. */
 const CARD_PERSPECTIVE = 900;
 /* Where the arc dissolves into the page, as stops for a horizontal mask. */
-const EDGE_FADE =
-  "linear-gradient(to right, transparent 0%, #000 11%, #000 89%, transparent 100%)";
+const EDGE_FADE = "linear-gradient(to right, transparent 0%, #000 11%, #000 89%, transparent 100%)";
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -331,9 +330,7 @@ export function OrbitalImageWheel({
     let previousActive = -1;
 
     const context = gsap.context(() => {
-      const cards = Array.from(
-        wheel.querySelectorAll<HTMLElement>(".oiw-item"),
-      );
+      const cards = Array.from(wheel.querySelectorAll<HTMLElement>(".oiw-item"));
       if (cards.length === 0) return undefined;
 
       const topAnchor = -Math.PI / 2;
@@ -362,24 +359,15 @@ export function OrbitalImageWheel({
           const distanceToFocus = shortestAngleDistance(theta, topAnchor);
           const focusIntensity = clamp(distanceToFocus / focusArc, 0, 1);
 
-          const darkIntensity = clamp(
-            focusIntensity * boundedDarknessStrength,
-            0,
-            1,
-          );
-          const saturationIntensity = clamp(
-            focusIntensity * boundedSaturationStrength,
-            0,
-            1,
-          );
+          const darkIntensity = clamp(focusIntensity * boundedDarknessStrength, 0, 1);
+          const saturationIntensity = clamp(focusIntensity * boundedSaturationStrength, 0, 1);
 
           const currentBlur = darkIntensity * boundedBlur;
           const peakBrightness = clamp(100 + boundedBrightnessBoost, 100, 220);
           const currentBrightness =
             boundedDim + (1 - darkIntensity) * (peakBrightness - boundedDim);
           const currentSaturation =
-            boundedMinSaturation +
-            (1 - saturationIntensity) * (100 - boundedMinSaturation);
+            boundedMinSaturation + (1 - saturationIntensity) * (100 - boundedMinSaturation);
           const currentScale = 1 - darkIntensity * boundedScaleEffect;
           const drift = clamp(x / radius, -1, 1);
           // Gentle tilt — cards lean with the arc without looking thrown. The
@@ -474,13 +462,7 @@ export function OrbitalImageWheel({
       context.revert();
       wheelScrollTriggerRef.current = null;
     };
-  }, [
-    scrollContainerRef,
-    ringImages,
-    animKey,
-    autoplay,
-    autoplayDuration,
-  ]);
+  }, [scrollContainerRef, ringImages, animKey, autoplay, autoplayDuration]);
 
   if (ringImages.length === 0) {
     return null;
