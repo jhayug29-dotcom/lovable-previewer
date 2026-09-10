@@ -42,7 +42,6 @@ async function queryProducts(): Promise<DbProduct[]> {
       .from("products")
       .select(PRODUCT_SELECT)
       .eq("active", true)
-      .eq("show_on_homepage", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
     if (error || !data || data.length === 0) return fallbackProducts;
