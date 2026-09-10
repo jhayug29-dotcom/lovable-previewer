@@ -18,16 +18,11 @@ const AuthContext = createContext<AuthState>({
   signOut: async () => {},
 });
 
-/**
- * Module-level cache for the "is this user an admin?" lookup.
- */
 const roleCache = new Map<string, boolean>();
 const inflight = new Map<string, Promise<boolean>>();
 
 async function isUserAdmin(client: NonNullable<typeof supabase>, user: User) {
-  if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") {
-    return true;
-  }
+  if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") return true;
 
   const cached = roleCache.get(user.id);
   if (cached !== undefined) return cached;
@@ -42,8 +37,6 @@ async function isUserAdmin(client: NonNullable<typeof supabase>, user: User) {
       .eq("user_id", user.id)
       .eq("role", "admin")
       .maybeSingle();
-    // Only a definitive answer is cached. A network/RLS failure must stay
-    // uncached so the next event can retry instead of pinning `false`.
     if (error) return false;
     const admin = Boolean(data);
     roleCache.set(user.id, admin);
@@ -54,37 +47,17 @@ async function isUserAdmin(client: NonNullable<typeof supabase>, user: User) {
   return request;
 }
 
-function syncUserProfile(client: NonNullable<typeof supabase>, user: User | undefined) {
-  if (!user) return;
-  void client
-    .from("profiles")
-    .upsert(
-      {
-        id: user.id,
-        email: user.email,
-        full_name:
-          (user.user_metadata?.["full_name"] as string | undefined) ||
-          user.email?.split("@")[0] ||
-          "",
-        avatar_url: (user.user_metadata?.["avatar_url"] as string | undefined) || null,
-      },
-      { onConflict: "id" },
-    )
-    .then(
-      () => {},
-      () => {},
-    );
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(Boolean(supabase));
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
     const client = supabase;
-
     let active = true;
     let resolvedFor: string | null = null;
 
@@ -94,15 +67,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (active) setIsAdmin(false);
         return;
       }
-      syncUserProfile(client, user);
-
       if (user.id === resolvedFor) return;
       resolvedFor = user.id;
       const admin = await isUserAdmin(client, user);
       if (active && resolvedFor === user.id) setIsAdmin(admin);
     };
 
-    client.auth.getSession().then(async ({ data }) => {
+    void client.auth.getSession().then(async ({ data }) => {
       if (!active) return;
       setSession(data.session ?? null);
       await loadRole(data.session?.user);
