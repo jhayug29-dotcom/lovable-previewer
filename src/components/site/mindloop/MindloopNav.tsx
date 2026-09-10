@@ -4,14 +4,16 @@ import { Instagram, Youtube, Twitter, Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Dock, DockIcon } from "./Dock";
 
-/** Concentric-circles brand mark — pure monochrome, scales via props. */
-function LoopMark({ outer = "w-7 h-7", inner = "w-3 h-3" }: { outer?: string; inner?: string }) {
+function LoopMark({ outer = "h-7 w-7" }: { outer?: string }) {
   return (
-    <span
-      className={`relative flex items-center justify-center rounded-full border-2 border-foreground/60 ${outer}`}
-    >
-      <span className={`rounded-full border border-foreground/60 ${inner}`} />
-    </span>
+    <img
+      src="/editly-icon-iris.svg"
+      alt=""
+      aria-hidden="true"
+      className={`object-contain ${outer}`}
+      width={28}
+      height={28}
+    />
   );
 }
 

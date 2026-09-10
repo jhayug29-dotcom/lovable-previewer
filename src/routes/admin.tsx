@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +49,10 @@ export const Route = createFileRoute("/admin")({
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken) {
-      throw notFound();
+      throw redirect({
+        to: "/auth",
+        search: { redirect: "/admin" },
+      });
     }
     try {
       const access = await checkPanelAccess({ data: { accessToken } });
@@ -484,6 +487,7 @@ type ProductRow = {
   file_info: string[];
   how_to_use: { step: string; detail: string }[];
   active: boolean;
+  show_on_homepage: boolean;
   sales: number;
 };
 
@@ -505,6 +509,7 @@ const emptyProduct = {
   how_to_use: "",
   is_free: false,
   active: true,
+  show_on_homepage: true,
 };
 
 function ProductsTab() {
@@ -512,11 +517,13 @@ function ProductsTab() {
   const save = useSave("products");
   const remove = useRemove("products");
   const [form, setForm] = useState({ ...emptyProduct, id: "" });
+  const { data: sectionRows = [] } = useTable<{ id: string; product_id: string; title: string; content: string; enabled: boolean; sort_order: number }>("product_sections", "sort_order");
+  const [sectionsText, setSectionsText] = useState("");
 
   const set = (key: keyof typeof form) => (v: string | boolean) =>
     setForm((f) => ({ ...f, [key]: v }));
 
-  const load = (row: ProductRow) =>
+  const load = (row: ProductRow) => {
     setForm({
       id: row.id,
       slug: row.slug,
@@ -536,9 +543,18 @@ function ProductsTab() {
       how_to_use: (row.how_to_use ?? []).map((s) => `${s.step} | ${s.detail}`).join("\n"),
       is_free: row.is_free,
       active: row.active,
+      show_on_homepage: row.show_on_homepage !== false,
     });
+    setSectionsText(
+      sectionRows
+        .filter((section) => section.product_id === row.id)
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((section) => `${section.title} | ${section.content}`)
+        .join("\n"),
+    );
+  };
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.slug || !form.title) {
       toast.error("Slug and title are required");
       return;
@@ -570,8 +586,21 @@ function ProductsTab() {
         return { step: (step ?? "").trim(), detail: detail.trim() };
       }),
       active: form.active,
+      show_on_homepage: form.show_on_homepage,
     });
+    const client = supabase;
+    if (form.id && client) {
+      const parsedSections = lines(sectionsText).map((line, index) => {
+        const [title = "", content = ""] = line.split("|");
+        return { product_id: form.id, title: title.trim(), content: content.trim(), sort_order: index, enabled: true };
+      });
+      void client.from("product_sections").delete().eq("product_id", form.id).then(() => {
+        if (parsedSections.length > 0) return client.from("product_sections").insert(parsedSections);
+        return null;
+      });
+    }
     setForm({ ...emptyProduct, id: "" });
+    setSectionsText("");
   };
 
   return (
@@ -671,11 +700,21 @@ function ProductsTab() {
           value={form.how_to_use}
           onChange={set("how_to_use") as (v: string) => void}
         />
+        <Area
+          label="Custom sections (one per line: Title | Content)"
+          value={sectionsText}
+          onChange={setSectionsText}
+        />
         <Toggle
           label="Visible on the storefront"
           value={form.active}
-          onChange={set("active") as (v: boolean) => void}
-        />
+  onChange={set("active") as (v: boolean) => void}
+  />
+  <Toggle
+  label="Show on homepage"
+  value={form.show_on_homepage}
+  onChange={set("show_on_homepage") as (v: boolean) => void}
+  />
         <PrimaryButton onClick={submit} busy={save.isPending}>
           {form.id ? (
             <Save className="size-4" strokeWidth={1.9} />
