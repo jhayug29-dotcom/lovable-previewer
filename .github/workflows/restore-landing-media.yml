@@ -1,0 +1,46 @@
+name: Restore landing page media
+
+on:
+  push:
+    paths:
+      - .github/workflows/restore-landing-media.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Restore missing landing videos from the known-good commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_COMMIT="baad36b97370ed010e5e815ca89ec3e2ac278276"
+          RAW_BASE="https://raw.githubusercontent.com/jhayug29-dotcom/lovable-previewer/${BASE_COMMIT}/public/media"
+          mkdir -p public/media
+          curl -fL --retry 3 --retry-delay 2 "${RAW_BASE}/hero.mp4" -o public/media/hero.mp4
+          curl -fL --retry 3 --retry-delay 2 "${RAW_BASE}/mission.mp4" -o public/media/mission.mp4
+          test -s public/media/hero.mp4
+          test -s public/media/mission.mp4
+
+      - name: Commit restored media
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/media/hero.mp4 public/media/mission.mp4
+          if git diff --cached --quiet; then
+            echo "Landing media already present; nothing to commit."
+            exit 0
+          fi
+          git commit -m "fix: restore landing page background media [skip ci]"
+          git push origin HEAD:main
