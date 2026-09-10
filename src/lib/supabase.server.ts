@@ -1,36 +1,49 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-/** Public project values also ship as build-time fallbacks so the app works on any host. */
-const PUBLIC_FALLBACK: Record<string, string | undefined> = {
-  SUPABASE_URL: "https://wylcbblegcyzunychqqa.supabase.co",
-  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV",
-};
-
-export function getSupabaseUrl(): string {
-  return (
-    process.env["SUPABASE_URL"] ??
-    process.env["VITE_SUPABASE_URL"] ??
-    process.env["STORE_SUPABASE_URL"] ??
-    PUBLIC_FALLBACK["SUPABASE_URL"]!
-  );
+function getEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value?.trim() || undefined;
 }
 
+/** Server-side Supabase URL. Production must provide an environment variable. */
+export function getSupabaseUrl(): string {
+  const url =
+    getEnv("SUPABASE_URL") ??
+    getEnv("VITE_SUPABASE_URL") ??
+    getEnv("STORE_SUPABASE_URL");
+
+  if (!url) {
+    throw new Error(
+      "Supabase is not configured. Set SUPABASE_URL (or VITE_SUPABASE_URL) in the deployment environment.",
+    );
+  }
+
+  return url;
+}
+
+/** Server-side publishable/anon key. */
 export function getSupabaseKey(): string {
-  return (
-    process.env["SUPABASE_PUBLISHABLE_KEY"] ??
-    process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
-    process.env["SUPABASE_ANON_KEY"] ??
-    process.env["VITE_SUPABASE_ANON_KEY"] ??
-    process.env["STORE_SUPABASE_PUBLISHABLE_KEY"] ??
-    PUBLIC_FALLBACK["SUPABASE_PUBLISHABLE_KEY"]!
-  );
+  const key =
+    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("SUPABASE_ANON_KEY") ??
+    getEnv("VITE_SUPABASE_ANON_KEY") ??
+    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
+
+  if (!key) {
+    throw new Error(
+      "Supabase is not configured. Set SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in the deployment environment.",
+    );
+  }
+
+  return key;
 }
 
 export function getServiceRoleKey(): string | undefined {
   return (
-    process.env["SUPABASE_SERVICE_ROLE_KEY"] ??
-    process.env["STORE_SUPABASE_SERVICE_ROLE_KEY"] ??
-    process.env["SUPABASE_SERVICE_KEY"]
+    getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
+    getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
+    getEnv("SUPABASE_SERVICE_KEY")
   );
 }
 
@@ -51,11 +64,9 @@ export function userClient(accessToken: string): SupabaseClient {
   });
 }
 
-/** Returns the most appropriate Supabase client: userClient if token provided, otherwise adminClient or anonClient. */
+/** Returns the most appropriate Supabase client: userClient if token provided, otherwise adminClient. */
 export function getDbClient(accessToken?: string): SupabaseClient {
-  if (accessToken) {
-    return userClient(accessToken);
-  }
+  if (accessToken) return userClient(accessToken);
   return adminClient();
 }
 
