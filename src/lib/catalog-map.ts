@@ -1,6 +1,21 @@
 import type { Category, Product, Review } from "@/lib/products";
 
-export type DbProduct = Product & { id?: string; banner?: string; downloadLink?: string };
+export type ProductSection = {
+  id: string;
+  product_id: string;
+  title: string;
+  content: string;
+  sort_order: number;
+  enabled: boolean;
+};
+
+export type DbProduct = Product & {
+  id?: string;
+  banner?: string;
+  downloadLink?: string;
+  showOnHomepage?: boolean;
+  sections?: ProductSection[];
+};
 
 export type Coupon = {
   id: string;
@@ -68,6 +83,7 @@ export function mapProduct(row: Row): DbProduct {
     reviewCount: reviews.length,
     sales: Number(row["sales"] ?? 0),
     ...(row["badge"] ? { badge: String(row["badge"]) } : {}),
+    showOnHomepage: row["show_on_homepage"] !== false,
     fileInfo: (row["file_info"] as string[] | null) ?? [],
     description: String(row["description"] ?? ""),
     features: (row["features"] as string[] | null) ?? [],

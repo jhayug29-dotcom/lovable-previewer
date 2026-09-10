@@ -484,6 +484,7 @@ type ProductRow = {
   file_info: string[];
   how_to_use: { step: string; detail: string }[];
   active: boolean;
+  show_on_homepage: boolean;
   sales: number;
 };
 
@@ -505,6 +506,7 @@ const emptyProduct = {
   how_to_use: "",
   is_free: false,
   active: true,
+  show_on_homepage: true,
 };
 
 function ProductsTab() {
@@ -536,6 +538,7 @@ function ProductsTab() {
       how_to_use: (row.how_to_use ?? []).map((s) => `${s.step} | ${s.detail}`).join("\n"),
       is_free: row.is_free,
       active: row.active,
+      show_on_homepage: row.show_on_homepage !== false,
     });
 
   const submit = () => {
@@ -570,6 +573,7 @@ function ProductsTab() {
         return { step: (step ?? "").trim(), detail: detail.trim() };
       }),
       active: form.active,
+      show_on_homepage: form.show_on_homepage,
     });
     setForm({ ...emptyProduct, id: "" });
   };
@@ -671,11 +675,16 @@ function ProductsTab() {
           value={form.how_to_use}
           onChange={set("how_to_use") as (v: string) => void}
         />
-        <Toggle
-          label="Visible on the storefront"
-          value={form.active}
-          onChange={set("active") as (v: boolean) => void}
-        />
+  <Toggle
+  label="Visible on the storefront"
+  value={form.active}
+  onChange={set("active") as (v: boolean) => void}
+  />
+  <Toggle
+  label="Show on homepage"
+  value={form.show_on_homepage}
+  onChange={set("show_on_homepage") as (v: boolean) => void}
+  />
         <PrimaryButton onClick={submit} busy={save.isPending}>
           {form.id ? (
             <Save className="size-4" strokeWidth={1.9} />

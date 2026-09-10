@@ -415,7 +415,7 @@ function Landing() {
             up wherever the ribbon's near-white crease happens to pass behind them
             and the background stays clean everywhere else. */}
         <div className="relative z-10 mx-auto flex max-w-2xl flex-col items-center text-center [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_2px_22px_rgba(0,0,0,0.85)]">
-          <LoopMark outer="w-10 h-10" inner="w-5 h-5" />
+          <LoopMark outer="w-10 h-10" />
           <h2 className="mt-8 text-4xl tracking-tight md:text-6xl">
             Start your <span className="font-instrument font-normal italic">journey</span>
           </h2>

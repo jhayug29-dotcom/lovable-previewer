@@ -98,8 +98,22 @@ create table if not exists public.products (
   rating numeric not null default 5,
   sales integer not null default 0,
   active boolean not null default true,
+  show_on_homepage boolean not null default true,
   sort_order integer not null default 0,
   created_at timestamptz default now()
+);
+
+alter table public.products add column if not exists show_on_homepage boolean not null default true;
+
+create table if not exists public.product_sections (
+  id uuid primary key default gen_random_uuid(),
+  product_id uuid not null references public.products(id) on delete cascade,
+  title text not null,
+  content text not null default '',
+  sort_order integer not null default 0,
+  enabled boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.reviews (
@@ -170,9 +184,9 @@ alter table public.orders add column if not exists paid_at timestamptz;
 alter table public.orders add column if not exists receipt_sent_at timestamptz;
 
 -- Grants
-grant select on public.products, public.reviews, public.banners, public.sales to anon;
-grant select on public.products, public.reviews, public.banners, public.sales to authenticated;
-grant insert, update, delete on public.products, public.reviews, public.banners, public.sales to authenticated;
+grant select on public.products, public.reviews, public.banners, public.sales, public.product_sections to anon;
+grant select on public.products, public.reviews, public.banners, public.sales, public.product_sections to authenticated;
+grant insert, update, delete on public.products, public.reviews, public.banners, public.sales, public.product_sections to authenticated;
 grant all on public.products, public.reviews, public.banners, public.sales to service_role;
 
 grant select, insert, update, delete on public.coupons to authenticated;
@@ -183,6 +197,7 @@ grant select on public.orders to authenticated;
 grant all on public.orders to service_role;
 
 alter table public.products enable row level security;
+alter table public.product_sections enable row level security;
 alter table public.reviews  enable row level security;
 alter table public.coupons  enable row level security;
 alter table public.banners  enable row level security;
@@ -200,6 +215,13 @@ begin
     execute format('create policy "admin write %1$s" on public.%1$s for all to authenticated using (public.is_admin()) with check (public.is_admin())', t);
   end loop;
 end $$;
+
+drop policy if exists "public read product sections" on public.product_sections;
+create policy "public read product sections" on public.product_sections for select to anon, authenticated
+  using (enabled = true or public.is_admin());
+drop policy if exists "admin write product sections" on public.product_sections;
+create policy "admin write product sections" on public.product_sections for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists "public read reviews" on public.reviews;
 create policy "public read reviews" on public.reviews for select to anon, authenticated using (true);
