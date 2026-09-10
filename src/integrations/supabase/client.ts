@@ -1,15 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-/** Project URL + publishable key are safe in client code; env vars override them on any host. */
-const FALLBACK_URL = "https://wylcbblegcyzunychqqa.supabase.co";
-const FALLBACK_KEY = "sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV";
+/** Project URL + publishable key are safe in client code and must be supplied by the host environment. */
+const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const key = (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
+  import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined;
 
-const url = (import.meta.env["VITE_SUPABASE_URL"] as string | undefined) ?? FALLBACK_URL;
-const key =
-  ((import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
-    import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined) ?? FALLBACK_KEY;
-
-/** True once the Supabase project is connected via Project Settings → Integrations. */
+/** True only when the host supplied a complete Supabase client configuration. */
 export const isSupabaseConfigured = Boolean(url && key);
 
 export const supabase: SupabaseClient | null = isSupabaseConfigured
@@ -26,7 +22,7 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
 export function requireSupabase(): SupabaseClient {
   if (!supabase) {
     throw new Error(
-      "Backend not connected yet. Connect your Supabase project in Project Settings → Integrations.",
+      "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY).",
     );
   }
   return supabase;
