@@ -3,7 +3,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
-import logoMark from "@/assets/logo.png";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 import { AccountMenu } from "@/components/site/AccountMenu";
 
@@ -28,7 +27,7 @@ export function SiteHeader() {
         <Link to="/" className="group flex items-center gap-2.5 sm:gap-3">
           <span className="glass flex size-10 items-center justify-center rounded-2xl transition-transform duration-500 group-hover:scale-105">
             <img
-              src={logoMark}
+              src="/editly-icon-iris.svg"
               alt="Editly Store logo"
               className="site-logo-mark size-7 object-contain"
               width={28}
