@@ -6,6 +6,7 @@ import { ProductCard } from "@/components/site/ProductCard";
 import { BuyButton } from "@/components/site/BuyButton";
 import { formatPrice } from "@/lib/products";
 import { getStoreProduct } from "@/lib/catalog.functions";
+import { loadProductSections, type ProductSection } from "@/lib/catalog.server";
 import type { DbProduct } from "@/lib/catalog-map";
 
 import { getBreadcrumbsSchema, getProductSchema, SITE_URL } from "@/lib/seo";
@@ -14,7 +15,8 @@ export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
     const { product, related } = await getStoreProduct({ data: { slug: params.slug } });
     if (!product) throw notFound();
-    return { product, related };
+    const sections = product.id ? await loadProductSections(product.id) : [];
+    return { product, related, sections };
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;
@@ -77,9 +79,10 @@ export const Route = createFileRoute("/product/$slug")({
 });
 
 function ProductPage() {
-  const { product, related } = Route.useLoaderData() as {
+  const { product, related, sections } = Route.useLoaderData() as {
     product: DbProduct;
     related: DbProduct[];
+    sections: ProductSection[];
   };
   const discount =
     product.originalPrice > 0 ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
@@ -244,6 +247,17 @@ function ProductPage() {
             </ol>
           </div>
         </div>
+
+        {sections.length > 0 ? (
+          <div className="mt-8 grid gap-8 md:grid-cols-2">
+            {sections.map((section) => (
+              <section key={section.id} className="glass rounded-4xl p-8">
+                <h2 className="font-display text-2xl font-extrabold text-ink">{section.title}</h2>
+                <p className="mt-4 whitespace-pre-line leading-relaxed text-ink/75">{section.content}</p>
+              </section>
+            ))}
+          </div>
+        ) : null}
 
         {/* Preview video — only rendered when this product has one */}
         {product.videoUrl ? (

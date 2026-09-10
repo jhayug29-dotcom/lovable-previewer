@@ -42,6 +42,7 @@ async function queryProducts(): Promise<DbProduct[]> {
       .from("products")
       .select(PRODUCT_SELECT)
       .eq("active", true)
+      .eq("show_on_homepage", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
     if (error || !data || data.length === 0) return fallbackProducts;
@@ -100,7 +101,45 @@ export async function loadProducts(): Promise<DbProduct[]> {
   return applySaleToAll(products, sale);
 }
 
+export type ProductSection = {
+  id: string;
+  product_id: string;
+  title: string;
+  content: string;
+  sort_order: number;
+  enabled: boolean;
+};
+
+export async function loadProductSections(productId: string): Promise<ProductSection[]> {
+  try {
+    const { data } = await publicClient()
+      .from("product_sections")
+      .select("id, product_id, title, content, sort_order, enabled")
+      .eq("product_id", productId)
+      .eq("enabled", true)
+      .order("sort_order", { ascending: true });
+    return (data as ProductSection[] | null) ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function loadProduct(slug: string): Promise<DbProduct | null> {
+  try {
+    const { data, error } = await publicClient()
+      .from("products")
+      .select(PRODUCT_SELECT)
+      .eq("slug", slug)
+      .eq("active", true)
+      .maybeSingle();
+    if (!error && data) {
+      const [{ sale }] = await Promise.all([loadPromos()]);
+      const product = mapProduct(data as Row);
+      return applySaleToAll([product], sale)[0] ?? null;
+    }
+  } catch {
+    // Fall through to the cached catalog fallback.
+  }
   const all = await loadProducts();
   return all.find((p) => p.slug === slug) ?? null;
 }
