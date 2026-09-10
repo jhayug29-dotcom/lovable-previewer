@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +49,10 @@ export const Route = createFileRoute("/admin")({
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken) {
-      throw notFound();
+      throw redirect({
+        to: "/auth",
+        search: { redirect: "/admin" },
+      });
     }
     try {
       const access = await checkPanelAccess({ data: { accessToken } });
