@@ -9,29 +9,17 @@ import {
   type StoreSale,
 } from "@/lib/sales";
 
-const FALLBACK_URL = "https://wylcbblegcyzunychqqa.supabase.co";
-const FALLBACK_KEY = "sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV";
-
-function env(name: string, fallback: string): string {
-  return process.env[name] ?? process.env[`STORE_${name}`] ?? fallback;
+function env(name: string): string | undefined {
+  return process.env[name] ?? process.env[`STORE_${name}`];
 }
 
-let client: SupabaseClient | null = null;
 function publicClient(): SupabaseClient {
-  client ??= createClient(
-    env("SUPABASE_URL", FALLBACK_URL),
-    env("SUPABASE_PUBLISHABLE_KEY", FALLBACK_KEY),
-    {
-      auth: { persistSession: false, autoRefreshToken: false },
-    },
-  );
-  return client;
+  const url = env("SUPABASE_URL");
+  const key = env("SUPABASE_PUBLISHABLE_KEY") ?? env("SUPABASE_ANON_KEY");
+  if (!url || !key) throw new Error("Supabase is not configured");
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-/**
- * Tiny per-isolate cache. Under traffic spikes hundreds of requests collapse
- * onto a single database read instead of one query per visitor.
- */
 const TTL_MS = 30_000;
 let cache: { at: number; products: DbProduct[] } | null = null;
 let inflight: Promise<DbProduct[]> | null = null;
@@ -67,7 +55,6 @@ async function loadRawProducts(): Promise<DbProduct[]> {
 }
 
 export type Promos = { sale: StoreSale | null; banners: StoreBanner[] };
-
 let promoCache: { at: number; promos: Promos } | null = null;
 
 async function queryPromos(): Promise<Promos> {
@@ -85,7 +72,6 @@ async function queryPromos(): Promise<Promos> {
   }
 }
 
-/** Active sale + festive banners, cached like the catalog. */
 export async function loadPromos(): Promise<Promos> {
   const now = Date.now();
   if (promoCache && now - promoCache.at < TTL_MS) return promoCache.promos;
@@ -94,7 +80,6 @@ export async function loadPromos(): Promise<Promos> {
   return promos;
 }
 
-/** Catalog with any live sale already priced in. */
 export async function loadProducts(): Promise<DbProduct[]> {
   const [products, { sale }] = await Promise.all([loadRawProducts(), loadPromos()]);
   return applySaleToAll(products, sale);
