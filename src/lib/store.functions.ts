@@ -14,6 +14,7 @@ export const createCashfreeOrder = createServerFn({ method: "POST" })
         customerPhone: z.string().min(6),
         couponCode: z.string().optional(),
         accessToken: z.string().optional(),
+        collaboratorCode: z.string().regex(/^[a-zA-Z0-9_-]{8,80}$/).optional(),
       })
       .parse(data),
   )
@@ -25,9 +26,15 @@ export const verifyCashfreeOrder = createServerFn({ method: "POST" })
 
 export const claimFreeProduct = createServerFn({ method: "POST" })
   .validator((data) =>
-    z.object({ slug: z.string().min(1), accessToken: z.string().optional() }).parse(data),
+    z
+      .object({
+        slug: z.string().min(1),
+        accessToken: z.string().optional(),
+        collaboratorCode: z.string().regex(/^[a-zA-Z0-9_-]{8,80}$/).optional(),
+      })
+      .parse(data),
   )
-  .handler(async ({ data }) => claimFree(data.slug, data.accessToken));
+  .handler(async ({ data }) => claimFree(data.slug, data.accessToken, data.collaboratorCode));
 
 export const generateAiReviews = createServerFn({ method: "POST" })
   .validator((data) =>
