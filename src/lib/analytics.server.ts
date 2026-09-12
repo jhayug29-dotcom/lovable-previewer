@@ -49,13 +49,48 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
 
   let collaborator = false;
   try {
-    const { count } = await db
+    const userEmail = (user.email ?? "").trim().toLowerCase();
+    // 1. Direct match by user_id
+    const { data: byId } = await db
       .from("collaborator_links")
-      .select("id", { count: "exact", head: true })
+      .select("id, user_id, email, active")
       .eq("user_id", user.id)
-      .eq("active", true);
-    collaborator = (count ?? 0) > 0;
-  } catch {
+      .eq("active", true)
+      .limit(10);
+
+    if (byId && byId.length > 0) {
+      collaborator = true;
+    } else if (userEmail) {
+      // 2. Resilient match by email
+      const { data: byEmail } = await db
+        .from("collaborator_links")
+        .select("id, user_id, email, active")
+        .ilike("email", userEmail)
+        .eq("active", true)
+        .limit(10);
+
+      if (byEmail && byEmail.length > 0) {
+        collaborator = true;
+        try {
+          const linksToUpdate = byEmail.filter((l) => l.user_id !== user.id).map((l) => l.id);
+          if (linksToUpdate.length > 0) {
+            await db.from("collaborator_links").update({ user_id: user.id }).in("id", linksToUpdate);
+          }
+          for (const link of byEmail) {
+            if (link.user_id && link.user_id !== user.id) {
+              await db
+                .from("collaborator_partner_products")
+                .update({ user_id: user.id })
+                .eq("user_id", link.user_id);
+            }
+          }
+        } catch (healErr) {
+          console.warn("Collaborator link user_id auto-sync notice:", healErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Collaborator access check error:", err);
     collaborator = false;
   }
 

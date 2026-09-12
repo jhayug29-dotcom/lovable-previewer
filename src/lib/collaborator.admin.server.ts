@@ -266,22 +266,63 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
 export async function getCollaboratorDashboardAdmin(accessToken?: string) {
   const user = await requireUser(accessToken);
   const db = adminDb(accessToken);
+  const userEmail = (user.email ?? "").trim().toLowerCase();
 
-  const { data: linkRows, error: linkError } = await db
+  let linkQuery = db
     .from("collaborator_links")
     .select("id,code,name,user_id,email,active,created_at")
-    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  if (userEmail) {
+    linkQuery = linkQuery.or(`user_id.eq.${user.id},email.ilike.${userEmail}`);
+  } else {
+    linkQuery = linkQuery.eq("user_id", user.id);
+  }
+
+  const { data: linkRows, error: linkError } = await linkQuery;
   if (linkError) throw linkError;
 
-  const activeLinks = ((linkRows ?? []) as LinkRow[]).filter((link) => link.active);
+  const rows = (linkRows ?? []) as LinkRow[];
+  const activeLinks = rows.filter((link) => link.active);
   if (!activeLinks.length) throw new Error("Collaborator access has been revoked or has not been assigned");
 
-  const productIds = await getProductIds(db, user.id);
+  // Auto-heal mismatched user_ids
+  try {
+    const mismatched = activeLinks.filter((l) => l.user_id !== user.id);
+    if (mismatched.length > 0) {
+      await db.from("collaborator_links").update({ user_id: user.id }).in("id", mismatched.map((m) => m.id));
+      for (const m of mismatched) {
+        if (m.user_id) {
+          await db.from("collaborator_partner_products").update({ user_id: user.id }).eq("user_id", m.user_id);
+        }
+      }
+    }
+  } catch (healErr) {
+    console.warn("Collaborator dashboard auto-sync notice:", healErr);
+  }
+
+  const userIdsToCheck = [...new Set([user.id, ...activeLinks.map((l) => l.user_id)])];
+  const { data: accessData } = await db
+    .from("collaborator_partner_products")
+    .select("product_id")
+    .in("user_id", userIdsToCheck);
+  const productIds = [...new Set(((accessData ?? []) as { product_id: string }[]).map((r) => r.product_id))];
+
   const products = await getProducts(db, productIds);
-  const links = await Promise.all(activeLinks.map(async (link) => ({ ...link, url: `/?ref=${link.code}`, ...(await safeStats(db, link, productIds)) })));
+  const links = await Promise.all(
+    activeLinks.map(async (link) => ({
+      ...link,
+      url: `/?ref=${link.code}`,
+      ...(await safeStats(db, link, productIds)),
+    })),
+  );
   const totals = links.reduce(
-    (sum, link) => ({ visitors: sum.visitors + link.visitors, page_views: sum.page_views + link.page_views, sales: sum.sales + link.sales, revenue: sum.revenue + link.revenue }),
+    (sum, link) => ({
+      visitors: sum.visitors + link.visitors,
+      page_views: sum.page_views + link.page_views,
+      sales: sum.sales + link.sales,
+      revenue: sum.revenue + link.revenue,
+    }),
     { visitors: 0, page_views: 0, sales: 0, revenue: 0 },
   );
 

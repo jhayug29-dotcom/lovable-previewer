@@ -5,6 +5,7 @@ import {
   CircleUserRound,
   Download,
   ExternalLink,
+  Link2,
   Loader2,
   LogOut,
   Package,
@@ -14,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { signOut } from "@/lib/auth";
 import { formatPrice } from "@/lib/products";
+import { checkPanelAccess } from "@/lib/analytics.functions";
 
 type PurchaseRow = {
   id: string;
@@ -88,7 +90,7 @@ const dateFmt = new Intl.DateTimeFormat("en-IN", {
  * until they ask for it.
  */
 export function AccountMenu() {
-  const { user, isAdmin } = useAuth();
+  const { user, session, isAdmin } = useAuth();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -99,6 +101,13 @@ export function AccountMenu() {
     queryKey: ["account-purchases", user?.id],
     queryFn: () => fetchAccount(user!.id),
     enabled: open && Boolean(user?.id),
+    staleTime: 60_000,
+  });
+
+  const { data: panelAccess } = useQuery({
+    queryKey: ["menu-panel-access", session?.access_token ?? ""],
+    queryFn: () => checkPanelAccess({ data: { accessToken: session?.access_token } }),
+    enabled: open && Boolean(session?.access_token),
     staleTime: 60_000,
   });
 
@@ -168,6 +177,7 @@ export function AccountMenu() {
       {open ? (
         <AccountPanel
           {...{ name, avatar, since, purchases, isPending, isAdmin }}
+          isCollaborator={Boolean(panelAccess?.collaborator)}
           email={user.email ?? ""}
         />
       ) : null}
@@ -184,6 +194,7 @@ function AccountPanel({
   purchases,
   isPending,
   isAdmin,
+  isCollaborator,
 }: {
   name: string;
   email: string;
@@ -192,6 +203,7 @@ function AccountPanel({
   purchases: PurchaseRow[];
   isPending: boolean;
   isAdmin: boolean;
+  isCollaborator: boolean;
 }) {
   /* Placement is breakpoint-dependent. From `sm` up the panel hangs off the
      button's right edge, which is what you want next to a header control. On a
@@ -281,6 +293,15 @@ function AccountPanel({
           >
             <ShieldCheck className="size-4" strokeWidth={1.7} />
             Admin panel
+          </Link>
+        ) : isCollaborator ? (
+          <Link
+            to="/admin/collaborators"
+            role="menuitem"
+            className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          >
+            <Link2 className="size-4" strokeWidth={1.7} />
+            Collaborator panel
           </Link>
         ) : (
           <Link

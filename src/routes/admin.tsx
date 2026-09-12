@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect, isRedirect } from "@tanstack/react-router";
 
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,10 +58,14 @@ export const Route = createFileRoute("/admin")({
     }
     try {
       const access = await checkPanelAccess({ data: { accessToken } });
+      if (access.collaborator && !access.admin && !access.seller) {
+        throw redirect({ to: "/admin/collaborators" });
+      }
       if (!access.admin && !access.seller) {
         throw notFound();
       }
-    } catch {
+    } catch (e) {
+      if (isRedirect(e)) throw e;
       throw notFound();
     }
   },

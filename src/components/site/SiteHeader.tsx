@@ -30,7 +30,6 @@ export function SiteHeader() {
   useEffect(() => setOpen(false), [pathname]);
 
   const canSeeCollaborators = Boolean(panelAccess?.admin || panelAccess?.collaborator);
-  const collaboratorTarget = panelAccess?.admin ? "/admin/collaborators" : "/admin/collaborators";
 
   return (
     <header className="sticky top-0 z-50 w-full">
@@ -51,7 +50,13 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2 sm:gap-2.5">
           {isAdmin ? <Link to="/admin" className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95" aria-label="Admin panel"><ShieldCheck className="size-5" strokeWidth={1.6} /></Link> : null}
-          {canSeeCollaborators ? <Link to={collaboratorTarget} className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95" aria-label="Collaborator analytics"><Link2 className="size-5" strokeWidth={1.7} /></Link> : null}
+          {canSeeCollaborators ? (
+            panelAccess?.admin ? (
+              <Link to="/admin" search={{ tab: "collaborators" }} className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95" aria-label="Collaborator analytics"><Link2 className="size-5" strokeWidth={1.7} /></Link>
+            ) : (
+              <Link to="/admin/collaborators" className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95" aria-label="Collaborator analytics"><Link2 className="size-5" strokeWidth={1.7} /></Link>
+            )
+          ) : null}
           <AccountMenu />
           <button type="button" onClick={() => setOpen((v) => !v)} className="glass flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 active:scale-95 md:hidden" aria-label={open ? "Close menu" : "Open menu"} aria-expanded={open}>{open ? <X className="size-5" strokeWidth={1.8} /> : <Menu className="size-5" strokeWidth={1.8} />}</button>
         </div>
@@ -60,7 +65,13 @@ export function SiteHeader() {
       <div className={`overflow-hidden px-4 transition-all duration-500 ease-[var(--ease-macos)] md:hidden ${open ? "max-h-96 opacity-100" : "pointer-events-none max-h-0 opacity-0"}`}>
         <nav className="glass flex flex-col gap-1 rounded-4xl p-3">
           {navItems.map((item) => <Link key={item.label} to={item.to} className="flex items-center gap-3 rounded-3xl px-4 py-3 text-[1rem] font-semibold text-ink/85 transition-colors hover:bg-white/50 hover:text-ink"><item.icon className="size-5" strokeWidth={1.6} />{item.label}</Link>)}
-          {canSeeCollaborators ? <Link to={collaboratorTarget} className="flex items-center gap-3 rounded-3xl px-4 py-3 text-[1rem] font-semibold text-ink/85 transition-colors hover:bg-white/50"><Link2 className="size-5" strokeWidth={1.6} />Collaborator analytics</Link> : null}
+          {canSeeCollaborators ? (
+            panelAccess?.admin ? (
+              <Link to="/admin" search={{ tab: "collaborators" }} className="flex items-center gap-3 rounded-3xl px-4 py-3 text-[1rem] font-semibold text-ink/85 transition-colors hover:bg-white/50"><Link2 className="size-5" strokeWidth={1.6} />Collaborator analytics</Link>
+            ) : (
+              <Link to="/admin/collaborators" className="flex items-center gap-3 rounded-3xl px-4 py-3 text-[1rem] font-semibold text-ink/85 transition-colors hover:bg-white/50"><Link2 className="size-5" strokeWidth={1.6} />Collaborator analytics</Link>
+            )
+          ) : null}
           {user ? <button type="button" onClick={() => void signOut()} className="flex items-center gap-3 rounded-3xl px-4 py-3 text-left text-[1rem] font-semibold text-ink/85 transition-colors hover:bg-white/50"><LogOut className="size-5" strokeWidth={1.6} />Sign out</button> : null}
         </nav>
       </div>
