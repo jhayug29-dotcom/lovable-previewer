@@ -3,7 +3,7 @@ import { z } from "zod";
 
 const token = z.object({ accessToken: z.string().optional() });
 
-/** Admin or seller access + the product scope for sellers. */
+/** Admin, seller, or collaborator access + the appropriate scope. */
 export const checkPanelAccess = createServerFn({ method: "POST" })
   .validator((data) => token.parse(data))
   .handler(async ({ data }) => {
@@ -36,12 +36,44 @@ export const saveSellerProducts = createServerFn({ method: "POST" })
 
 export const listCollaboratorLinks = createServerFn({ method: "POST" })
   .validator((data) => token.parse(data))
-  .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken));
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken),
+  );
 
 export const createCollaboratorLink = createServerFn({ method: "POST" })
-  .validator((data) => token.extend({ name: z.string().trim().min(2).max(80), email: z.string().email() }).parse(data))
-  .handler(async ({ data }) => (await import("./collaborator.server")).createCollaboratorLink(data.accessToken, data.name, data.email));
+  .validator((data) =>
+    token
+      .extend({ name: z.string().trim().min(2).max(80), email: z.string().trim().email() })
+      .parse(data),
+  )
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).createCollaboratorLink(
+      data.accessToken,
+      data.name,
+      data.email,
+    ),
+  );
 
 export const toggleCollaboratorLink = createServerFn({ method: "POST" })
-  .validator((data) => token.extend({ id: z.string().uuid(), active: z.boolean() }).parse(data))
-  .handler(async ({ data }) => (await import("./collaborator.server")).toggleCollaboratorLink(data.accessToken, data.id, data.active));
+  .validator((data) =>
+    token.extend({ id: z.string().uuid(), active: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).toggleCollaboratorLink(
+      data.accessToken,
+      data.id,
+      data.active,
+    ),
+  );
+
+export const fetchCollaboratorLinkStats = createServerFn({ method: "POST" })
+  .validator((data) => token.extend({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).getCollaboratorLinkStats(data.accessToken, data.id),
+  );
+
+export const fetchCollaboratorDashboard = createServerFn({ method: "POST" })
+  .validator((data) => token.parse(data))
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).getCollaboratorDashboard(data.accessToken),
+  );
