@@ -101,7 +101,21 @@ using (auth.uid() = user_id or public.is_admin());
 drop policy if exists "public create page views" on public.page_views;
 create policy "public create page views"
 on public.page_views for insert to anon, authenticated
-with check (true);
+with check (
+  collaborator_code is null
+  or exists (
+    select 1
+    from public.collaborator_links cl
+    where cl.id = collaborator_link_id
+      and cl.code = collaborator_code
+      and cl.active = true
+  )
+);
+
+drop policy if exists "admins read page views" on public.page_views;
+create policy "admins read page views"
+on public.page_views for select to authenticated
+using (public.is_admin());
 
 grant select, insert, update, delete on public.collaborator_links to authenticated;
 grant select, insert, update, delete on public.collaborator_partner_products to authenticated;
