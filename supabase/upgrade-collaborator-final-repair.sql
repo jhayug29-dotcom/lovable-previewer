@@ -110,9 +110,14 @@ create trigger collaborator_partner_products_dedupe
 before insert on public.collaborator_partner_products
 for each row execute function public.ignore_duplicate_collaborator_product_access();
 
--- 5) Active-link resolver used by referral tracking.
+-- 5) Active-link resolver used by referral tracking. SECURITY DEFINER is required
+-- because anonymous visitors must resolve a code without SELECT access to the table.
 create or replace function public.resolve_collaborator_link(link_code text)
-returns uuid language sql stable security invoker set search_path = public
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
 as $$
   select id from public.collaborator_links
   where code = link_code and active = true
