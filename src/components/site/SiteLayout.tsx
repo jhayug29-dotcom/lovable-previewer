@@ -14,6 +14,8 @@ export function SiteLayout({ children, dark = false }: { children: ReactNode; da
     queryKey: ["site-settings"],
     queryFn: fetchSettings,
     staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const socials = [
