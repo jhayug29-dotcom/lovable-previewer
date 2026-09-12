@@ -39,6 +39,8 @@ function CollaboratorDashboard() {
     enabled: Boolean(session?.access_token),
     staleTime: 15_000,
     refetchInterval: 30_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   return (
