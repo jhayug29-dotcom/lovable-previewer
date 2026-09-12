@@ -80,7 +80,7 @@ const steps = [
   },
 ];
 
-const faqs = [
+export const faqs = [
   {
     q: "Which software versions are supported?",
     a: "After Effects packs work in CC 2020 and newer. LUTs are .cube files that load in Premiere Pro, DaVinci Resolve, Final Cut and After Effects. SFX packs are 48kHz WAV.",
