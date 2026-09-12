@@ -42,7 +42,6 @@ async function loadProduct(slug: string): Promise<ProductRow> {
   };
 }
 
-/** Honours the live store-wide / per-product sale so checkout matches the storefront. */
 async function applySalePricing(productId: string, price: number): Promise<number> {
   try {
     const { loadPromos } = await import("./catalog.server");
@@ -62,11 +61,7 @@ async function applySalePricing(productId: string, price: number): Promise<numbe
   }
 }
 
-async function applyCoupon(
-  amount: number,
-  code: string | undefined,
-  productId?: string,
-): Promise<number> {
+async function applyCoupon(amount: number, code: string | undefined, productId?: string): Promise<number> {
   if (!code) return amount;
   const { data } = await adminClient()
     .from("coupons")
@@ -84,10 +79,20 @@ async function applyCoupon(
   if (!coupon) return amount;
   if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) return amount;
   if (coupon.max_uses !== null && coupon.used_count >= coupon.max_uses) return amount;
-  // An empty product list means the coupon works store-wide.
   const scoped = coupon.product_ids ?? [];
   if (scoped.length > 0 && (!productId || !scoped.includes(productId))) return amount;
   return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
+}
+
+async function resolveCollaboratorLink(code: string | undefined): Promise<{ id: string; code: string } | null> {
+  if (!code) return null;
+  const { data } = await adminClient()
+    .from("collaborator_links")
+    .select("id,code")
+    .eq("code", code)
+    .eq("active", true)
+    .maybeSingle();
+  return data as { id: string; code: string } | null;
 }
 
 export type CreateOrderInput = {
@@ -98,6 +103,7 @@ export type CreateOrderInput = {
   customerPhone: string;
   couponCode?: string | undefined;
   accessToken?: string | undefined;
+  collaboratorCode?: string | undefined;
 };
 
 export async function createOrder(input: CreateOrderInput) {
@@ -108,6 +114,7 @@ export async function createOrder(input: CreateOrderInput) {
   const amount = await applyCoupon(salePrice, input.couponCode, product.id as string);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
+  const collaborator = await resolveCollaboratorLink(input.collaboratorCode);
 
   const response = await fetch(`${CF_BASE}/orders`, {
     method: "POST",
@@ -122,34 +129,29 @@ export async function createOrder(input: CreateOrderInput) {
         customer_email: input.customerEmail,
         customer_phone: input.customerPhone.replace(/\D/g, "").slice(-10).padStart(10, "0"),
       },
-      order_meta: {
-        return_url: `${input.origin}/payment/status?order_id=${cfOrderId}`,
-      },
+      order_meta: { return_url: `${input.origin}/payment/status?order_id=${cfOrderId}` },
       order_note: product.title.slice(0, 50),
     }),
   });
 
   const payload = (await response.json()) as { payment_session_id?: string; message?: string };
   if (!response.ok || !payload.payment_session_id) {
-    throw new Error(
-      payload.message ?? "Could not start the payment (Cashfree rejected order creation)",
-    );
+    throw new Error(payload.message ?? "Could not start the payment (Cashfree rejected order creation)");
   }
 
-  await adminClient()
-    .from("orders")
-    .insert({
-      user_id: user?.id ?? null,
-      product_id: product.id,
-      cf_order_id: cfOrderId,
-      amount,
-      status: "PENDING",
-      coupon_code: input.couponCode ?? null,
-      customer_email: input.customerEmail,
-      customer_name: input.customerName,
-      customer_phone: input.customerPhone,
-      origin: input.origin,
-    });
+  await adminClient().from("orders").insert({
+    user_id: user?.id ?? null,
+    product_id: product.id,
+    cf_order_id: cfOrderId,
+    amount,
+    status: "PENDING",
+    coupon_code: input.couponCode ?? null,
+    customer_email: input.customerEmail,
+    customer_name: input.customerName,
+    customer_phone: input.customerPhone,
+    origin: input.origin,
+    collaborator_link_id: collaborator?.id ?? null,
+  });
 
   return { orderId: cfOrderId, paymentSessionId: payload.payment_session_id, amount };
 }
@@ -166,47 +168,23 @@ type SettleRow = {
   products: { slug: string; title: string; download_link: string | null } | null;
 };
 
-const ORDER_COLUMNS =
-  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
+const ORDER_COLUMNS = "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
-  const { data } = await adminClient()
-    .from("orders")
-    .select(ORDER_COLUMNS)
-    .eq("cf_order_id", cfOrderId)
-    .maybeSingle();
+  const { data } = await adminClient().from("orders").select(ORDER_COLUMNS).eq("cf_order_id", cfOrderId).maybeSingle();
   return (data as SettleRow | null) ?? null;
 }
 
-/**
- * Marks an order paid, attaches the download link, redeems the coupon and
- * emails the receipt — exactly once, whichever path gets there first
- * (Cashfree webhook or the buyer returning to /payment/status).
- */
 async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<string | null> {
   const db = adminClient();
   const link = row.products?.download_link ?? null;
 
   if (row.status !== "PAID") {
-    await db
-      .from("orders")
-      .update({ status: "PAID", download_link: link, paid_at: new Date().toISOString() })
-      .eq("id", row.id);
-
+    await db.from("orders").update({ status: "PAID", download_link: link, paid_at: new Date().toISOString() }).eq("id", row.id);
     if (row.coupon_code) {
-      // Redeem the coupon only for real, paid orders.
-      const { data: coupon } = await db
-        .from("coupons")
-        .select("id, used_count")
-        .ilike("code", row.coupon_code.trim())
-        .maybeSingle();
+      const { data: coupon } = await db.from("coupons").select("id, used_count").ilike("code", row.coupon_code.trim()).maybeSingle();
       const found = coupon as { id: string; used_count: number } | null;
-      if (found) {
-        await db
-          .from("coupons")
-          .update({ used_count: (found.used_count ?? 0) + 1 })
-          .eq("id", found.id);
-      }
+      if (found) await db.from("coupons").update({ used_count: (found.used_count ?? 0) + 1 }).eq("id", found.id);
     }
   }
 
@@ -220,12 +198,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       orderId: cfOrderId,
       downloadLink: link ?? fallback,
     });
-    if (sent) {
-      await db
-        .from("orders")
-        .update({ receipt_sent_at: new Date().toISOString() })
-        .eq("id", row.id);
-    }
+    if (sent) await db.from("orders").update({ receipt_sent_at: new Date().toISOString() }).eq("id", row.id);
   }
 
   return link;
@@ -244,23 +217,12 @@ export type VerifiedOrder = {
 
 export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   const response = await fetch(`${CF_BASE}/orders/${cfOrderId}`, { headers: cfHeaders() });
-  const payload = (await response.json()) as {
-    order_status?: string;
-    order_amount?: number;
-    message?: string;
-  };
+  const payload = (await response.json()) as { order_status?: string; order_amount?: number; message?: string };
   if (!response.ok) throw new Error(payload.message ?? "Could not verify the payment");
-
   const paid = payload.order_status === "PAID";
-  const status: VerifiedOrder["status"] = paid
-    ? "PAID"
-    : payload.order_status === "ACTIVE"
-      ? "PENDING"
-      : "FAILED";
-
+  const status: VerifiedOrder["status"] = paid ? "PAID" : payload.order_status === "ACTIVE" ? "PENDING" : "FAILED";
   const row = await loadOrder(cfOrderId);
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
-
   return {
     status,
     amount: Number(payload.order_amount ?? row?.amount ?? 0),
@@ -273,31 +235,27 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   };
 }
 
-export async function claimFree(slug: string, accessToken: string | undefined) {
+export async function claimFree(slug: string, accessToken: string | undefined, collaboratorCode?: string) {
   const user = await requireUser(accessToken);
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
+  const collaborator = await resolveCollaboratorLink(collaboratorCode);
 
-  await adminClient()
-    .from("orders")
-    .insert({
-      user_id: user.id,
-      product_id: product.id,
-      cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      amount: 0,
-      status: "PAID",
-      customer_email: user.email ?? null,
-      download_link: product.download_link,
-      paid_at: new Date().toISOString(),
-    });
+  await adminClient().from("orders").insert({
+    user_id: user.id,
+    product_id: product.id,
+    cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    amount: 0,
+    status: "PAID",
+    customer_email: user.email,
+    download_link: product.download_link,
+    paid_at: new Date().toISOString(),
+    collaborator_link_id: collaborator?.id ?? null,
+  });
 
   return { downloadLink: product.download_link, productTitle: product.title };
 }
 
-/**
- * Idempotently settle an order status (used by the Cashfree webhook so
- * delivery is fully automated).
- */
 export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED") {
   const row = await loadOrder(cfOrderId);
   if (!row) return;
