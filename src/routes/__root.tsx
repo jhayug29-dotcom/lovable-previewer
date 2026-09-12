@@ -13,7 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Toaster } from "../components/ui/sonner";
-import { PageViewTracker } from "../components/site/PageViewTracker";
+import { PageViewTrackerV2 } from "../components/site/PageViewTrackerV2";
 
 function NotFoundComponent() {
   return (
@@ -124,15 +124,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        // Inter is requested as a variable axis (300..900) so the landing's
-        // kinetic heading can interpolate weight smoothly instead of snapping
-        // between two static cuts.
         href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Manrope:wght@400;500;600;700&family=Inter:wght@300..900&family=Instrument+Serif:ital@0;1&display=swap",
       },
       { rel: "icon", href: "/favicon.png", type: "image/png" },
     ],
   }),
-
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
@@ -159,9 +155,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <PageViewTracker />
+        <PageViewTrackerV2 />
         <Toaster position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
