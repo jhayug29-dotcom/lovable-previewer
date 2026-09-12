@@ -23,14 +23,13 @@ export const listCollaboratorLinks = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
   .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken));
 
-// Use the resilient list path so a legacy analytics column cannot hide a valid collaborator.
 export const listCollaboratorPartners = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
-  .handler(async ({ data }) => (await import("./collaborator.safe.server")).listCollaboratorPartnersSafe(data.accessToken));
+  .handler(async ({ data }) => (await import("./collaborator.admin.server")).listCollaboratorPartnersAdmin(data.accessToken));
 
 export const listCollaboratorProducts = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
-  .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorProducts(data.accessToken));
+  .handler(async ({ data }) => (await import("./collaborator.admin.server")).listCollaboratorProductsAdmin(data.accessToken));
 
 export const createCollaboratorLink = createServerFn({ method: "POST" })
   .validator((d) =>
@@ -45,7 +44,7 @@ export const createCollaboratorLink = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }) =>
-    (await import("./collaborator.server")).createCollaboratorLink(data.accessToken, data.name, data.email, data.userId, data.productIds),
+    (await import("./collaborator.admin.server")).createCollaboratorLinkAdmin(data.accessToken, data.name, data.email, data.userId, data.productIds),
   );
 
 export const toggleCollaboratorLink = createServerFn({ method: "POST" })
@@ -62,7 +61,7 @@ export const fetchCollaboratorLinkStats = createServerFn({ method: "POST" })
 
 export const saveCollaboratorProductAccess = createServerFn({ method: "POST" })
   .validator((d) => token.extend({ userId: z.string().uuid(), productIds: z.array(z.string().uuid()) }).parse(d))
-  .handler(async ({ data }) => (await import("./collaborator.server")).setCollaboratorProductAccess(data.accessToken, data.userId, data.productIds));
+  .handler(async ({ data }) => (await import("./collaborator.admin.server")).setCollaboratorProductAccessAdmin(data.accessToken, data.userId, data.productIds));
 
 export const fetchCollaboratorDashboard = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
