@@ -8,7 +8,7 @@ export const getStoreProducts = createServerFn({ method: "GET" }).handler(async 
 });
 
 export const getStoreProduct = createServerFn({ method: "GET" })
-  .inputValidator((data) => z.object({ slug: z.string().min(1).max(200) }).parse(data))
+  .validator((data) => z.object({ slug: z.string().min(1).max(200) }).parse(data))
   .handler(async ({ data }) => {
     const { loadProduct, loadProducts } = await import("./catalog.server");
     const [product, all] = await Promise.all([loadProduct(data.slug), loadProducts()]);

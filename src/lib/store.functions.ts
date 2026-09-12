@@ -4,7 +4,7 @@ import { createOrder, verifyOrder, claimFree } from "./cashfree.server";
 import { generateReviews } from "./ai-reviews.server";
 
 export const createCashfreeOrder = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
+  .validator((data) =>
     z
       .object({
         slug: z.string().min(1),
@@ -20,17 +20,17 @@ export const createCashfreeOrder = createServerFn({ method: "POST" })
   .handler(async ({ data }) => createOrder(data));
 
 export const verifyCashfreeOrder = createServerFn({ method: "POST" })
-  .inputValidator((data) => z.object({ orderId: z.string().min(1) }).parse(data))
+  .validator((data) => z.object({ orderId: z.string().min(1) }).parse(data))
   .handler(async ({ data }) => verifyOrder(data.orderId));
 
 export const claimFreeProduct = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
+  .validator((data) =>
     z.object({ slug: z.string().min(1), accessToken: z.string().optional() }).parse(data),
   )
   .handler(async ({ data }) => claimFree(data.slug, data.accessToken));
 
 export const generateAiReviews = createServerFn({ method: "POST" })
-  .inputValidator((data) =>
+  .validator((data) =>
     z
       .object({
         accessToken: z.string().optional(),
