@@ -86,13 +86,9 @@ async function applyCoupon(amount: number, code: string | undefined, productId?:
 
 async function resolveCollaboratorLink(code: string | undefined): Promise<{ id: string; code: string } | null> {
   if (!code) return null;
-  const { data } = await adminClient()
-    .from("collaborator_links")
-    .select("id,code")
-    .eq("code", code)
-    .eq("active", true)
-    .maybeSingle();
-  return data as { id: string; code: string } | null;
+  const { data, error } = await adminClient().rpc("resolve_collaborator_link", { link_code: code });
+  if (error || !data) return null;
+  return { id: String(data), code };
 }
 
 export type CreateOrderInput = {
