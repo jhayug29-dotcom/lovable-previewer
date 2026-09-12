@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Copy, ExternalLink, Loader2, Plus, ShieldCheck, UserX } from "lucide-react";
+import { BarChart3, Copy, ExternalLink, Loader2, Plus, Search, ShieldCheck, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { listAdminUsers, type AdminUser } from "@/lib/admin.functions";
 import {
   createCollaboratorLink,
   listCollaboratorPartners,
@@ -35,12 +36,17 @@ type Partner = {
   }>;
 };
 
+type RecipientMode = "select" | "email";
+
 export function CollaboratorsTab() {
   const { session } = useAuth();
   const accessToken = session?.access_token;
   const qc = useQueryClient();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [recipientMode, setRecipientMode] = useState<RecipientMode>("select");
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [userSearch, setUserSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const partners = useQuery<Partner[]>({
@@ -54,11 +60,35 @@ export function CollaboratorsTab() {
     queryFn: () => listCollaboratorProducts({ data: { accessToken } }),
     staleTime: 60_000,
   });
+  const users = useQuery<AdminUser[]>({
+    queryKey: ["admin-users-for-collaborators", accessToken ?? ""],
+    queryFn: () => listAdminUsers({ data: { accessToken } }),
+    staleTime: 60_000,
+    enabled: Boolean(accessToken),
+  });
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    const list = users.data ?? [];
+    if (!q) return list;
+    return list.filter((user) =>
+      [user.fullName, user.email].filter(Boolean).some((value) => String(value).toLowerCase().includes(q)),
+    );
+  }, [users.data, userSearch]);
+
+  const selectedUser = useMemo(
+    () => (users.data ?? []).find((user) => user.id === selectedUserId) ?? null,
+    [users.data, selectedUserId],
+  );
 
   const create = useMutation({
     mutationFn: () => createCollaboratorLink({ data: { accessToken, name, email } }),
     onSuccess: (link) => {
-      setName(""); setEmail("");
+      setName("");
+      setEmail("");
+      setSelectedUserId("");
+      setUserSearch("");
+      setRecipientMode("select");
       void navigator.clipboard?.writeText(`${window.location.origin}${link.url}`);
       toast.success("Collaborator created. Unique link copied.");
       void qc.invalidateQueries({ queryKey: ["collaborator-partners"] });
@@ -86,6 +116,30 @@ export function CollaboratorsTab() {
   const salesTotal = rows.reduce((n, p) => n + p.totals.sales, 0);
   const revenueTotal = rows.reduce((n, p) => n + p.totals.revenue, 0);
 
+  const selectUser = (user: AdminUser) => {
+    setSelectedUserId(user.id);
+    setEmail(user.email);
+    setUserSearch("");
+  };
+
+  const switchRecipientMode = (mode: RecipientMode) => {
+    setRecipientMode(mode);
+    if (mode === "select") {
+      setSelectedUserId("");
+      setEmail("");
+    } else {
+      setSelectedUserId("");
+      setUserSearch("");
+      setEmail("");
+    }
+  };
+
+  const submitCreate = () => {
+    if (!name.trim()) return toast.error("Enter a partner / link name");
+    if (!email.trim()) return toast.error(recipientMode === "select" ? "Select a registered user" : "Enter an email address");
+    create.mutate();
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-3">
@@ -97,14 +151,64 @@ export function CollaboratorsTab() {
       <div className="grid gap-6 lg:grid-cols-[0.65fr_1.35fr]">
         <div className="glass h-fit rounded-4xl p-7">
           <h2 className="font-display text-xl font-extrabold text-ink">Add collaborator</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">The email must belong to an existing Editly Store account.</p>
-          <div className="mt-5 space-y-3">
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Assign the referral link to an existing signed-in account, or enter its email manually.</p>
+
+          <div className="mt-5 space-y-4">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Partner / link name" className="w-full rounded-2xl bg-white/65 px-4 py-3 text-sm outline-none" />
-            <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="partner@example.com" className="w-full rounded-2xl bg-white/65 px-4 py-3 text-sm outline-none" />
-            <button type="button" disabled={create.isPending} onClick={() => { if (!name.trim() || !email.trim()) return toast.error("Enter name and email"); create.mutate(); }} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
+
+            <div className="rounded-2xl bg-white/45 p-1.5">
+              <div className="grid grid-cols-2 gap-1">
+                <button type="button" onClick={() => switchRecipientMode("select")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${recipientMode === "select" ? "bg-white shadow-sm text-ink" : "text-muted-foreground"}`}>
+                  <UserCheck className="size-4" /> Select user
+                </button>
+                <button type="button" onClick={() => switchRecipientMode("email")} className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition ${recipientMode === "email" ? "bg-white shadow-sm text-ink" : "text-muted-foreground"}`}>
+                  Enter email
+                </button>
+              </div>
+            </div>
+
+            {recipientMode === "select" ? (
+              <div className="rounded-2xl bg-white/55 p-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search registered users by name or email"
+                    className="w-full rounded-xl bg-white/75 py-2.5 pl-9 pr-3 text-sm outline-none"
+                  />
+                </div>
+
+                {selectedUser ? (
+                  <div className="mt-3 flex items-center gap-3 rounded-xl bg-primary/10 px-3 py-2.5 ring-1 ring-primary/20">
+                    <span className="flex size-9 items-center justify-center rounded-full bg-white text-xs font-bold text-ink">{(selectedUser.fullName || selectedUser.email).slice(0, 1).toUpperCase()}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-ink">{selectedUser.fullName || selectedUser.email}</span>
+                      <span className="block truncate text-xs text-muted-foreground">{selectedUser.email}</span>
+                    </span>
+                    <button type="button" onClick={() => { setSelectedUserId(""); setEmail(""); }} className="text-xs font-semibold text-muted-foreground hover:text-ink">Change</button>
+                  </div>
+                ) : (
+                  <div className="mt-3 max-h-60 space-y-1 overflow-y-auto">
+                    {users.isLoading ? <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading registered users…</div> : filteredUsers.length === 0 ? <p className="px-2 py-3 text-xs text-muted-foreground">No registered users match your search.</p> : filteredUsers.map((user) => (
+                      <button key={user.id} type="button" onClick={() => selectUser(user)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/80">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-ink">{(user.fullName || user.email).slice(0, 1).toUpperCase()}</span>
+                        <span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{user.fullName || "Unnamed user"}</span><span className="block truncate text-xs text-muted-foreground">{user.email}</span></span>
+                        {user.isAdmin ? <span className="rounded-full bg-ink/10 px-2 py-1 text-[10px] font-semibold text-muted-foreground">Admin</span> : null}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="partner@example.com" className="w-full rounded-2xl bg-white/65 px-4 py-3 text-sm outline-none" />
+            )}
+
+            <button type="button" disabled={create.isPending} onClick={submitCreate} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">
               {create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Create referral link
             </button>
           </div>
+
           <div className="mt-5 rounded-2xl bg-white/45 p-4 text-xs leading-5 text-muted-foreground">
             <ShieldCheck className="mb-2 size-4" /> Assign specific products to each collaborator. Their dashboard and attributed sales are scoped to those products.
           </div>
