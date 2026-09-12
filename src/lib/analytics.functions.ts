@@ -1,16 +1,69 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-const token=z.object({accessToken:z.string().optional()});
-export const checkPanelAccess=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./analytics.server")).panelAccess(data.accessToken));
-export const fetchAnalytics=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./analytics.server")).getAnalytics(data.accessToken));
-export const fetchSellers=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./analytics.server")).listSellers(data.accessToken));
-export const saveSellerProducts=createServerFn({method:"POST"}).validator(d=>token.extend({userId:z.string().uuid(),productIds:z.array(z.string().uuid())}).parse(d)).handler(async({data})=>(await import("./analytics.server")).setSellerProducts(data.accessToken,data.userId,data.productIds));
-export const listCollaboratorLinks=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./collaborator.server")).listCollaboratorLinks(data.accessToken));
-export const listCollaboratorPartners=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./collaborator.server")).listCollaboratorPartners(data.accessToken));
-export const listCollaboratorProducts=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./collaborator.server")).listCollaboratorProducts(data.accessToken));
-export const createCollaboratorLink=createServerFn({method:"POST"}).validator(d=>token.extend({name:z.string().trim().min(2).max(80),email:z.string().trim().email().optional(),userId:z.string().uuid().optional(),productIds:z.array(z.string().uuid()).default([])}).refine(v=>Boolean(v.userId||v.email),{message:"A registered user or email is required"}).parse(d)).handler(async({data})=>(await import("./collaborator.server")).createCollaboratorLink(data.accessToken,data.name,data.email,data.userId,data.productIds));
-export const toggleCollaboratorLink=createServerFn({method:"POST"}).validator(d=>token.extend({id:z.string().uuid(),active:z.boolean()}).parse(d)).handler(async({data})=>(await import("./collaborator.server")).toggleCollaboratorLink(data.accessToken,data.id,data.active));
-export const revokeCollaboratorPartner=createServerFn({method:"POST"}).validator(d=>token.extend({userId:z.string().uuid()}).parse(d)).handler(async({data})=>(await import("./collaborator.server")).revokeCollaboratorPartner(data.accessToken,data.userId));
-export const fetchCollaboratorLinkStats=createServerFn({method:"POST"}).validator(d=>token.extend({id:z.string().uuid()}).parse(d)).handler(async({data})=>(await import("./collaborator.server")).getCollaboratorLinkStats(data.accessToken,data.id));
-export const saveCollaboratorProductAccess=createServerFn({method:"POST"}).validator(d=>token.extend({userId:z.string().uuid(),productIds:z.array(z.string().uuid())}).parse(d)).handler(async({data})=>(await import("./collaborator.server")).setCollaboratorProductAccess(data.accessToken,data.userId,data.productIds));
-export const fetchCollaboratorDashboard=createServerFn({method:"POST"}).validator(d=>token.parse(d)).handler(async({data})=>(await import("./collaborator.server")).getCollaboratorDashboard(data.accessToken));
+
+const token = z.object({ accessToken: z.string().optional() });
+
+export const checkPanelAccess = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./analytics.server")).panelAccess(data.accessToken));
+
+export const fetchAnalytics = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./analytics.server")).getAnalytics(data.accessToken));
+
+export const fetchSellers = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./analytics.server")).listSellers(data.accessToken));
+
+export const saveSellerProducts = createServerFn({ method: "POST" })
+  .validator((d) => token.extend({ userId: z.string().uuid(), productIds: z.array(z.string().uuid()) }).parse(d))
+  .handler(async ({ data }) => (await import("./analytics.server")).setSellerProducts(data.accessToken, data.userId, data.productIds));
+
+export const listCollaboratorLinks = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken));
+
+// Use the resilient list path so a legacy analytics column cannot hide a valid collaborator.
+export const listCollaboratorPartners = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.safe.server")).listCollaboratorPartnersSafe(data.accessToken));
+
+export const listCollaboratorProducts = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorProducts(data.accessToken));
+
+export const createCollaboratorLink = createServerFn({ method: "POST" })
+  .validator((d) =>
+    token
+      .extend({
+        name: z.string().trim().min(2).max(80),
+        email: z.string().trim().email().optional(),
+        userId: z.string().uuid().optional(),
+        productIds: z.array(z.string().uuid()).default([]),
+      })
+      .refine((v) => Boolean(v.userId || v.email), { message: "A registered user or email is required" })
+      .parse(d),
+  )
+  .handler(async ({ data }) =>
+    (await import("./collaborator.server")).createCollaboratorLink(data.accessToken, data.name, data.email, data.userId, data.productIds),
+  );
+
+export const toggleCollaboratorLink = createServerFn({ method: "POST" })
+  .validator((d) => token.extend({ id: z.string().uuid(), active: z.boolean() }).parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).toggleCollaboratorLink(data.accessToken, data.id, data.active));
+
+export const revokeCollaboratorPartner = createServerFn({ method: "POST" })
+  .validator((d) => token.extend({ userId: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).revokeCollaboratorPartner(data.accessToken, data.userId));
+
+export const fetchCollaboratorLinkStats = createServerFn({ method: "POST" })
+  .validator((d) => token.extend({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).getCollaboratorLinkStats(data.accessToken, data.id));
+
+export const saveCollaboratorProductAccess = createServerFn({ method: "POST" })
+  .validator((d) => token.extend({ userId: z.string().uuid(), productIds: z.array(z.string().uuid()) }).parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).setCollaboratorProductAccess(data.accessToken, data.userId, data.productIds));
+
+export const fetchCollaboratorDashboard = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) => (await import("./collaborator.server")).getCollaboratorDashboard(data.accessToken));
