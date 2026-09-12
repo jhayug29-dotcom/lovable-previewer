@@ -5,34 +5,38 @@ function getEnv(name: string): string | undefined {
   return value?.trim() || undefined;
 }
 
-/** Server-side Supabase URL. Production must provide an environment variable. */
+/**
+ * Use the same Supabase project configuration as the browser client first.
+ * This prevents a stale SUPABASE_URL/SUPABASE_* variable on Vercel from
+ * silently pointing server functions at a different Supabase project.
+ */
 export function getSupabaseUrl(): string {
   const url =
-    getEnv("SUPABASE_URL") ??
     getEnv("VITE_SUPABASE_URL") ??
+    getEnv("SUPABASE_URL") ??
     getEnv("STORE_SUPABASE_URL");
 
   if (!url) {
     throw new Error(
-      "Supabase is not configured. Set SUPABASE_URL (or VITE_SUPABASE_URL) in the deployment environment.",
+      "Supabase is not configured. Set VITE_SUPABASE_URL (or SUPABASE_URL) in the deployment environment.",
     );
   }
 
   return url;
 }
 
-/** Server-side publishable/anon key. */
+/** Server-side publishable/anon key. Keep it aligned with the browser client. */
 export function getSupabaseKey(): string {
   const key =
-    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
-    getEnv("SUPABASE_ANON_KEY") ??
     getEnv("VITE_SUPABASE_ANON_KEY") ??
+    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("SUPABASE_ANON_KEY") ??
     getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
 
   if (!key) {
     throw new Error(
-      "Supabase is not configured. Set SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in the deployment environment.",
+      "Supabase is not configured. Set VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) in the deployment environment.",
     );
   }
 
