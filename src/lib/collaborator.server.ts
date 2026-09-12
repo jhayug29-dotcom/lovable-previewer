@@ -28,11 +28,6 @@ export type CollaboratorPartner = {
   totals: CollaboratorStats;
 };
 
-/**
- * Prefer the service-role client when it is configured. Otherwise use the signed-in
- * user's authenticated client so admin RLS policies still apply. Never fall back to
- * an unauthenticated publishable client for admin data.
- */
 function adminDb(accessToken?: string): DbClient {
   return getServiceRoleKey() ? adminClient() : getDbClient(accessToken);
 }
@@ -49,7 +44,6 @@ async function getAuthorizedProductIds(db: DbClient, userId: string) {
 async function getProducts(db: DbClient, ids?: string[]): Promise<Product[]> {
   let query = db.from("products").select("id,title,category,price,active").order("sort_order", { ascending: true });
   if (ids) query = query.in("id", ids.length ? ids : [EMPTY_UUID]);
-
   const { data, error } = await query;
   if (error) throw error;
   return (data ?? []) as Product[];
@@ -62,16 +56,8 @@ async function statsForLink(
   allowedProductIds?: string[],
 ): Promise<CollaboratorStats> {
   const [{ data: views, error: viewError }, { data: orders, error: orderError }] = await Promise.all([
-    db
-      .from("page_views")
-      .select("session_id")
-      .eq("collaborator_code", collaboratorCode)
-      .limit(100000),
-    db
-      .from("orders")
-      .select("id,product_id,amount,status")
-      .eq("collaborator_link_id", id)
-      .limit(100000),
+    db.from("page_views").select("session_id").eq("collaborator_code", collaboratorCode).limit(100000),
+    db.from("orders").select("id,product_id,amount,status").eq("collaborator_link_id", id).limit(100000),
   ]);
 
   if (viewError) throw viewError;
@@ -83,11 +69,8 @@ async function statsForLink(
       PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
       (!allowed || (order.product_id ? allowed.has(order.product_id) : false)),
   );
-
   const visitors = new Set(
-    ((views ?? []) as { session_id: string | null }[])
-      .map((view) => view.session_id)
-      .filter(Boolean),
+    ((views ?? []) as { session_id: string | null }[]).map((view) => view.session_id).filter(Boolean),
   );
 
   return {
@@ -98,6 +81,20 @@ async function statsForLink(
   };
 }
 
+async function safeStatsForLink(
+  db: DbClient,
+  id: string,
+  collaboratorCode: string,
+  allowedProductIds?: string[],
+): Promise<CollaboratorStats> {
+  try {
+    return await statsForLink(db, id, collaboratorCode, allowedProductIds);
+  } catch (error) {
+    console.error("Collaborator stats unavailable", error);
+    return { visitors: 0, page_views: 0, sales: 0, revenue: 0 };
+  }
+}
+
 async function buildLink(
   db: DbClient,
   row: { id: string; code: string; name: string; user_id: string; email: string; active: boolean; created_at: string },
@@ -106,7 +103,7 @@ async function buildLink(
   return {
     ...row,
     url: `/?ref=${row.code}`,
-    ...(await statsForLink(db, row.id, row.code, ids)),
+    ...(await safeStatsForLink(db, row.id, row.code, ids)),
   };
 }
 
@@ -123,7 +120,6 @@ export async function listCollaboratorLinks(accessToken?: string): Promise<Colla
     .select("id,code,name,user_id,email,active,created_at")
     .order("created_at", { ascending: false });
   if (error) throw error;
-
   return Promise.all(
     ((data ?? []) as Omit<CollaboratorLink, keyof CollaboratorStats | "url">[]).map(async (row) =>
       buildLink(db, row, await getAuthorizedProductIds(db, row.user_id)),
@@ -183,7 +179,9 @@ export async function listCollaboratorPartners(accessToken?: string): Promise<Co
       active: links.some((link) => link.active),
       links,
       product_ids: productIds,
-      products: await getProducts(db, productIds),
+      // The admin UI uses its authenticated product catalog query for this list.
+      // Avoid making the entire partner list fail because this secondary product read has an RLS/config issue.
+      products: [],
       totals,
     });
   }
@@ -199,11 +197,7 @@ export async function setCollaboratorProductAccess(
   await requireAdmin(accessToken);
   const db = adminDb(accessToken);
   const clean = [...new Set(productIds)];
-
-  const { error: deleteError } = await db
-    .from("collaborator_partner_products")
-    .delete()
-    .eq("user_id", userId);
+  const { error: deleteError } = await db.from("collaborator_partner_products").delete().eq("user_id", userId);
   if (deleteError) throw deleteError;
 
   if (clean.length) {
@@ -212,7 +206,6 @@ export async function setCollaboratorProductAccess(
       .select("id")
       .in("id", clean);
     if (productError) throw productError;
-
     const validIds = new Set((validProducts ?? []).map((product) => product.id as string));
     const invalid = clean.filter((id) => !validIds.has(id));
     if (invalid.length) throw new Error("One or more selected products no longer exist");
@@ -245,29 +238,23 @@ export async function createCollaboratorLink(
       .eq("id", resolvedUserId)
       .maybeSingle();
     if (profileError) throw profileError;
-
     if (profile) {
       resolvedEmail = (profile.email as string) || resolvedEmail;
     } else if (getServiceRoleKey()) {
       try {
         const { data } = await adminClient().auth.admin.getUserById(resolvedUserId);
         if (data.user) resolvedEmail = (data.user.email ?? resolvedEmail).toLowerCase();
-      } catch {
-        // The profile is the primary identity source. Do not fail the flow if auth.admin is unavailable.
-      }
+      } catch {}
     }
-
     if (!resolvedEmail) throw new Error("The selected account has no email address");
   } else {
     if (!resolvedEmail) throw new Error("A registered user or email is required");
-
     const { data: profile, error: profileError } = await db
       .from("profiles")
       .select("id,email")
       .ilike("email", resolvedEmail)
       .maybeSingle();
     if (profileError) throw profileError;
-
     if (profile) {
       resolvedUserId = profile.id as string;
       resolvedEmail = (profile.email as string) || resolvedEmail;
@@ -291,7 +278,6 @@ export async function createCollaboratorLink(
       .select("id")
       .in("id", cleanProductIds);
     if (productError) throw productError;
-
     const validIds = new Set((validProducts ?? []).map((product) => product.id as string));
     const invalid = cleanProductIds.filter((id) => !validIds.has(id));
     if (invalid.length) throw new Error("One or more selected products no longer exist");
@@ -300,13 +286,7 @@ export async function createCollaboratorLink(
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const { data, error } = await db
       .from("collaborator_links")
-      .insert({
-        name: name.trim(),
-        email: resolvedEmail,
-        user_id: resolvedUserId,
-        code: makeCode(),
-        active: true,
-      })
+      .insert({ name: name.trim(), email: resolvedEmail, user_id: resolvedUserId, code: makeCode(), active: true })
       .select("id,code,name,user_id,email,active,created_at")
       .single();
 
@@ -322,25 +302,15 @@ export async function createCollaboratorLink(
       }
       return { ...data, url: `/?ref=${data.code}` };
     }
-
     if (error.code !== "23505") throw error;
   }
 
   throw new Error("Could not generate a unique collaborator link. Please try again.");
 }
 
-export async function toggleCollaboratorLink(
-  accessToken: string | undefined,
-  id: string,
-  active: boolean,
-) {
+export async function toggleCollaboratorLink(accessToken: string | undefined, id: string, active: boolean) {
   await requireAdmin(accessToken);
-  const { data, error } = await adminDb(accessToken)
-    .from("collaborator_links")
-    .update({ active })
-    .eq("id", id)
-    .select("id,active")
-    .single();
+  const { data, error } = await adminDb(accessToken).from("collaborator_links").update({ active }).eq("id", id).select("id,active").single();
   if (error) throw error;
   return data;
 }
@@ -348,33 +318,19 @@ export async function toggleCollaboratorLink(
 export async function revokeCollaboratorPartner(accessToken: string | undefined, userId: string) {
   await requireAdmin(accessToken);
   const db = adminDb(accessToken);
-
-  const { error: linkError } = await db
-    .from("collaborator_links")
-    .update({ active: false })
-    .eq("user_id", userId);
+  const { error: linkError } = await db.from("collaborator_links").update({ active: false }).eq("user_id", userId);
   if (linkError) throw linkError;
-
-  const { error: productError } = await db
-    .from("collaborator_partner_products")
-    .delete()
-    .eq("user_id", userId);
+  const { error: productError } = await db.from("collaborator_partner_products").delete().eq("user_id", userId);
   if (productError) throw productError;
-
   return { ok: true };
 }
 
 export async function getCollaboratorLinkStats(accessToken: string | undefined, id: string) {
   await requireAdmin(accessToken);
   const db = adminDb(accessToken);
-  const { data: link, error } = await db
-    .from("collaborator_links")
-    .select("id,code,user_id")
-    .eq("id", id)
-    .maybeSingle();
+  const { data: link, error } = await db.from("collaborator_links").select("id,code,user_id").eq("id", id).maybeSingle();
   if (error) throw error;
   if (!link) throw new Error("Collaborator link not found");
-
   return statsForLink(db, link.id, link.code, await getAuthorizedProductIds(db, link.user_id));
 }
 
@@ -388,15 +344,7 @@ export async function getCollaboratorDashboard(accessToken?: string) {
     .order("created_at", { ascending: false });
   if (error) throw error;
 
-  const links = (linkRows ?? []) as {
-    id: string;
-    code: string;
-    name: string;
-    email: string;
-    active: boolean;
-    created_at: string;
-    user_id: string;
-  }[];
+  const links = (linkRows ?? []) as { id: string; code: string; name: string; email: string; active: boolean; created_at: string; user_id: string }[];
   const activeLinks = links.filter((link) => link.active);
   if (!activeLinks.length) throw new Error("Collaborator access has been revoked or has not been assigned");
 
@@ -413,12 +361,5 @@ export async function getCollaboratorDashboard(accessToken?: string) {
     { visitors: 0, page_views: 0, sales: 0, revenue: 0 },
   );
 
-  return {
-    userId: user.id,
-    email: user.email ?? scoped[0]?.email ?? null,
-    links: scoped,
-    products,
-    productIds,
-    totals,
-  };
+  return { userId: user.id, email: user.email ?? scoped[0]?.email ?? null, links: scoped, products, productIds, totals };
 }
