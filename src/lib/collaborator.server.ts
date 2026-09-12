@@ -1,4 +1,4 @@
-import { adminClient, requireAdmin, requireUser } from "./supabase.server";
+import { adminClient, getServiceRoleKey, requireAdmin, requireUser } from "./supabase.server";
 
 const PAID_STATUSES = new Set(["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"]);
 const makeCode = () => `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -14,11 +14,63 @@ async function buildLink(row:{id:string;code:string;name:string;user_id:string;e
 export async function listCollaboratorProducts(accessToken?:string){ await requireAdmin(accessToken); return getProducts(); }
 export async function listCollaboratorLinks(accessToken?:string):Promise<CollaboratorLink[]>{ await requireAdmin(accessToken); const {data,error}=await adminClient().from("collaborator_links").select("id,code,name,user_id,email,active,created_at").order("created_at",{ascending:false}); if(error) throw error; return Promise.all(((data??[]) as Omit<CollaboratorLink,keyof CollaboratorStats|"url">[]).map(async r=>buildLink(r,await getAuthorizedProductIds(r.user_id)))); }
 export async function listCollaboratorPartners(accessToken?:string):Promise<CollaboratorPartner[]>{ await requireAdmin(accessToken); const db=adminClient(); const {data,error}=await db.from("collaborator_links").select("id,code,name,user_id,email,active,created_at").order("created_at",{ascending:false}); if(error) throw error; const rows=(data??[]) as {id:string;code:string;name:string;user_id:string;email:string;active:boolean;created_at:string}[]; const byUser=new Map<string,typeof rows>(); for(const r of rows) byUser.set(r.user_id,[...(byUser.get(r.user_id)??[]),r]); const ids=[...byUser.keys()]; const {data:profiles}=ids.length?await db.from("profiles").select("id,email,full_name").in("id",ids):{data:[]}; const pm=new Map((profiles??[]).map(p=>[p.id as string,p])); const out:CollaboratorPartner[]=[]; for(const userId of ids){const productIds=await getAuthorizedProductIds(userId);const links=await Promise.all((byUser.get(userId)??[]).map(r=>buildLink(r,productIds)));const totals=links.reduce((s,l)=>({visitors:s.visitors+l.visitors,page_views:s.page_views+l.page_views,sales:s.sales+l.sales,revenue:s.revenue+l.revenue}),{visitors:0,page_views:0,sales:0,revenue:0});const p=pm.get(userId);out.push({user_id:userId,email:p?.email??links[0]?.email??"(unknown account)",full_name:(p?.full_name as string|null)??null,active:links.some(l=>l.active),links,product_ids:productIds,products:await getProducts(productIds),totals});} return out; }
-export async function setCollaboratorProductAccess(accessToken:string|undefined,userId:string,productIds:string[]){ await requireAdmin(accessToken); const db=adminClient(); const clean=[...new Set(productIds)]; const {error:del}=await db.from("collaborator_partner_products").delete().eq("user_id",userId); if(del) throw del; if(clean.length){const {error}=await db.from("collaborator_partner_products").insert(clean.map(product_id=>({user_id:userId,product_id})));if(error)throw error;} return {ok:true,productIds:clean}; }
-export async function createCollaboratorLink(accessToken:string|undefined,name:string,email?:string){ await requireAdmin(accessToken); const admin=adminClient(); const requested=(email??"").trim().toLowerCase(); let resolvedEmail=requested; let resolvedUserId:string|undefined;
-  const {data:profile,error:pe}=await admin.from("profiles").select("id,email").ilike("email",requested).maybeSingle(); if(pe)throw pe; if(profile){resolvedUserId=profile.id as string;resolvedEmail=(profile.email as string)||requested;}
-  if(!resolvedUserId){ throw new Error("No registered user was found for that email"); }
-  for(let attempt=0;attempt<3;attempt++){ const {data,error}=await admin.from("collaborator_links").insert({name:name.trim(),email:resolvedEmail,user_id:resolvedUserId,code:makeCode(),active:true}).select("id,code,name,user_id,email,active,created_at").single(); if(!error)return {...data,url:`/?ref=${data.code}`}; if(error.code!=="23505")throw error; }
+export async function setCollaboratorProductAccess(accessToken:string|undefined,userId:string,productIds:string[]){ await requireAdmin(accessToken); const db=adminClient(); const clean=[...new Set(productIds)]; const {error:del}=await db.from("collaborator_partner_products").delete().eq("user_id",userId); if(del) throw del; if(clean.length){const {data:validProducts,error:productError}=await db.from("products").select("id").in("id",clean); if(productError)throw productError; const validIds=new Set((validProducts??[]).map(p=>p.id as string)); const invalid=clean.filter(id=>!validIds.has(id)); if(invalid.length)throw new Error("One or more selected products no longer exist"); const {error}=await db.from("collaborator_partner_products").insert(clean.map(product_id=>({user_id:userId,product_id})));if(error)throw error;} return {ok:true,productIds:clean}; }
+
+export async function createCollaboratorLink(accessToken:string|undefined,name:string,email?:string,userId?:string,productIds:string[]=[]){
+  await requireAdmin(accessToken);
+  const admin=adminClient();
+  let resolvedUserId=(userId??"").trim()||undefined;
+  let resolvedEmail=(email??"").trim().toLowerCase();
+
+  if(resolvedUserId){
+    const {data:profile,error:profileError}=await admin.from("profiles").select("id,email").eq("id",resolvedUserId).maybeSingle();
+    if(profileError) throw profileError;
+    if(profile){
+      resolvedEmail=(profile.email as string)||resolvedEmail;
+    } else if(getServiceRoleKey()){
+      try{
+        const {data}=await admin.auth.admin.getUserById(resolvedUserId);
+        if(data.user){resolvedEmail=(data.user.email??resolvedEmail).toLowerCase();}
+      }catch{}
+    }
+    if(!resolvedEmail) throw new Error("The selected account has no email address");
+  }else{
+    if(!resolvedEmail) throw new Error("A registered user or email is required");
+    const {data:profile,error:profileError}=await admin.from("profiles").select("id,email").ilike("email",resolvedEmail).maybeSingle();
+    if(profileError) throw profileError;
+    if(profile){
+      resolvedUserId=profile.id as string;
+      resolvedEmail=(profile.email as string)||resolvedEmail;
+    }else if(getServiceRoleKey()){
+      const {data,error}=await admin.auth.admin.listUsers({page:1,perPage:1000});
+      if(error) throw error;
+      const match=data.users.find(user=>(user.email??"").toLowerCase()===resolvedEmail);
+      if(match){resolvedUserId=match.id;resolvedEmail=(match.email??resolvedEmail).toLowerCase();}
+    }
+  }
+
+  if(!resolvedUserId) throw new Error("No registered user was found for that email");
+
+  const cleanProductIds=[...new Set(productIds)];
+  if(cleanProductIds.length){
+    const {data:validProducts,error:productError}=await admin.from("products").select("id").in("id",cleanProductIds);
+    if(productError) throw productError;
+    const validIds=new Set((validProducts??[]).map(p=>p.id as string));
+    const invalid=cleanProductIds.filter(id=>!validIds.has(id));
+    if(invalid.length) throw new Error("One or more selected products no longer exist");
+  }
+
+  for(let attempt=0;attempt<3;attempt++){
+    const {data,error}=await admin.from("collaborator_links").insert({name:name.trim(),email:resolvedEmail,user_id:resolvedUserId,code:makeCode(),active:true}).select("id,code,name,user_id,email,active,created_at").single();
+    if(!error){
+      if(cleanProductIds.length){
+        const {error:accessError}=await admin.from("collaborator_partner_products").insert(cleanProductIds.map(product_id=>({user_id:resolvedUserId,product_id})));
+        if(accessError){ await admin.from("collaborator_links").delete().eq("id",data.id); throw accessError; }
+      }
+      return {...data,url:`/?ref=${data.code}`};
+    }
+    if(error.code!=="23505")throw error;
+  }
   throw new Error("Could not generate a unique collaborator link. Please try again.");
 }
 export async function toggleCollaboratorLink(accessToken:string|undefined,id:string,active:boolean){await requireAdmin(accessToken);const {data,error}=await adminClient().from("collaborator_links").update({active}).eq("id",id).select("id,active").single();if(error)throw error;return data;}
