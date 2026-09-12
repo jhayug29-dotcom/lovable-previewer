@@ -31,21 +31,33 @@ export function PageViewTracker() {
 
     const timer = window.setTimeout(() => {
       void client.auth.getSession().then(async ({ data }) => {
-        let collaboratorLinkId: string | null = null;
+        const baseRow = {
+          path,
+          session_id: sid,
+          user_id: data.session?.user.id ?? null,
+        };
+
+        // The collaborator columns are installed by the collaborator migration. Keep the
+        // tracker compatible with older production databases so analytics never produces
+        // a noisy 400 when that migration has not been applied yet.
         if (collaboratorCode) {
           const { data: link } = await client.rpc("resolve_collaborator_link", {
             link_code: collaboratorCode,
           });
-          collaboratorLinkId = (link as string | null) ?? null;
+          const collaboratorLinkId = (link as string | null) ?? null;
+          const { error } = await client.from("page_views").insert({
+            ...baseRow,
+            collaborator_code: collaboratorCode,
+            collaborator_link_id: collaboratorLinkId,
+          });
+          if (!error) return;
         }
 
-        await client.from("page_views").insert({
-          path,
-          session_id: sid,
-          collaborator_code: collaboratorCode,
-          collaborator_link_id: collaboratorLinkId,
-          user_id: data.session?.user.id ?? null,
-        });
+        // Legacy schema fallback: only use the fields that existed before collaborator
+        // attribution was added. Errors are intentionally swallowed because page tracking
+        // must never interrupt storefront navigation.
+        const { error } = await client.from("page_views").insert(baseRow);
+        if (error) return;
       }).catch(() => undefined);
     }, 600);
 
