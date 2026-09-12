@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Copy, ExternalLink, Loader2, Plus, Search, ShieldCheck, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { listAdminUsers, type AdminUser } from "@/lib/admin.functions";
+import { listAdminUsers } from "@/lib/admin.functions";
 import {
   createCollaboratorLink,
   listCollaboratorPartners,
@@ -16,6 +16,7 @@ import {
 const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
 type Product = { id: string; title: string; category: string; price: number; active: boolean };
+type RegisteredUser = { id: string; email: string; fullName: string | null; isAdmin: boolean; roleRowId: string | null };
 type Partner = {
   user_id: string;
   email: string;
@@ -60,7 +61,7 @@ export function CollaboratorsTab() {
     queryFn: () => listCollaboratorProducts({ data: { accessToken } }),
     staleTime: 60_000,
   });
-  const users = useQuery<AdminUser[]>({
+  const users = useQuery<RegisteredUser[]>({
     queryKey: ["admin-users-for-collaborators", accessToken ?? ""],
     queryFn: () => listAdminUsers({ data: { accessToken } }),
     staleTime: 60_000,
@@ -116,7 +117,7 @@ export function CollaboratorsTab() {
   const salesTotal = rows.reduce((n, p) => n + p.totals.sales, 0);
   const revenueTotal = rows.reduce((n, p) => n + p.totals.revenue, 0);
 
-  const selectUser = (user: AdminUser) => {
+  const selectUser = (user: RegisteredUser) => {
     setSelectedUserId(user.id);
     setEmail(user.email);
     setUserSearch("");
@@ -124,14 +125,9 @@ export function CollaboratorsTab() {
 
   const switchRecipientMode = (mode: RecipientMode) => {
     setRecipientMode(mode);
-    if (mode === "select") {
-      setSelectedUserId("");
-      setEmail("");
-    } else {
-      setSelectedUserId("");
-      setUserSearch("");
-      setEmail("");
-    }
+    setSelectedUserId("");
+    setEmail("");
+    setUserSearch("");
   };
 
   const submitCreate = () => {
@@ -171,12 +167,7 @@ export function CollaboratorsTab() {
               <div className="rounded-2xl bg-white/55 p-3">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Search registered users by name or email"
-                    className="w-full rounded-xl bg-white/75 py-2.5 pl-9 pr-3 text-sm outline-none"
-                  />
+                  <input value={userSearch} onChange={(e) => setUserSearch(e.target.value)} placeholder="Search registered users by name or email" className="w-full rounded-xl bg-white/75 py-2.5 pl-9 pr-3 text-sm outline-none" />
                 </div>
 
                 {selectedUser ? (
