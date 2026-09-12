@@ -20,11 +20,15 @@ export function PageViewTracker() {
     if (!supabase || typeof window === "undefined") return;
     if (path.startsWith("/admin")) return;
     const client = supabase;
+    const params = new URLSearchParams(window.location.search);
+    const incomingRef = params.get("ref");
+    if (incomingRef && /^[a-zA-Z0-9_-]{8,80}$/.test(incomingRef)) window.localStorage.setItem("editly_ref", incomingRef);
+    const collaboratorCode = window.localStorage.getItem("editly_ref");
     const timer = window.setTimeout(() => {
       void client.auth.getSession().then(({ data }) =>
         client
           .from("page_views")
-          .insert({ path, session_id: sessionId(), user_id: data.session?.user.id ?? null })
+          .insert({ path, session_id: sessionId(), collaborator_code: collaboratorCode, user_id: data.session?.user.id ?? null })
           .then(
             () => undefined,
             () => undefined,
