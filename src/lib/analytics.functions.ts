@@ -65,4 +65,4 @@ export const saveCollaboratorProductAccess = createServerFn({ method: "POST" })
 
 export const fetchCollaboratorDashboard = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
-  .handler(async ({ data }) => (await import("./collaborator.server")).getCollaboratorDashboard(data.accessToken));
+  .handler(async ({ data }) => (await import("./collaborator.admin.server")).getCollaboratorDashboardAdmin(data.accessToken));
