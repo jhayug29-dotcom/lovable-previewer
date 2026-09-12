@@ -12,6 +12,7 @@ type Product = { id: string; title: string; category: string; price: number; act
 type UserRow = { id: string; email: string; fullName: string | null; isAdmin: boolean; roleRowId: string | null };
 type Partner = { user_id: string; email: string; full_name: string | null; active: boolean; product_ids: string[]; totals: { visitors: number; page_views: number; sales: number; revenue: number }; links: Array<{ id: string; name: string; active: boolean; url: string; visitors: number; page_views: number; sales: number; revenue: number }> };
 type Mode = "select" | "email";
+type CreatedLink = { id: string; name: string; code: string; url: string };
 
 function makeCode() {
   return `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
@@ -45,9 +46,16 @@ async function createLinkInCurrentSession(input: { name: string; email?: string;
   if (invalid.length) throw new Error("One or more selected products no longer exist");
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data, error } = await supabase.from("collaborator_links").insert({ name: input.name.trim(), email, user_id: userId, code: makeCode(), active: true }).select("id,code,name,user_id,email,active,created_at").single();
+    const { data, error } = await supabase
+      .from("collaborator_links")
+      .insert({ name: input.name.trim(), email, user_id: userId, code: makeCode(), active: true })
+      .select("id,code,name,user_id,email,active,created_at")
+      .single();
+
     if (!error && data) {
-      const { error: accessError } = await supabase.from("collaborator_partner_products").insert(productIds.map((product_id) => ({ user_id: userId, product_id })));
+      const { error: accessError } = await supabase
+        .from("collaborator_partner_products")
+        .insert(productIds.map((product_id) => ({ user_id: userId, product_id })));
       if (accessError) {
         await supabase.from("collaborator_links").delete().eq("id", data.id);
         throw new Error(`Could not save product access: ${accessError.message}`);
@@ -72,23 +80,52 @@ export function CollaboratorsTab() {
   const [search, setSearch] = useState("");
   const [productIds, setProductIds] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [createdLink, setCreatedLink] = useState<CreatedLink | null>(null);
 
-  const partners = useQuery<Partner[]>({ queryKey: ["collaborator-partners", token ?? ""], queryFn: () => listCollaboratorPartners({ data: { accessToken: token } }), enabled: Boolean(token), staleTime: 20_000, refetchInterval: 30_000 });
-  const products = useQuery<Product[]>({ queryKey: ["collaborator-products-client", session?.user?.id ?? ""], enabled: Boolean(supabase && token), staleTime: 60_000, retry: 1, queryFn: async () => {
-    if (!supabase) throw new Error("Supabase is not configured");
-    const { data, error } = await supabase.from("products").select("id,title,category,price,active").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
-    if (error) throw new Error(`Could not load products: ${error.message}`);
-    return (data ?? []) as Product[];
-  }});
+  const partners = useQuery<Partner[]>({
+    queryKey: ["collaborator-partners", token ?? ""],
+    queryFn: () => listCollaboratorPartners({ data: { accessToken: token } }),
+    enabled: Boolean(token),
+    staleTime: 0,
+    refetchInterval: 30_000,
+  });
+
+  const products = useQuery<Product[]>({
+    queryKey: ["collaborator-products-client", session?.user?.id ?? ""],
+    enabled: Boolean(supabase && token),
+    staleTime: 60_000,
+    retry: 1,
+    queryFn: async () => {
+      if (!supabase) throw new Error("Supabase is not configured");
+      const { data, error } = await supabase.from("products").select("id,title,category,price,active").order("sort_order", { ascending: true }).order("created_at", { ascending: false });
+      if (error) throw new Error(`Could not load products: ${error.message}`);
+      return (data ?? []) as Product[];
+    },
+  });
+
   const users = useQuery<UserRow[]>({ queryKey: ["admin-users-for-collaborators", token ?? ""], queryFn: () => listAdminUsers({ data: { accessToken: token } }), enabled: Boolean(token), staleTime: 60_000 });
   const filteredUsers = useMemo(() => { const q = search.trim().toLowerCase(); return (users.data ?? []).filter((u) => !q || [u.fullName, u.email].some((v) => String(v ?? "").toLowerCase().includes(q))); }, [users.data, search]);
   const selectedUser = useMemo(() => (users.data ?? []).find((u) => u.id === selectedUserId) ?? null, [users.data, selectedUserId]);
 
   const create = useMutation({
     mutationFn: () => createLinkInCurrentSession({ name, email: mode === "email" ? email : undefined, userId: mode === "select" ? selectedUserId : undefined, productIds }),
-    onSuccess: async (link) => { setName(""); setEmail(""); setSelectedUserId(""); setSearch(""); setProductIds([]); setMode("select"); try { await navigator.clipboard?.writeText(`${window.location.origin}${link.url}`); } catch {} toast.success("Collaborator created. Unique link copied."); void qc.invalidateQueries({ queryKey: ["collaborator-partners"] }); },
+    onSuccess: async (link) => {
+      const fullUrl = `${window.location.origin}${link.url}`;
+      setCreatedLink({ id: link.id, name: link.name, code: link.code, url: fullUrl });
+      setName("");
+      setEmail("");
+      setSelectedUserId("");
+      setSearch("");
+      setProductIds([]);
+      setMode("select");
+      try { await navigator.clipboard?.writeText(fullUrl); } catch {}
+      toast.success("Collaborator created. Referral link copied.");
+      await qc.invalidateQueries({ queryKey: ["collaborator-partners"] });
+      await partners.refetch();
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Could not create collaborator"),
   });
+
   const saveAccess = useMutation({ mutationFn: (v: { userId: string; productIds: string[] }) => saveCollaboratorProductAccess({ data: { accessToken: token, ...v } }), onSuccess: () => { toast.success("Product access saved"); void qc.invalidateQueries({ queryKey: ["collaborator-partners"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save access") });
   const revoke = useMutation({ mutationFn: (userId: string) => revokeCollaboratorPartner({ data: { accessToken: token, userId } }), onSuccess: () => { toast.success("Collaborator access revoked"); void qc.invalidateQueries({ queryKey: ["collaborator-partners"] }); }, onError: (e) => toast.error(e instanceof Error ? e.message : "Could not revoke access") });
   const toggle = useMutation({ mutationFn: (v: { id: string; active: boolean }) => toggleCollaboratorLink({ data: { accessToken: token, ...v } }), onSuccess: () => void qc.invalidateQueries({ queryKey: ["collaborator-partners"] }), onError: (e) => toast.error(e instanceof Error ? e.message : "Could not update link") });
@@ -98,6 +135,9 @@ export function CollaboratorsTab() {
 
   return <div className="space-y-6">
     <div className="grid gap-4 sm:grid-cols-3"><Stat label="Partners" value={String(rows.length)} /><Stat label="Visitors" value={String(rows.reduce((n,p) => n + p.totals.visitors, 0))} /><Stat label="Sales / revenue" value={`${rows.reduce((n,p) => n + p.totals.sales, 0)} · ${inr(rows.reduce((n,p) => n + p.totals.revenue, 0))}`} /></div>
+
+    {createdLink ? <div className="glass rounded-3xl p-5 ring-1 ring-primary/20"><div className="flex flex-col gap-4 sm:flex-row sm:items-center"><div className="min-w-0 flex-1"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Referral link generated</p><p className="mt-1 font-display font-extrabold text-ink">{createdLink.name}</p><p className="mt-1 truncate text-xs text-muted-foreground">{createdLink.url}</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void navigator.clipboard?.writeText(createdLink.url).then(() => toast.success("Link copied"))} className="rounded-full bg-primary px-4 py-2.5 text-xs font-semibold text-primary-foreground"><Copy className="mr-1 inline size-3.5" /> Copy link</button><a href={createdLink.url} target="_blank" rel="noreferrer" className="rounded-full bg-white px-4 py-2.5 text-xs font-semibold text-ink"><ExternalLink className="mr-1 inline size-3.5" /> Open</a><button type="button" onClick={() => setCreatedLink(null)} className="rounded-full bg-white px-4 py-2.5 text-xs font-semibold text-muted-foreground">Dismiss</button></div></div></div> : null}
+
     <div className="grid gap-6 lg:grid-cols-[0.65fr_1.35fr]">
       <div className="glass h-fit rounded-4xl p-7"><h2 className="font-display text-xl font-extrabold text-ink">Add collaborator</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">Assign the referral link to an existing signed-in account, enter its email manually, and choose the products they can access.</p>
         <div className="mt-5 space-y-4"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Partner / link name" className="w-full rounded-2xl bg-white/65 px-4 py-3 text-sm outline-none" />
@@ -107,7 +147,7 @@ export function CollaboratorsTab() {
           <button type="button" disabled={create.isPending || products.isLoading || products.isError} onClick={submit} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Create referral link</button>
         </div><div className="mt-5 rounded-2xl bg-white/45 p-4 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mb-2 size-4" /> Product permissions are applied when the referral link is created. You can change them later from the collaborator card.</div>
       </div>
-      <div className="glass rounded-4xl p-7"><div className="flex items-center justify-between"><div><h2 className="font-display text-xl font-extrabold text-ink">Collaborator Partners</h2><p className="text-xs text-muted-foreground">Click a partner to manage products and referral links.</p></div>{partners.isLoading ? <Loader2 className="size-5 animate-spin" /> : null}</div><div className="mt-5 space-y-3">{!partners.isLoading && rows.length === 0 ? <p className="rounded-3xl bg-white/45 p-8 text-center text-sm text-muted-foreground">No collaborators yet.</p> : null}{rows.map((p) => <PartnerCard key={p.user_id} partner={p} products={products.data ?? []} open={expanded === p.user_id} onOpen={() => setExpanded(expanded === p.user_id ? null : p.user_id)} onSave={(ids) => saveAccess.mutate({ userId: p.user_id, productIds: ids })} saving={saveAccess.isPending} onRevoke={() => { if (window.confirm(`Revoke access for ${p.email}?`)) revoke.mutate(p.user_id); }} revoking={revoke.isPending} onToggle={(id, active) => toggle.mutate({ id, active })} />)}</div></div>
+      <div className="glass rounded-4xl p-7"><div className="flex items-center justify-between"><div><h2 className="font-display text-xl font-extrabold text-ink">Collaborator Partners</h2><p className="text-xs text-muted-foreground">Click a partner to manage products and referral links.</p></div>{partners.isLoading ? <Loader2 className="size-5 animate-spin" /> : null}{partners.isError ? <button type="button" onClick={() => void partners.refetch()} className="text-xs font-semibold text-destructive underline">Retry</button> : null}</div><div className="mt-5 space-y-3">{partners.isError ? <p className="rounded-3xl bg-destructive/10 p-4 text-xs text-destructive">{partners.error instanceof Error ? partners.error.message : "Could not load collaborators"}</p> : null}{!partners.isLoading && !partners.isError && rows.length === 0 ? <p className="rounded-3xl bg-white/45 p-8 text-center text-sm text-muted-foreground">No collaborators yet.</p> : null}{rows.map((p) => <PartnerCard key={p.user_id} partner={p} products={products.data ?? []} open={expanded === p.user_id} onOpen={() => setExpanded(expanded === p.user_id ? null : p.user_id)} onSave={(ids) => saveAccess.mutate({ userId: p.user_id, productIds: ids })} saving={saveAccess.isPending} onRevoke={() => { if (window.confirm(`Revoke access for ${p.email}?`)) revoke.mutate(p.user_id); }} revoking={revoke.isPending} onToggle={(id, active) => toggle.mutate({ id, active })} />)}</div></div>
     </div>
   </div>;
 }
