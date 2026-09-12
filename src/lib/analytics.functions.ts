@@ -33,3 +33,15 @@ export const saveSellerProducts = createServerFn({ method: "POST" })
     const { setSellerProducts } = await import("./analytics.server");
     return setSellerProducts(data.accessToken, data.userId, data.productIds);
   });
+
+export const listCollaboratorLinks = createServerFn({ method: "POST" })
+  .inputValidator((data) => token.parse(data))
+  .handler(async ({ data }) => (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken));
+
+export const createCollaboratorLink = createServerFn({ method: "POST" })
+  .inputValidator((data) => token.extend({ name: z.string().trim().min(2).max(80), email: z.string().email() }).parse(data))
+  .handler(async ({ data }) => (await import("./collaborator.server")).createCollaboratorLink(data.accessToken, data.name, data.email));
+
+export const toggleCollaboratorLink = createServerFn({ method: "POST" })
+  .inputValidator((data) => token.extend({ id: z.string().uuid(), active: z.boolean() }).parse(data))
+  .handler(async ({ data }) => (await import("./collaborator.server")).toggleCollaboratorLink(data.accessToken, data.id, data.active));

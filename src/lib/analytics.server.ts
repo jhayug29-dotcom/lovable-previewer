@@ -6,11 +6,16 @@ import {
   getServiceRoleKey,
 } from "./supabase.server";
 
-export type PanelAccess = { admin: boolean; seller: boolean; productIds: string[] };
+export type PanelAccess = { admin: boolean; seller: boolean; productIds: string[]; collaborator: boolean };
+
+export type CollaboratorLink = {
+  id: string; code: string; name: string; user_id: string; email: string; active: boolean;
+  created_at: string; visitors: number; page_views: number; sales: number; revenue: number;
+};
 
 /** Who is allowed into the control panel, and with what scope. */
 export async function panelAccess(accessToken: string | undefined): Promise<PanelAccess> {
-  const empty: PanelAccess = { admin: false, seller: false, productIds: [] };
+  const empty: PanelAccess = { admin: false, seller: false, collaborator: false, productIds: [] };
   if (!accessToken) return empty;
   let user;
   try {
@@ -21,7 +26,7 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
 
   // Owner account is unconditionally an admin
   if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") {
-    return { admin: true, seller: false, productIds: [] };
+    return { admin: true, seller: false, collaborator: false, productIds: [] };
   }
 
   const db = getDbClient(accessToken);
@@ -32,7 +37,7 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
     .eq("role", "admin")
     .maybeSingle();
 
-  if (roleRow) return { admin: true, seller: false, productIds: [] };
+  if (roleRow) return { admin: true, seller: false, collaborator: false, productIds: [] };
 
   try {
     const { data: assigned } = await db
@@ -40,7 +45,7 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
       .select("product_id")
       .eq("user_id", user.id);
     const productIds = (assigned ?? []).map((r) => r.product_id as string);
-    return { admin: false, seller: productIds.length > 0, productIds };
+    return { admin: false, seller: productIds.length > 0, collaborator: false, productIds };
   } catch {
     return { admin: false, seller: false, productIds: [] };
   }
