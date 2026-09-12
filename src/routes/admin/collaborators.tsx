@@ -13,14 +13,11 @@ export const Route = createFileRoute("/admin/collaborators")({
     const { data } = await supabase.auth.getSession();
     const accessToken = data.session?.access_token;
     if (!accessToken) throw redirect({ to: "/auth", search: { redirect: "/admin/collaborators" } });
-    try {
-      const access = await checkPanelAccess({ data: { accessToken } });
-      if (access.admin) throw redirect({ to: "/admin" });
-      if (!access.collaborator) throw notFound();
-    } catch (error) {
-      if (error && typeof error === "object" && "isRedirect" in error) throw error;
-      throw notFound();
-    }
+
+    const access = await checkPanelAccess({ data: { accessToken } }).catch(() => null);
+    if (!access) throw notFound();
+    if (access.admin) throw redirect({ to: "/admin" });
+    if (!access.collaborator) throw notFound();
   },
   head: () => ({ meta: [{ title: "Collaborator Dashboard — Editly Store" }, { name: "robots", content: "noindex, nofollow" }] }),
   component: CollaboratorDashboard,
