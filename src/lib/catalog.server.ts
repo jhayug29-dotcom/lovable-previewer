@@ -14,8 +14,12 @@ function env(name: string): string | undefined {
 }
 
 function publicClient(): SupabaseClient {
-  const url = env("SUPABASE_URL");
-  const key = env("SUPABASE_PUBLISHABLE_KEY") ?? env("SUPABASE_ANON_KEY");
+  const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL");
+  const key =
+    env("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+    env("VITE_SUPABASE_ANON_KEY") ??
+    env("SUPABASE_PUBLISHABLE_KEY") ??
+    env("SUPABASE_ANON_KEY");
   if (!url || !key) throw new Error("Supabase is not configured");
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
