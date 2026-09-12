@@ -20,9 +20,11 @@ import {
   Upload,
   BarChart3,
   Store,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
+import { CollaboratorsTab } from "@/components/admin/CollaboratorsTab";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
@@ -91,6 +93,7 @@ const TABS = [
   { id: "support", label: "Support inbox", icon: MessageCircle },
   { id: "settings", label: "Contact", icon: LifeBuoy },
   { id: "sellers", label: "Sellers", icon: Store },
+  { id: "collaborators", label: "Collaborators", icon: Users },
   { id: "admins", label: "Admins", icon: Shield },
 ] as const;
 
@@ -99,7 +102,13 @@ type TabId = (typeof TABS)[number]["id"];
 function AdminPage() {
   const { loading, session } = useAuth();
   const accessToken = session?.access_token;
-  const [tab, setTab] = useState<TabId>("analytics");
+  const [tab, setTab] = useState<TabId>(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search).get("tab");
+      if (p && TABS.some((t) => t.id === p)) return p as TabId;
+    }
+    return "analytics";
+  });
 
   const { data: access } = useQuery({
     queryKey: ["panel-access", accessToken ?? ""],
@@ -111,6 +120,15 @@ function AdminPage() {
   const isAdminUser = access?.admin ?? false;
   const visibleTabs = isAdminUser ? TABS : TABS.filter((t) => t.id === "analytics");
   const activeTab: TabId = visibleTabs.some((t) => t.id === tab) ? tab : "analytics";
+
+  const handleTabChange = (newTab: TabId) => {
+    setTab(newTab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", newTab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
 
   if (loading || !access) {
     return (
@@ -139,7 +157,7 @@ function AdminPage() {
             <button
               key={t.id}
               type="button"
-              onClick={() => setTab(t.id)}
+              onClick={() => handleTabChange(t.id)}
               className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-all duration-500 ease-[var(--ease-macos)] ${
                 activeTab === t.id
                   ? "bg-primary text-primary-foreground shadow-lift"
@@ -162,6 +180,7 @@ function AdminPage() {
           {activeTab === "support" ? <SupportTab /> : null}
           {activeTab === "settings" ? <SettingsTab /> : null}
           {activeTab === "sellers" ? <SellersTab /> : null}
+          {activeTab === "collaborators" ? <CollaboratorsTab /> : null}
           {activeTab === "admins" ? <AdminsTab /> : null}
         </div>
       </section>

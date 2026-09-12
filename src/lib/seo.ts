@@ -227,7 +227,7 @@ export function getCollectionSchema(products: (DbProduct | Product)[]) {
 /**
  * FAQPage JSON-LD.
  */
-export function getFAQSchema(faqs: { q: string; a: string }[]) {
+export function getFAQSchema(faqs: readonly { q: string; a: string }[] | { q: string; a: string }[]) {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",

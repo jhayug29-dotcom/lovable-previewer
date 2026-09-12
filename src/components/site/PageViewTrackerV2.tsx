@@ -67,7 +67,9 @@ export function PageViewTrackerV2() {
           }
         }
 
-        await client.from("page_views").insert({ path, session_id: sid, user_id: userId }).catch(() => undefined);
+        try {
+          await client.from("page_views").insert({ path, session_id: sid, user_id: userId });
+        } catch {}
       }).catch(() => undefined);
     }, 600);
 

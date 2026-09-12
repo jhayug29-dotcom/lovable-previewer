@@ -14,6 +14,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ReadMoreRouteImport } from './routes/read-more'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as StoreRouteImport } from './routes/store'
+import { Route as AdminCollaboratorsRouteImport } from './routes/admin/collaborators'
 import { Route as AuthIndexRouteImport } from './routes/auth.index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as PaymentStatusRouteImport } from './routes/payment.status'
@@ -45,6 +46,11 @@ const StoreRoute = StoreRouteImport.update({
   path: '/store',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminCollaboratorsRoute = AdminCollaboratorsRouteImport.update({
+  id: '/collaborators',
+  path: '/collaborators',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/auth/',
   path: '/auth/',
@@ -74,10 +80,11 @@ const ApiPublicCashfreeWebhookRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/read-more': typeof ReadMoreRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/store': typeof StoreRoute
+  '/admin/collaborators': typeof AdminCollaboratorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/payment/status': typeof PaymentStatusRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -86,10 +93,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/read-more': typeof ReadMoreRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/store': typeof StoreRoute
+  '/admin/collaborators': typeof AdminCollaboratorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/payment/status': typeof PaymentStatusRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -99,10 +107,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/read-more': typeof ReadMoreRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/store': typeof StoreRoute
+  '/admin/collaborators': typeof AdminCollaboratorsRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/payment/status': typeof PaymentStatusRoute
   '/product/$slug': typeof ProductSlugRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/read-more'
     | '/sitemap.xml'
     | '/store'
+    | '/admin/collaborators'
     | '/auth/callback'
     | '/payment/status'
     | '/product/$slug'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/read-more'
     | '/sitemap.xml'
     | '/store'
+    | '/admin/collaborators'
     | '/auth/callback'
     | '/payment/status'
     | '/product/$slug'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/read-more'
     | '/sitemap.xml'
     | '/store'
+    | '/admin/collaborators'
     | '/auth/callback'
     | '/payment/status'
     | '/product/$slug'
@@ -150,7 +162,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   ReadMoreRoute: typeof ReadMoreRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StoreRoute: typeof StoreRoute
@@ -198,6 +210,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StoreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/collaborators': {
+      id: '/admin/collaborators'
+      path: '/collaborators'
+      fullPath: '/admin/collaborators'
+      preLoaderRoute: typeof AdminCollaboratorsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/auth/': {
       id: '/auth/'
       path: '/auth'
@@ -236,9 +255,19 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminCollaboratorsRoute: typeof AdminCollaboratorsRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminCollaboratorsRoute: AdminCollaboratorsRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   ReadMoreRoute: ReadMoreRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StoreRoute: StoreRoute,

@@ -10,7 +10,8 @@ const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
 const makeCode = () => `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
 
 function adminDb(accessToken?: string): DbClient {
-  return getServiceRoleKey() ? adminClient() : getDbClient(accessToken);
+  if (accessToken) return getDbClient(accessToken);
+  return adminClient();
 }
 
 async function getProducts(db: DbClient, ids?: string[]): Promise<Product[]> {
@@ -32,15 +33,12 @@ async function getProductIds(db: DbClient, userId: string): Promise<string[]> {
 }
 
 async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[]) {
-  if (!allowedProductIds.length) return { visitors: 0, page_views: 0, sales: 0, revenue: 0 };
-
   try {
     const [{ data: views, error: viewError }, { data: orders, error: orderError }] = await Promise.all([
       db
         .from("page_views")
         .select("session_id,product_id")
-        .eq("collaborator_code", link.code)
-        .in("product_id", allowedProductIds)
+        .or(`collaborator_code.eq.${link.code},collaborator_link_id.eq.${link.id}`)
         .limit(100000),
       db.from("orders").select("id,product_id,amount,status").eq("collaborator_link_id", link.id).limit(100000),
     ]);
@@ -48,18 +46,23 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
     if (viewError || orderError) throw viewError ?? orderError;
 
     const allowed = new Set(allowedProductIds);
+    const relevantViews = ((views ?? []) as { session_id: string | null; product_id: string | null }[]).filter(
+      (view) => !view.product_id || !allowedProductIds.length || allowed.has(view.product_id),
+    );
     const visibleOrders = ((orders ?? []) as { id: string; product_id: string | null; amount: number | string | null; status: string }[]).filter(
-      (order) => PAID_STATUSES.has((order.status ?? "").toUpperCase()) && Boolean(order.product_id && allowed.has(order.product_id)),
+      (order) =>
+        PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
+        (!allowedProductIds.length || (order.product_id ? allowed.has(order.product_id) : true)),
     );
     const visitors = new Set(
-      ((views ?? []) as { session_id: string | null; product_id: string | null }[])
+      relevantViews
         .map((view) => view.session_id)
         .filter(Boolean),
     );
 
     return {
       visitors: visitors.size,
-      page_views: (views ?? []).length,
+      page_views: relevantViews.length,
       sales: visibleOrders.length,
       revenue: visibleOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0),
     };
@@ -73,33 +76,42 @@ async function resolveUser(db: DbClient, email?: string, userId?: string) {
   let resolvedEmail = email?.trim().toLowerCase() || "";
 
   if (resolvedUserId) {
-    const { data: profile, error } = await db.from("profiles").select("id,email").eq("id", resolvedUserId).maybeSingle();
-    if (error) throw error;
+    const { data: profile } = await db.from("profiles").select("id,email").eq("id", resolvedUserId).maybeSingle();
     if (profile) {
       resolvedUserId = String(profile.id);
       resolvedEmail = String(profile.email ?? resolvedEmail).toLowerCase();
     } else if (getServiceRoleKey()) {
-      const { data, error: authError } = await adminClient().auth.admin.getUserById(resolvedUserId);
-      if (authError || !data.user) throw new Error("The selected account no longer exists");
-      resolvedEmail = String(data.user.email ?? resolvedEmail).toLowerCase();
-    }
-  } else {
-    if (!resolvedEmail) throw new Error("A registered user or email is required");
-    const { data: profile, error } = await db.from("profiles").select("id,email").ilike("email", resolvedEmail).maybeSingle();
-    if (error) throw error;
-    if (profile) {
-      resolvedUserId = String(profile.id);
-      resolvedEmail = String(profile.email ?? resolvedEmail).toLowerCase();
-    } else if (getServiceRoleKey()) {
-      const { data, error: authError } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (authError) throw authError;
-      const match = data.users.find((user) => String(user.email ?? "").toLowerCase() === resolvedEmail);
-      if (match) {
-        resolvedUserId = match.id;
-        resolvedEmail = String(match.email ?? resolvedEmail).toLowerCase();
-      }
+      try {
+        const { data, error: authError } = await adminClient().auth.admin.getUserById(resolvedUserId);
+        if (!authError && data?.user) {
+          resolvedEmail = String(data.user.email ?? resolvedEmail).toLowerCase();
+        }
+      } catch {}
     }
   }
+
+  if (!resolvedUserId && resolvedEmail) {
+    const { data: profile } = await db.from("profiles").select("id,email").ilike("email", resolvedEmail).maybeSingle();
+    if (profile) {
+      resolvedUserId = String(profile.id);
+      resolvedEmail = String(profile.email ?? resolvedEmail).toLowerCase();
+    } else if (getServiceRoleKey()) {
+      try {
+        const { data, error: authError } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (!authError && data?.users) {
+          const match = data.users.find((user) => String(user.email ?? "").toLowerCase() === resolvedEmail);
+          if (match) {
+            resolvedUserId = match.id;
+            resolvedEmail = String(match.email ?? resolvedEmail).toLowerCase();
+          }
+        }
+      } catch {}
+    }
+  }
+
+  // Direct client fallback
+  if (!resolvedUserId && userId) resolvedUserId = userId.trim();
+  if (!resolvedEmail && email) resolvedEmail = email.trim().toLowerCase();
 
   if (!resolvedUserId) throw new Error("No registered user was found for that email");
   if (!resolvedEmail) throw new Error("The selected account has no email address");
@@ -138,15 +150,26 @@ export async function createCollaboratorLinkAdmin(
       .single();
 
     if (!linkError && link) {
-      const { error: accessError } = await db
-        .from("collaborator_partner_products")
-        .upsert(cleanProductIds.map((product_id) => ({ user_id: recipient.userId, product_id })), {
-          onConflict: "user_id,product_id",
-          ignoreDuplicates: true,
-        });
-      if (accessError) {
-        await db.from("collaborator_links").delete().eq("id", link.id);
-        throw new Error(`Could not save product access: ${accessError.message}`);
+      if (cleanProductIds.length > 0) {
+        try {
+          const { data: existing } = await db
+            .from("collaborator_partner_products")
+            .select("product_id")
+            .eq("user_id", recipient.userId);
+          const existingSet = new Set(((existing ?? []) as { product_id: string }[]).map((r) => String(r.product_id)));
+          const toAdd = cleanProductIds.filter((pid) => !existingSet.has(pid));
+
+          if (toAdd.length > 0) {
+            const { error: accessError } = await db
+              .from("collaborator_partner_products")
+              .insert(toAdd.map((product_id) => ({ user_id: recipient.userId, product_id })));
+            if (accessError && accessError.code !== "23505") {
+              console.warn("Non-fatal collaborator product access map warning:", accessError.message);
+            }
+          }
+        } catch (err) {
+          console.warn("Product access map warning:", err);
+        }
       }
       return { ...link, url: `/?ref=${link.code}` };
     }
@@ -175,8 +198,8 @@ export async function setCollaboratorProductAccessAdmin(accessToken: string | un
     if (invalid.length) throw new Error("One or more selected products no longer exist");
     const { error: insertError } = await db
       .from("collaborator_partner_products")
-      .upsert(clean.map((product_id) => ({ user_id: userId, product_id })), { onConflict: "user_id,product_id", ignoreDuplicates: true });
-    if (insertError) throw insertError;
+      .insert(clean.map((product_id) => ({ user_id: userId, product_id })));
+    if (insertError && insertError.code !== "23505") throw insertError;
   }
   return { ok: true, productIds: clean };
 }

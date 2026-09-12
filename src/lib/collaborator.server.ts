@@ -29,7 +29,8 @@ export type CollaboratorPartner = {
 };
 
 function adminDb(accessToken?: string): DbClient {
-  return getServiceRoleKey() ? adminClient() : getDbClient(accessToken);
+  if (accessToken) return getDbClient(accessToken);
+  return adminClient();
 }
 
 async function getAuthorizedProductIds(db: DbClient, userId: string) {
@@ -56,26 +57,33 @@ async function statsForLink(
   allowedProductIds?: string[],
 ): Promise<CollaboratorStats> {
   const [{ data: views, error: viewError }, { data: orders, error: orderError }] = await Promise.all([
-    db.from("page_views").select("session_id").eq("collaborator_code", collaboratorCode).limit(100000),
+    db
+      .from("page_views")
+      .select("session_id,product_id")
+      .or(`collaborator_code.eq.${collaboratorCode},collaborator_link_id.eq.${id}`)
+      .limit(100000),
     db.from("orders").select("id,product_id,amount,status").eq("collaborator_link_id", id).limit(100000),
   ]);
 
   if (viewError) throw viewError;
   if (orderError) throw orderError;
 
-  const allowed = allowedProductIds ? new Set(allowedProductIds) : null;
+  const allowed = allowedProductIds && allowedProductIds.length ? new Set(allowedProductIds) : null;
+  const relevantViews = ((views ?? []) as { session_id: string | null; product_id: string | null }[]).filter(
+    (v) => !v.product_id || !allowed || allowed.has(v.product_id),
+  );
   const visible = ((orders ?? []) as { id: string; product_id: string | null; amount: number | string | null; status: string }[]).filter(
     (order) =>
       PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
-      (!allowed || (order.product_id ? allowed.has(order.product_id) : false)),
+      (!allowed || (order.product_id ? allowed.has(order.product_id) : true)),
   );
   const visitors = new Set(
-    ((views ?? []) as { session_id: string | null }[]).map((view) => view.session_id).filter(Boolean),
+    relevantViews.map((view) => view.session_id).filter(Boolean),
   );
 
   return {
     visitors: visitors.size,
-    page_views: (views ?? []).length,
+    page_views: relevantViews.length,
     sales: visible.length,
     revenue: visible.reduce((sum, order) => sum + (Number(order.amount) || 0), 0),
   };
@@ -213,7 +221,7 @@ export async function setCollaboratorProductAccess(
     const { error } = await db
       .from("collaborator_partner_products")
       .insert(clean.map((product_id) => ({ user_id: userId, product_id })));
-    if (error) throw error;
+    if (error && error.code !== "23505") throw error;
   }
 
   return { ok: true, productIds: clean };
@@ -292,12 +300,24 @@ export async function createCollaboratorLink(
 
     if (!error) {
       if (cleanProductIds.length) {
-        const { error: accessError } = await db
-          .from("collaborator_partner_products")
-          .insert(cleanProductIds.map((product_id) => ({ user_id: resolvedUserId, product_id })));
-        if (accessError) {
-          await db.from("collaborator_links").delete().eq("id", data.id);
-          throw accessError;
+        try {
+          const { data: existing } = await db
+            .from("collaborator_partner_products")
+            .select("product_id")
+            .eq("user_id", resolvedUserId);
+          const existingSet = new Set(((existing ?? []) as { product_id: string }[]).map((r) => String(r.product_id)));
+          const toAdd = cleanProductIds.filter((pid) => !existingSet.has(pid));
+
+          if (toAdd.length > 0) {
+            const { error: accessError } = await db
+              .from("collaborator_partner_products")
+              .insert(toAdd.map((product_id) => ({ user_id: resolvedUserId, product_id })));
+            if (accessError && accessError.code !== "23505") {
+              console.warn("Could not map product access:", accessError.message);
+            }
+          }
+        } catch (err) {
+          console.warn("Product access map warning:", err);
         }
       }
       return { ...data, url: `/?ref=${data.code}` };

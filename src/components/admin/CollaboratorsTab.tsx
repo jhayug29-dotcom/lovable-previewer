@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, ExternalLink, Loader2, Plus, Search, ShieldCheck, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { listAdminUsers } from "@/lib/admin.functions";
 import {
   createCollaboratorLink,
@@ -36,7 +37,29 @@ export function CollaboratorsTab() {
   const [createdLink, setCreatedLink] = useState<CreatedLink | null>(null);
 
   const partners = useQuery<Partner[]>({ queryKey: ["collaborator-partners", token ?? ""], queryFn: () => listCollaboratorPartners({ data: { accessToken: token } }), enabled: Boolean(token), staleTime: 0, refetchInterval: 30_000 });
-  const products = useQuery<Product[]>({ queryKey: ["collaborator-products", token ?? ""], queryFn: () => listCollaboratorProducts({ data: { accessToken: token } }), enabled: Boolean(token), staleTime: 60_000, retry: 1 });
+  const products = useQuery<Product[]>({
+    queryKey: ["collaborator-products", token ?? ""],
+    queryFn: async () => {
+      try {
+        const res = await listCollaboratorProducts({ data: { accessToken: token } });
+        if (res && res.length > 0) return res;
+      } catch (e) {
+        console.warn("Server listCollaboratorProducts error, checking client fallback:", e);
+      }
+      if (supabase) {
+        const { data, error } = await supabase
+          .from("products")
+          .select("id,title,category,price,active")
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: false });
+        if (!error && data) return data as Product[];
+      }
+      return [];
+    },
+    enabled: Boolean(token),
+    staleTime: 60_000,
+    retry: 1,
+  });
   const users = useQuery<UserRow[]>({ queryKey: ["admin-users-for-collaborators", token ?? ""], queryFn: () => listAdminUsers({ data: { accessToken: token } }), enabled: Boolean(token), staleTime: 60_000 });
 
   const filteredUsers = useMemo(() => {
@@ -48,7 +71,16 @@ export function CollaboratorsTab() {
   const selectedUser = useMemo(() => (users.data ?? []).find((user) => user.id === selectedUserId) ?? null, [selectedUserId, users.data]);
 
   const create = useMutation({
-    mutationFn: () => createCollaboratorLink({ data: { accessToken: token, name, email: recipientMode === "email" ? email : undefined, userId: recipientMode === "select" ? selectedUserId : undefined, productIds: createProductIds } }),
+    mutationFn: () =>
+      createCollaboratorLink({
+        data: {
+          accessToken: token,
+          name: name.trim(),
+          email: (recipientMode === "select" ? selectedUser?.email || email : email)?.trim() || undefined,
+          userId: recipientMode === "select" ? selectedUserId : undefined,
+          productIds: createProductIds,
+        },
+      }),
     onSuccess: async (link) => {
       const fullUrl = `${window.location.origin}${link.url}`;
       setCreatedLink({ name: link.name, code: link.code, url: fullUrl });
@@ -86,11 +118,26 @@ export function CollaboratorsTab() {
 
   const switchMode = (mode: RecipientMode) => { setRecipientMode(mode); setSelectedUserId(""); setEmail(""); setUserSearch(""); };
   const submit = () => {
-    if (!name.trim()) return toast.error("Enter a partner / link name");
-    if (recipientMode === "select" && !selectedUserId) return toast.error("Select a registered user");
-    if (recipientMode === "email" && !email.trim()) return toast.error("Enter an email address");
-    if (!createProductIds.length) return toast.error("Select at least one product");
-    if (!token) return toast.error("Admin session expired. Refresh the page and sign in again.");
+    if (!name.trim()) {
+      toast.error("Enter a partner / link name");
+      return;
+    }
+    if (recipientMode === "select" && !selectedUserId) {
+      toast.error("Select a registered user");
+      return;
+    }
+    if (recipientMode === "email" && !email.trim()) {
+      toast.error("Enter an email address");
+      return;
+    }
+    if (!createProductIds.length) {
+      toast.error("Select at least one product");
+      return;
+    }
+    if (!token) {
+      toast.error("Admin session expired. Refresh the page and sign in again.");
+      return;
+    }
     create.mutate();
   };
 
@@ -104,7 +151,7 @@ export function CollaboratorsTab() {
           <div className="rounded-2xl bg-white/45 p-1.5"><div className="grid grid-cols-2 gap-1"><button type="button" onClick={() => switchMode("select")} className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold ${recipientMode === "select" ? "bg-white shadow-sm text-ink" : "text-muted-foreground"}`}><UserCheck className="size-4" /> Select user</button><button type="button" onClick={() => switchMode("email")} className={`rounded-xl px-3 py-2.5 text-sm font-semibold ${recipientMode === "email" ? "bg-white shadow-sm text-ink" : "text-muted-foreground"}`}>Enter email</button></div></div>
           {recipientMode === "select" ? <div className="rounded-2xl bg-white/55 p-3"><div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Search registered users by name or email" className="w-full rounded-xl bg-white/75 py-2.5 pl-9 pr-3 text-sm outline-none" /></div>{selectedUser ? <div className="mt-3 flex items-center gap-3 rounded-xl bg-primary/10 px-3 py-2.5"><span className="flex size-9 items-center justify-center rounded-full bg-white text-xs font-bold text-ink">{(selectedUser.fullName || selectedUser.email).slice(0, 1).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{selectedUser.fullName || selectedUser.email}</span><span className="block truncate text-xs text-muted-foreground">{selectedUser.email}</span></span>{selectedUser.isAdmin ? <span className="rounded-full bg-ink/10 px-2 py-1 text-[10px] font-semibold text-muted-foreground">Admin</span> : null}<button type="button" onClick={() => setSelectedUserId("")} className="text-xs font-semibold text-muted-foreground hover:text-ink">Change</button></div> : <div className="mt-3 max-h-60 space-y-1 overflow-y-auto">{users.isLoading ? <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading registered users…</div> : null}{users.isError ? <div className="rounded-xl bg-destructive/10 px-3 py-3 text-xs text-destructive">{users.error instanceof Error ? users.error.message : "Could not load registered users"}</div> : null}{!users.isLoading && !users.isError && filteredUsers.length === 0 ? <p className="px-2 py-3 text-xs text-muted-foreground">No registered users match your search.</p> : null}{!users.isLoading && !users.isError ? filteredUsers.map((user) => <button key={user.id} type="button" onClick={() => { setSelectedUserId(user.id); setEmail(user.email); setUserSearch(""); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-white/80"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-ink">{(user.fullName || user.email).slice(0, 1).toUpperCase()}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{user.fullName || "Unnamed user"}</span><span className="block truncate text-xs text-muted-foreground">{user.email}</span></span>{user.isAdmin ? <span className="rounded-full bg-ink/10 px-2 py-1 text-[10px] font-semibold text-muted-foreground">Admin</span> : null}</button>) : null}</div>}</div> : <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" placeholder="partner@example.com" className="w-full rounded-2xl bg-white/65 px-4 py-3 text-sm outline-none" />}
           <div className="rounded-2xl bg-white/55 p-3"><div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-ink">Product access</p><p className="text-xs text-muted-foreground">Choose exactly which products this collaborator can analyze.</p></div><span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">{createProductIds.length} selected</span></div><div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto">{products.isLoading ? <div className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading products…</div> : null}{products.isError ? <div className="rounded-xl bg-destructive/10 px-3 py-3 text-xs text-destructive"><p>{products.error instanceof Error ? products.error.message : "Could not load products"}</p><button type="button" onClick={() => void products.refetch()} className="mt-2 font-semibold underline">Retry</button></div> : null}{!products.isLoading && !products.isError && (products.data ?? []).length === 0 ? <p className="px-2 py-3 text-xs text-muted-foreground">No products available.</p> : null}{!products.isLoading && !products.isError ? (products.data ?? []).map((product) => { const checked = createProductIds.includes(product.id); return <button key={product.id} type="button" onClick={() => setCreateProductIds((current) => checked ? current.filter((id) => id !== product.id) : [...current, product.id])} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${checked ? "bg-primary/10 ring-1 ring-primary/20" : "hover:bg-white/80"}`}><span className={`flex size-5 shrink-0 items-center justify-center rounded-md border text-xs ${checked ? "border-primary bg-primary text-primary-foreground" : "border-ink/20 bg-white/60"}`}>{checked ? "✓" : ""}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-ink">{product.title}</span><span className="text-xs text-muted-foreground">{product.category} · {inr(product.price)}</span></span></button>; }) : null}</div></div>
-          <button type="button" disabled={create.isPending || products.isLoading || products.isError || !token} onClick={submit} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Create referral link</button>
+          <button type="button" disabled={create.isPending || !token} onClick={submit} className="flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3.5 text-sm font-semibold text-primary-foreground disabled:opacity-60">{create.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />} Create referral link</button>
         </div><div className="mt-5 rounded-2xl bg-white/45 p-4 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mb-2 size-4" /> All collaborator creation and permission writes go through the authenticated server admin path.</div>
       </div>
 

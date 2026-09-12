@@ -44,11 +44,19 @@ export function getSupabaseKey(): string {
 }
 
 export function getServiceRoleKey(): string | undefined {
-  return (
+  const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY")
-  );
+    getEnv("SUPABASE_SERVICE_KEY");
+
+  if (
+    !key ||
+    key === "sb_secret_xxx" ||
+    key === "sb_secret_Y-grezvFAlZJDkZlW96gVA_splbGR9O"
+  ) {
+    return undefined;
+  }
+  return key;
 }
 
 /** Service-role client — bypasses RLS when configured. Server-only, privileged work only. */
