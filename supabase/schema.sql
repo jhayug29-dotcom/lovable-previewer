@@ -100,10 +100,14 @@ create table if not exists public.products (
   active boolean not null default true,
   show_on_homepage boolean not null default true,
   sort_order integer not null default 0,
+  launch_time timestamptz,
+  timer_image_url text,
   created_at timestamptz default now()
 );
 
 alter table public.products add column if not exists show_on_homepage boolean not null default true;
+alter table public.products add column if not exists launch_time timestamptz;
+alter table public.products add column if not exists timer_image_url text;
 
 create table if not exists public.product_sections (
   id uuid primary key default gen_random_uuid(),

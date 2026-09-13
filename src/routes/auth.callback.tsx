@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getReferralCode, getVisitorSessionId } from "@/lib/referral";
+import { recordCollaboratorSignup } from "@/lib/analytics.functions";
 
 export const Route = createFileRoute("/auth/callback")({
   ssr: false,
@@ -27,7 +29,24 @@ function AuthCallback() {
       void navigate({ to: "/" });
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session?.user) {
+        const refCode = getReferralCode();
+        if (refCode) {
+          try {
+            await recordCollaboratorSignup({
+              data: {
+                userId: data.session.user.id,
+                email: data.session.user.email,
+                collaboratorCode: refCode,
+                sessionId: getVisitorSessionId(),
+              },
+            });
+          } catch {
+            // Ignore background error
+          }
+        }
+      }
       void navigate({ to: data.session ? "/store" : "/auth" });
     });
   }, [navigate]);

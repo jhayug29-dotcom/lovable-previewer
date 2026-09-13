@@ -5,6 +5,7 @@ import {
   requireAdmin,
   requireUser,
 } from "./supabase.server";
+import { autoHealCollaboratorOrders } from "./collaborator.engine.server";
 
 const PAID_STATUSES = new Set(["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"]);
 
@@ -58,6 +59,7 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
   let revenue = 0;
 
   // 1. Safe page_views query (only real columns: session_id, path, user_id, created_at)
+  const attributedUserSet = new Set<string>();
   try {
     const { data: views, error: viewError } = await db
       .from("page_views")
@@ -69,19 +71,20 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
       page_views = views.length;
       const uniqueSessions = new Set(views.map((v) => v.session_id).filter(Boolean));
       visitors = uniqueSessions.size;
-      const uniqueSignups = new Set(views.map((v) => v.user_id).filter(Boolean));
-      signups = uniqueSignups.size;
+      for (const v of views) {
+        if (v.user_id) attributedUserSet.add(v.user_id);
+      }
+      signups = attributedUserSet.size;
     }
   } catch (err) {
     console.warn("View stats fetch warning for link:", link.code, err);
   }
 
-  // 2. Safe orders query
+  // 2. Comprehensive orders query (attributing via link id or attributed user)
   try {
     const { data: orders, error: orderError } = await db
       .from("orders")
-      .select("id, product_id, amount, status, user_id, created_at")
-      .eq("collaborator_link_id", link.id)
+      .select("id, product_id, amount, status, user_id, collaborator_link_id, created_at")
       .limit(100000);
 
     if (!orderError && orders) {
@@ -93,12 +96,21 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
           amount: number | string | null;
           status: string;
           user_id: string | null;
+          collaborator_link_id: string | null;
         }[]
-      ).filter(
-        (order) =>
-          PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
-          (!allowedProductIds.length || (order.product_id ? allowed.has(order.product_id) : true)),
-      );
+      ).filter((order) => {
+        const isPaid = PAID_STATUSES.has((order.status ?? "").toUpperCase());
+        if (!isPaid) return false;
+
+        const isDirect = order.collaborator_link_id === link.id;
+        const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
+        if (!isDirect && !isAttributedUser) return false;
+
+        if (allowedProductIds.length > 0) {
+          return order.product_id ? allowed.has(order.product_id) : false;
+        }
+        return true;
+      });
 
       sales = visibleOrders.length;
       revenue = visibleOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
@@ -297,6 +309,7 @@ export async function setCollaboratorProductAccessAdmin(
 
 export async function listCollaboratorPartnersAdmin(accessToken?: string) {
   await requireAdmin(accessToken);
+  await autoHealCollaboratorOrders().catch(() => {});
   const db = adminDb(accessToken);
   const { data: linkRows, error: linkError } = await db
     .from("collaborator_links")
@@ -388,6 +401,7 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
 
 export async function getCollaboratorDashboardAdmin(accessToken?: string) {
   const user = await requireUser(accessToken);
+  await autoHealCollaboratorOrders().catch(() => {});
   const db = adminDb(accessToken);
   const userEmail = (user.email ?? "").trim().toLowerCase();
 

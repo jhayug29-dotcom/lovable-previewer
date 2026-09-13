@@ -15,6 +15,8 @@ export type DbProduct = Product & {
   downloadLink?: string;
   showOnHomepage?: boolean;
   sections?: ProductSection[];
+  launchTime?: string | null;
+  timerImageUrl?: string | null;
 };
 
 export type Coupon = {
@@ -84,6 +86,8 @@ export function mapProduct(row: Row): DbProduct {
     sales: Number(row["sales"] ?? 0),
     ...(row["badge"] ? { badge: String(row["badge"]) } : {}),
     showOnHomepage: row["show_on_homepage"] !== false,
+    launchTime: row["launch_time"] ? String(row["launch_time"]) : null,
+    timerImageUrl: row["timer_image_url"] ? String(row["timer_image_url"]) : null,
     fileInfo: (row["file_info"] as string[] | null) ?? [],
     description: String(row["description"] ?? ""),
     features: (row["features"] as string[] | null) ?? [],

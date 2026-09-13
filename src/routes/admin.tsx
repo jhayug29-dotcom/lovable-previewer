@@ -511,6 +511,8 @@ type ProductRow = {
   how_to_use: { step: string; detail: string }[];
   active: boolean;
   show_on_homepage: boolean;
+  launch_time: string | null;
+  timer_image_url: string | null;
   sales: number;
 };
 
@@ -533,6 +535,8 @@ const emptyProduct = {
   is_free: false,
   active: true,
   show_on_homepage: true,
+  launch_time: "",
+  timer_image_url: "",
 };
 
 function ProductsTab() {
@@ -574,6 +578,8 @@ function ProductsTab() {
       is_free: row.is_free,
       active: row.active,
       show_on_homepage: row.show_on_homepage !== false,
+      launch_time: row.launch_time ? new Date(row.launch_time).toISOString().slice(0, 16) : "",
+      timer_image_url: row.timer_image_url ?? "",
     });
     setSectionsText(
       sectionRows
@@ -617,6 +623,8 @@ function ProductsTab() {
       }),
       active: form.active,
       show_on_homepage: form.show_on_homepage,
+      launch_time: form.launch_time ? new Date(form.launch_time).toISOString() : null,
+      timer_image_url: form.timer_image_url || null,
     });
     const client = supabase;
     if (form.id && client) {
@@ -745,6 +753,17 @@ function ProductsTab() {
           label="Custom sections (one per line: Title | Content)"
           value={sectionsText}
           onChange={setSectionsText}
+        />
+        <Field
+          label="Launch Time (e.g. 2026-09-13T12:00)"
+          type="datetime-local"
+          value={form.launch_time}
+          onChange={set("launch_time") as (v: string) => void}
+        />
+        <ImageUrlInput
+          label="Timer Image URL"
+          value={form.timer_image_url || ""}
+          onChange={set("timer_image_url") as (v: string) => void}
         />
         <Toggle
           label="Visible on the storefront"

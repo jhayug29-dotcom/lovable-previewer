@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, notFound, redirect, isRedirect } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -90,17 +90,52 @@ const getFullUrl = (url: string) => {
 
 function CollaboratorDashboard() {
   const { session } = useAuth();
+  const qc = useQueryClient();
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["collaborator-dashboard", session?.access_token ?? ""],
     queryFn: () => fetchCollaboratorDashboard({ data: { accessToken: session?.access_token } }),
     enabled: Boolean(session?.access_token),
-    staleTime: 15_000,
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    staleTime: 0,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
   });
+
+  // Ultra-intelligent Realtime synchronization for Collaborator Portal
+  useEffect(() => {
+    if (!supabase || !session?.access_token) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const triggerRefresh = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ["collaborator-dashboard"] });
+      }, 150);
+    };
+
+    const channel = supabase
+      .channel("collaborator-portal-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, triggerRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, triggerRefresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "collaborator_links" },
+        triggerRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "collaborator_partner_products" },
+        triggerRefresh,
+      )
+      .on("broadcast", { event: "collaborator_update" }, triggerRefresh)
+      .subscribe();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      void supabase?.removeChannel(channel);
+    };
+  }, [session?.access_token, qc]);
 
   const handleCopy = (id: string, text: string) => {
     if (!navigator.clipboard) return;

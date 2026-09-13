@@ -236,10 +236,11 @@ export async function listCollaboratorPartners(
       (sum, link) => ({
         visitors: sum.visitors + link.visitors,
         page_views: sum.page_views + link.page_views,
+        signups: sum.signups + link.signups,
         sales: sum.sales + link.sales,
         revenue: sum.revenue + link.revenue,
       }),
-      { visitors: 0, page_views: 0, sales: 0, revenue: 0 },
+      { visitors: 0, page_views: 0, signups: 0, sales: 0, revenue: 0 },
     );
     const profile = profileMap.get(userId);
 

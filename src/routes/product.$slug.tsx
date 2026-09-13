@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { Star, Check, ShieldCheck, ArrowLeft, Share2, PlayCircle } from "lucide-react";
+import { Star, Check, ShieldCheck, ArrowLeft, Share2, PlayCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { SiteLayout } from "@/components/site/SiteLayout";
 import { ProductCard } from "@/components/site/ProductCard";
@@ -8,8 +8,53 @@ import { formatPrice } from "@/lib/products";
 import { getStoreProduct } from "@/lib/catalog.functions";
 import { loadProductSections, type ProductSection } from "@/lib/catalog.server";
 import type { DbProduct } from "@/lib/catalog-map";
+import { useState, useEffect } from "react";
 
 import { getBreadcrumbsSchema, getProductSchema, SITE_URL } from "@/lib/seo";
+
+function CountdownTimer({ targetDate }: { targetDate: string }) {
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    const target = new Date(targetDate).getTime();
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const diff = target - now;
+      if (diff <= 0) {
+        clearInterval(interval);
+        window.location.reload(); // Reload when timer hits 0 to show the actual product
+        return;
+      }
+      setTimeLeft({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / 1000 / 60) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [targetDate]);
+
+  const block = (value: number, label: string) => (
+    <div className="flex flex-col items-center justify-center rounded-2xl bg-black/5 p-4 backdrop-blur-md dark:bg-white/5">
+      <span className="font-display text-4xl font-black text-ink md:text-6xl">
+        {value.toString().padStart(2, "0")}
+      </span>
+      <span className="mt-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        {label}
+      </span>
+    </div>
+  );
+
+  return (
+    <div className="mt-8 grid grid-cols-4 gap-4">
+      {block(timeLeft.days, "Days")}
+      {block(timeLeft.hours, "Hours")}
+      {block(timeLeft.minutes, "Mins")}
+      {block(timeLeft.seconds, "Secs")}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
@@ -86,6 +131,33 @@ function ProductPage() {
   };
   const discount =
     product.originalPrice > 0 ? Math.round((1 - product.price / product.originalPrice) * 100) : 0;
+
+  const hasLaunchTimer = product.launchTime && new Date(product.launchTime).getTime() > Date.now();
+
+  if (hasLaunchTimer) {
+    return (
+      <SiteLayout dark>
+        <div className="flex min-h-[80vh] flex-col items-center justify-center p-6 text-center">
+          <div className="glass animate-rise-in max-w-5xl overflow-hidden rounded-4xl p-3 shadow-2xl">
+            <div className="relative aspect-16/9 overflow-hidden rounded-3xl">
+              <img
+                src={product.timerImageUrl || product.cover}
+                alt={`${product.title} coming soon`}
+                className="size-full object-cover transition-transform duration-1000 hover:scale-[1.03]"
+              />
+            </div>
+          </div>
+          <h1 className="mt-12 font-display text-4xl font-extrabold tracking-tight text-ink md:text-6xl">
+            {product.title}
+          </h1>
+          <p className="mt-4 text-lg text-ink/60 max-w-2xl mx-auto">
+            {product.tagline || "Dropping soon. Mark your calendars."}
+          </p>
+          <CountdownTimer targetDate={product.launchTime!} />
+        </div>
+      </SiteLayout>
+    );
+  }
 
   return (
     <SiteLayout dark>

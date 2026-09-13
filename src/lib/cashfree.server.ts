@@ -1,5 +1,10 @@
 import { adminClient, requireUser } from "./supabase.server";
 import { sendReceiptEmail } from "./receipt.server";
+import {
+  broadcastCollaboratorRealtimeEvent,
+  intelligentResolveCollaborator,
+  resolveCollaboratorLink,
+} from "./collaborator.engine.server";
 
 const CF_BASE =
   process.env["CASHFREE_MODE"] === "sandbox"
@@ -88,37 +93,6 @@ async function applyCoupon(
   return Math.max(1, Math.round(amount * (1 - coupon.percent_off / 100)));
 }
 
-async function resolveCollaboratorLink(
-  code: string | undefined,
-): Promise<{ id: string; code: string } | null> {
-  if (!code) return null;
-  const clean = code.trim();
-  if (!clean) return null;
-
-  try {
-    const { data } = await adminClient()
-      .from("collaborator_links")
-      .select("id, code")
-      .or(`code.eq.${clean},id.eq.${clean}`)
-      .eq("active", true)
-      .maybeSingle();
-    if (data?.id) return { id: data.id, code: data.code };
-  } catch {
-    // Ignore table query error and try RPC fallback
-  }
-
-  try {
-    const { data, error } = await adminClient().rpc("resolve_collaborator_link", {
-      link_code: clean,
-    });
-    if (!error && data) return { id: String(data), code: clean };
-  } catch {
-    // Ignore RPC error
-  }
-
-  return null;
-}
-
 export type CreateOrderInput = {
   slug: string;
   origin: string;
@@ -138,7 +112,11 @@ export async function createOrder(input: CreateOrderInput) {
   const amount = await applyCoupon(salePrice, input.couponCode, product.id as string);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
-  const collaborator = await resolveCollaboratorLink(input.collaboratorCode);
+  const collaborator = await intelligentResolveCollaborator({
+    collaboratorCode: input.collaboratorCode,
+    userId: user?.id,
+    customerEmail: input.customerEmail,
+  });
 
   const response = await fetch(`${CF_BASE}/orders`, {
     method: "POST",
@@ -181,6 +159,16 @@ export async function createOrder(input: CreateOrderInput) {
       collaborator_link_id: collaborator?.id ?? null,
     });
 
+  if (collaborator?.id) {
+    broadcastCollaboratorRealtimeEvent("order_pending", {
+      orderId: cfOrderId,
+      linkId: collaborator.id,
+      code: collaborator.code,
+      amount,
+      productId: product.id,
+    });
+  }
+
   return { orderId: cfOrderId, paymentSessionId: payload.payment_session_id, amount };
 }
 
@@ -188,16 +176,18 @@ type SettleRow = {
   id: string;
   status: string;
   amount: number;
+  user_id?: string | null;
+  collaborator_link_id?: string | null;
   coupon_code: string | null;
   customer_email: string | null;
   customer_name: string | null;
   origin: string | null;
   receipt_sent_at: string | null;
-  products: { slug: string; title: string; download_link: string | null } | null;
+  products: { id?: string; slug: string; title: string; download_link: string | null } | null;
 };
 
 const ORDER_COLUMNS =
-  "id, status, amount, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
+  "id, status, amount, user_id, collaborator_link_id, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   const { data } = await adminClient()
@@ -212,10 +202,24 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
   const db = adminClient();
   const link = row.products?.download_link ?? null;
 
+  let resolvedLinkId = row.collaborator_link_id;
+  if (!resolvedLinkId) {
+    const deduced = await intelligentResolveCollaborator({
+      userId: row.user_id,
+      customerEmail: row.customer_email,
+    });
+    if (deduced?.id) resolvedLinkId = deduced.id;
+  }
+
   if (row.status !== "PAID") {
     await db
       .from("orders")
-      .update({ status: "PAID", download_link: link, paid_at: new Date().toISOString() })
+      .update({
+        status: "PAID",
+        download_link: link,
+        paid_at: new Date().toISOString(),
+        ...(resolvedLinkId ? { collaborator_link_id: resolvedLinkId } : {}),
+      })
       .eq("id", row.id);
     if (row.coupon_code) {
       const { data: coupon } = await db
@@ -230,6 +234,13 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
           .update({ used_count: (found.used_count ?? 0) + 1 })
           .eq("id", found.id);
     }
+
+    broadcastCollaboratorRealtimeEvent("order_paid", {
+      orderId: cfOrderId,
+      linkId: resolvedLinkId,
+      amount: Number(row.amount ?? 0),
+      productId: row.products?.id,
+    });
   }
 
   if (!row.receipt_sent_at && row.customer_email) {
@@ -299,14 +310,20 @@ export async function claimFree(
   const user = await requireUser(accessToken);
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
-  const collaborator = await resolveCollaboratorLink(collaboratorCode);
+  const collaborator = await intelligentResolveCollaborator({
+    collaboratorCode,
+    userId: user.id,
+    customerEmail: user.email,
+  });
+
+  const cfOrderId = `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   await adminClient()
     .from("orders")
     .insert({
       user_id: user.id,
       product_id: product.id,
-      cf_order_id: `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      cf_order_id: cfOrderId,
       amount: 0,
       status: "PAID",
       customer_email: user.email,
@@ -314,6 +331,16 @@ export async function claimFree(
       paid_at: new Date().toISOString(),
       collaborator_link_id: collaborator?.id ?? null,
     });
+
+  if (collaborator?.id) {
+    broadcastCollaboratorRealtimeEvent("order_paid", {
+      orderId: cfOrderId,
+      linkId: collaborator.id,
+      code: collaborator.code,
+      amount: 0,
+      productId: product.id,
+    });
+  }
 
   return { downloadLink: product.download_link, productTitle: product.title };
 }

@@ -1,8 +1,10 @@
 import { requireSupabase } from "@/integrations/supabase/client";
-import { getReferralCode } from "@/lib/referral";
+import { getReferralCode, getVisitorSessionId } from "@/lib/referral";
+import { recordCollaboratorSignup } from "@/lib/analytics.functions";
 
 export async function signUp(email: string, password: string, fullName?: string) {
   const refCode = getReferralCode();
+  const sessionId = getVisitorSessionId();
   const metadata: Record<string, unknown> = {};
   if (fullName) metadata.full_name = fullName;
   if (refCode) metadata.collaborator_code = refCode;
@@ -16,6 +18,23 @@ export async function signUp(email: string, password: string, fullName?: string)
     },
   });
   if (error) throw error;
+
+  if (data.user?.id) {
+    try {
+      await recordCollaboratorSignup({
+        data: {
+          userId: data.user.id,
+          email,
+          collaboratorCode: refCode,
+          sessionId,
+          fullName: fullName ?? null,
+        },
+      });
+    } catch (attributionErr) {
+      console.warn("Collaborator signup attribution warning:", attributionErr);
+    }
+  }
+
   return data;
 }
 

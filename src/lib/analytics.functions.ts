@@ -128,3 +128,20 @@ export const recordPageView = createServerFn({ method: "POST" })
     const { recordPageViewServer } = await import("./analytics.server");
     return recordPageViewServer(data);
   });
+
+export const recordCollaboratorSignup = createServerFn({ method: "POST" })
+  .validator((d) =>
+    z
+      .object({
+        userId: z.string(),
+        email: z.string().optional().nullable(),
+        collaboratorCode: z.string().optional().nullable(),
+        sessionId: z.string().optional().nullable(),
+        fullName: z.string().optional().nullable(),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { recordCollaboratorSignupServer } = await import("./collaborator.engine.server");
+    return recordCollaboratorSignupServer(data);
+  });

@@ -1,10 +1,46 @@
 import { Link } from "@tanstack/react-router";
 import { Star, ArrowUpRight } from "lucide-react";
 import { formatPrice, type Product } from "@/lib/products";
+import type { DbProduct } from "@/lib/catalog-map";
 import { MagicGlow } from "@/components/magic/MagicGlow";
 import { SHIMMER_SURFACE, ShimmerLayers } from "@/components/magic/Shimmer";
 
 export function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
+  const dbProduct = product as DbProduct; // Cast to access launchTime and timerImageUrl
+  const hasLaunchTimer =
+    dbProduct.launchTime && new Date(dbProduct.launchTime).getTime() > Date.now();
+
+  if (hasLaunchTimer) {
+    return (
+      <Link
+        to="/product/$slug"
+        params={{ slug: product.slug }}
+        aria-label={`View ${product.title} launch`}
+        className="group glass hover-pop animate-rise-in relative isolate block overflow-hidden rounded-4xl p-3"
+        style={{ animationDelay: `${index * 80}ms` }}
+      >
+        <MagicGlow />
+        <div className="relative z-10 aspect-4/3 overflow-hidden rounded-3xl">
+          <img
+            src={dbProduct.timerImageUrl || product.cover}
+            alt={`${product.title} coming soon`}
+            loading="lazy"
+            className="size-full object-cover transition-transform duration-[900ms] ease-[var(--ease-macos)] group-hover:scale-[1.06]"
+          />
+          <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/25 to-transparent opacity-0 transition-opacity duration-700 group-hover:opacity-100" />
+          <span className="glass absolute left-3 top-3 rounded-full px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-ink">
+            Coming Soon
+          </span>
+        </div>
+        <div className="relative z-10 px-3 pb-2 pt-4">
+          <h3 className="mt-2 text-center font-display text-xl font-extrabold text-ink">
+            {product.title}
+          </h3>
+        </div>
+      </Link>
+    );
+  }
+
   const discount =
     product.originalPrice > product.price
       ? Math.round((1 - product.price / product.originalPrice) * 100)

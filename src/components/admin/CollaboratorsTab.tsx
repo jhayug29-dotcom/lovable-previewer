@@ -98,8 +98,43 @@ export function CollaboratorsTab() {
     queryFn: () => listCollaboratorPartners({ data: { accessToken: token } }),
     enabled: Boolean(token),
     staleTime: 0,
-    refetchInterval: 30_000,
+    refetchInterval: 5_000,
   });
+
+  // Ultra-intelligent Realtime synchronization for Admin Collaborators Tab
+  useEffect(() => {
+    if (!supabase || !token) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const triggerRefresh = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ["collaborator-partners"] });
+      }, 150);
+    };
+
+    const channel = supabase
+      .channel("admin-collaborators-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, triggerRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, triggerRefresh)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "collaborator_links" },
+        triggerRefresh,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "collaborator_partner_products" },
+        triggerRefresh,
+      )
+      .on("broadcast", { event: "collaborator_update" }, triggerRefresh)
+      .subscribe();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      void supabase?.removeChannel(channel);
+    };
+  }, [token, qc]);
 
   const products = useQuery<Product[]>({
     queryKey: ["collaborator-products", token ?? ""],
