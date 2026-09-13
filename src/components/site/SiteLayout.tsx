@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, fetchSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import { SiteHeader } from "./SiteHeader";
 import { RainingFlags } from "./RainingFlags";
+import { CollaboratorBanner } from "./CollaboratorBanner";
 
 export function SiteLayout({ children, dark = false }: { children: ReactNode; dark?: boolean }) {
   const { data: settings = DEFAULT_SETTINGS } = useQuery({
@@ -49,6 +50,7 @@ export function SiteLayout({ children, dark = false }: { children: ReactNode; da
         )}
       </div>
 
+      <CollaboratorBanner />
       <SiteHeader />
       <RainingFlags />
       <main>{children}</main>

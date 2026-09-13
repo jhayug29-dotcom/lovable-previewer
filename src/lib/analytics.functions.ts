@@ -129,6 +129,15 @@ export const recordPageView = createServerFn({ method: "POST" })
     return recordPageViewServer(data);
   });
 
+export const resolveCollaboratorDetails = createServerFn({ method: "GET" })
+  .validator((d) => z.object({ code: z.string() }).parse(d))
+  .handler(async ({ data }) => {
+    const { resolveCollaboratorLink } = await import("./collaborator.engine.server");
+    const resolved = await resolveCollaboratorLink(data.code);
+    if (!resolved) return null;
+    return { name: resolved.name, code: resolved.code };
+  });
+
 export const recordCollaboratorSignup = createServerFn({ method: "POST" })
   .validator((d) =>
     z
