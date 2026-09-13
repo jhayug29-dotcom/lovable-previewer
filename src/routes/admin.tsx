@@ -540,7 +540,14 @@ function ProductsTab() {
   const save = useSave("products");
   const remove = useRemove("products");
   const [form, setForm] = useState({ ...emptyProduct, id: "" });
-  const { data: sectionRows = [] } = useTable<{ id: string; product_id: string; title: string; content: string; enabled: boolean; sort_order: number }>("product_sections", "sort_order");
+  const { data: sectionRows = [] } = useTable<{
+    id: string;
+    product_id: string;
+    title: string;
+    content: string;
+    enabled: boolean;
+    sort_order: number;
+  }>("product_sections", "sort_order");
   const [sectionsText, setSectionsText] = useState("");
 
   const set = (key: keyof typeof form) => (v: string | boolean) =>
@@ -615,12 +622,23 @@ function ProductsTab() {
     if (form.id && client) {
       const parsedSections = lines(sectionsText).map((line, index) => {
         const [title = "", content = ""] = line.split("|");
-        return { product_id: form.id, title: title.trim(), content: content.trim(), sort_order: index, enabled: true };
+        return {
+          product_id: form.id,
+          title: title.trim(),
+          content: content.trim(),
+          sort_order: index,
+          enabled: true,
+        };
       });
-      void client.from("product_sections").delete().eq("product_id", form.id).then(() => {
-        if (parsedSections.length > 0) return client.from("product_sections").insert(parsedSections);
-        return null;
-      });
+      void client
+        .from("product_sections")
+        .delete()
+        .eq("product_id", form.id)
+        .then(() => {
+          if (parsedSections.length > 0)
+            return client.from("product_sections").insert(parsedSections);
+          return null;
+        });
     }
     setForm({ ...emptyProduct, id: "" });
     setSectionsText("");
@@ -731,13 +749,13 @@ function ProductsTab() {
         <Toggle
           label="Visible on the storefront"
           value={form.active}
-  onChange={set("active") as (v: boolean) => void}
-  />
-  <Toggle
-  label="Show on homepage"
-  value={form.show_on_homepage}
-  onChange={set("show_on_homepage") as (v: boolean) => void}
-  />
+          onChange={set("active") as (v: boolean) => void}
+        />
+        <Toggle
+          label="Show on homepage"
+          value={form.show_on_homepage}
+          onChange={set("show_on_homepage") as (v: boolean) => void}
+        />
         <PrimaryButton onClick={submit} busy={save.isPending}>
           {form.id ? (
             <Save className="size-4" strokeWidth={1.9} />

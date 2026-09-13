@@ -11,10 +11,7 @@ function getEnv(name: string): string | undefined {
  * silently pointing server functions at a different Supabase project.
  */
 export function getSupabaseUrl(): string {
-  const url =
-    getEnv("VITE_SUPABASE_URL") ??
-    getEnv("SUPABASE_URL") ??
-    getEnv("STORE_SUPABASE_URL");
+  const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
 
   if (!url) {
     throw new Error(
@@ -49,11 +46,7 @@ export function getServiceRoleKey(): string | undefined {
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("SUPABASE_SERVICE_KEY");
 
-  if (
-    !key ||
-    key === "sb_secret_xxx" ||
-    key === "sb_secret_Y-grezvFAlZJDkZlW96gVA_splbGR9O"
-  ) {
+  if (!key || key === "sb_secret_xxx") {
     return undefined;
   }
   return key;

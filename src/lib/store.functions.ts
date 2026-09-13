@@ -14,7 +14,10 @@ export const createCashfreeOrder = createServerFn({ method: "POST" })
         customerPhone: z.string().min(6),
         couponCode: z.string().optional(),
         accessToken: z.string().optional(),
-        collaboratorCode: z.string().regex(/^[a-zA-Z0-9_-]{8,80}$/).optional(),
+        collaboratorCode: z
+          .string()
+          .regex(/^[a-zA-Z0-9_-]{8,80}$/)
+          .optional(),
       })
       .parse(data),
   )
@@ -30,7 +33,10 @@ export const claimFreeProduct = createServerFn({ method: "POST" })
       .object({
         slug: z.string().min(1),
         accessToken: z.string().optional(),
-        collaboratorCode: z.string().regex(/^[a-zA-Z0-9_-]{8,80}$/).optional(),
+        collaboratorCode: z
+          .string()
+          .regex(/^[a-zA-Z0-9_-]{8,80}$/)
+          .optional(),
       })
       .parse(data),
   )

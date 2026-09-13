@@ -1,12 +1,18 @@
 import { requireSupabase } from "@/integrations/supabase/client";
+import { getReferralCode } from "@/lib/referral";
 
 export async function signUp(email: string, password: string, fullName?: string) {
+  const refCode = getReferralCode();
+  const metadata: Record<string, unknown> = {};
+  if (fullName) metadata.full_name = fullName;
+  if (refCode) metadata.collaborator_code = refCode;
+
   const { data, error } = await requireSupabase().auth.signUp({
     email,
     password,
     options: {
       emailRedirectTo: `${window.location.origin}/auth/callback`,
-      ...(fullName ? { data: { full_name: fullName } } : {}),
+      data: Object.keys(metadata).length ? metadata : undefined,
     },
   });
   if (error) throw error;

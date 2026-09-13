@@ -25,6 +25,7 @@ import { SilkWave } from "@/components/magic/SilkWave";
 // Decorative background clips (muted, aria-hidden). Self-hosted from `public/`
 // as plain H.264 MP4 — no CDN and no adaptive-streaming manifest, so the repo
 // carries every asset the page needs and any static host can serve it.
+const HERO_POSTER = "/media/hero-bg-4k.jpg";
 const HERO_VIDEO = "/media/hero.mp4";
 const MISSION_VIDEO = "/media/mission.mp4";
 const SOLUTION_VIDEO = "/media/solution.mp4";
@@ -117,11 +118,19 @@ function Landing() {
           scene fills the lower two-thirds, and a soft fade closes the seam into
           the black section below. */}
       <section className="relative flex min-h-[94vh] flex-col overflow-hidden">
+        {/* Instant high-res background image so the hero is immediately visible even before video stream starts */}
+        <img
+          src={HERO_POSTER}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 h-full w-full object-cover object-[center_63%] sm:object-[center_68%] md:object-[center_73%]"
+        />
         <video
           autoPlay
           muted
           loop
           playsInline
+          poster={HERO_POSTER}
           preload="auto"
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover object-[center_63%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_15%,black_100%)] sm:object-[center_68%] md:object-[center_73%]"

@@ -1,13 +1,28 @@
-import { adminClient, getDbClient, getServiceRoleKey, requireAdmin, requireUser } from "./supabase.server";
+import {
+  adminClient,
+  getDbClient,
+  getServiceRoleKey,
+  requireAdmin,
+  requireUser,
+} from "./supabase.server";
 
 const PAID_STATUSES = new Set(["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"]);
 
 type DbClient = ReturnType<typeof getDbClient>;
 type Product = { id: string; title: string; category: string; price: number; active: boolean };
-type LinkRow = { id: string; code: string; name: string; user_id: string; email: string; active: boolean; created_at: string };
+type LinkRow = {
+  id: string;
+  code: string;
+  name: string;
+  user_id: string;
+  email: string;
+  active: boolean;
+  created_at: string;
+};
 
 const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
-const makeCode = () => `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
+const makeCode = () =>
+  `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
 
 function adminDb(accessToken?: string): DbClient {
   if (accessToken) return getDbClient(accessToken);
@@ -27,48 +42,80 @@ async function getProducts(db: DbClient, ids?: string[]): Promise<Product[]> {
 }
 
 async function getProductIds(db: DbClient, userId: string): Promise<string[]> {
-  const { data, error } = await db.from("collaborator_partner_products").select("product_id").eq("user_id", userId);
+  const { data, error } = await db
+    .from("collaborator_partner_products")
+    .select("product_id")
+    .eq("user_id", userId);
   if (error) throw error;
   return [...new Set(((data ?? []) as { product_id: string }[]).map((row) => row.product_id))];
 }
 
 async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[]) {
+  let visitors = 0;
+  let page_views = 0;
+  let signups = 0;
+  let sales = 0;
+  let revenue = 0;
+
+  // 1. Safe page_views query (only real columns: session_id, path, user_id, created_at)
   try {
-    const [{ data: views, error: viewError }, { data: orders, error: orderError }] = await Promise.all([
-      db
-        .from("page_views")
-        .select("session_id,product_id")
-        .or(`collaborator_code.eq.${link.code},collaborator_link_id.eq.${link.id}`)
-        .limit(100000),
-      db.from("orders").select("id,product_id,amount,status").eq("collaborator_link_id", link.id).limit(100000),
-    ]);
+    const { data: views, error: viewError } = await db
+      .from("page_views")
+      .select("session_id, path, user_id, created_at")
+      .or(`collaborator_code.eq.${link.code},collaborator_link_id.eq.${link.id}`)
+      .limit(100000);
 
-    if (viewError || orderError) throw viewError ?? orderError;
-
-    const allowed = new Set(allowedProductIds);
-    const relevantViews = ((views ?? []) as { session_id: string | null; product_id: string | null }[]).filter(
-      (view) => !view.product_id || !allowedProductIds.length || allowed.has(view.product_id),
-    );
-    const visibleOrders = ((orders ?? []) as { id: string; product_id: string | null; amount: number | string | null; status: string }[]).filter(
-      (order) =>
-        PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
-        (!allowedProductIds.length || (order.product_id ? allowed.has(order.product_id) : true)),
-    );
-    const visitors = new Set(
-      relevantViews
-        .map((view) => view.session_id)
-        .filter(Boolean),
-    );
-
-    return {
-      visitors: visitors.size,
-      page_views: relevantViews.length,
-      sales: visibleOrders.length,
-      revenue: visibleOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0),
-    };
-  } catch {
-    return { visitors: 0, page_views: 0, sales: 0, revenue: 0 };
+    if (!viewError && views) {
+      page_views = views.length;
+      const uniqueSessions = new Set(views.map((v) => v.session_id).filter(Boolean));
+      visitors = uniqueSessions.size;
+      const uniqueSignups = new Set(views.map((v) => v.user_id).filter(Boolean));
+      signups = uniqueSignups.size;
+    }
+  } catch (err) {
+    console.warn("View stats fetch warning for link:", link.code, err);
   }
+
+  // 2. Safe orders query
+  try {
+    const { data: orders, error: orderError } = await db
+      .from("orders")
+      .select("id, product_id, amount, status, user_id, created_at")
+      .eq("collaborator_link_id", link.id)
+      .limit(100000);
+
+    if (!orderError && orders) {
+      const allowed = new Set(allowedProductIds);
+      const visibleOrders = (
+        orders as {
+          id: string;
+          product_id: string | null;
+          amount: number | string | null;
+          status: string;
+          user_id: string | null;
+        }[]
+      ).filter(
+        (order) =>
+          PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
+          (!allowedProductIds.length || (order.product_id ? allowed.has(order.product_id) : true)),
+      );
+
+      sales = visibleOrders.length;
+      revenue = visibleOrders.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);
+      const orderUsers = new Set(visibleOrders.map((o) => o.user_id).filter(Boolean));
+      signups = Math.max(signups, orderUsers.size);
+    }
+  } catch (err) {
+    console.warn("Order stats fetch warning for link:", link.id, err);
+  }
+
+  return {
+    visitors,
+    page_views,
+    signups,
+    sales,
+    revenue,
+  };
 }
 
 async function resolveUser(db: DbClient, email?: string, userId?: string) {
@@ -76,36 +123,54 @@ async function resolveUser(db: DbClient, email?: string, userId?: string) {
   let resolvedEmail = email?.trim().toLowerCase() || "";
 
   if (resolvedUserId) {
-    const { data: profile } = await db.from("profiles").select("id,email").eq("id", resolvedUserId).maybeSingle();
+    const { data: profile } = await db
+      .from("profiles")
+      .select("id,email")
+      .eq("id", resolvedUserId)
+      .maybeSingle();
     if (profile) {
       resolvedUserId = String(profile.id);
       resolvedEmail = String(profile.email ?? resolvedEmail).toLowerCase();
     } else if (getServiceRoleKey()) {
       try {
-        const { data, error: authError } = await adminClient().auth.admin.getUserById(resolvedUserId);
+        const { data, error: authError } =
+          await adminClient().auth.admin.getUserById(resolvedUserId);
         if (!authError && data?.user) {
           resolvedEmail = String(data.user.email ?? resolvedEmail).toLowerCase();
         }
-      } catch {}
+      } catch {
+        // Ignore auth error
+      }
     }
   }
 
   if (!resolvedUserId && resolvedEmail) {
-    const { data: profile } = await db.from("profiles").select("id,email").ilike("email", resolvedEmail).maybeSingle();
+    const { data: profile } = await db
+      .from("profiles")
+      .select("id,email")
+      .ilike("email", resolvedEmail)
+      .maybeSingle();
     if (profile) {
       resolvedUserId = String(profile.id);
       resolvedEmail = String(profile.email ?? resolvedEmail).toLowerCase();
     } else if (getServiceRoleKey()) {
       try {
-        const { data, error: authError } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const { data, error: authError } = await adminClient().auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
         if (!authError && data?.users) {
-          const match = data.users.find((user) => String(user.email ?? "").toLowerCase() === resolvedEmail);
+          const match = data.users.find(
+            (user) => String(user.email ?? "").toLowerCase() === resolvedEmail,
+          );
           if (match) {
             resolvedUserId = match.id;
             resolvedEmail = String(match.email ?? resolvedEmail).toLowerCase();
           }
         }
-      } catch {}
+      } catch {
+        // Ignore user listing error
+      }
     }
   }
 
@@ -136,7 +201,10 @@ export async function createCollaboratorLinkAdmin(
   const cleanProductIds = [...new Set(productIds.filter(Boolean))];
   if (!cleanProductIds.length) throw new Error("Select at least one product");
 
-  const { data: validProducts, error: productError } = await db.from("products").select("id").in("id", cleanProductIds);
+  const { data: validProducts, error: productError } = await db
+    .from("products")
+    .select("id")
+    .in("id", cleanProductIds);
   if (productError) throw productError;
   const validIds = new Set((validProducts ?? []).map((row) => String(row.id)));
   const invalidIds = cleanProductIds.filter((id) => !validIds.has(id));
@@ -145,7 +213,13 @@ export async function createCollaboratorLinkAdmin(
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const { data: link, error: linkError } = await db
       .from("collaborator_links")
-      .insert({ name: name.trim(), email: recipient.email, user_id: recipient.userId, code: makeCode(), active: true })
+      .insert({
+        name: name.trim(),
+        email: recipient.email,
+        user_id: recipient.userId,
+        code: makeCode(),
+        active: true,
+      })
       .select("id,code,name,user_id,email,active,created_at")
       .single();
 
@@ -156,7 +230,9 @@ export async function createCollaboratorLinkAdmin(
             .from("collaborator_partner_products")
             .select("product_id")
             .eq("user_id", recipient.userId);
-          const existingSet = new Set(((existing ?? []) as { product_id: string }[]).map((r) => String(r.product_id)));
+          const existingSet = new Set(
+            ((existing ?? []) as { product_id: string }[]).map((r) => String(r.product_id)),
+          );
           const toAdd = cleanProductIds.filter((pid) => !existingSet.has(pid));
 
           if (toAdd.length > 0) {
@@ -164,7 +240,10 @@ export async function createCollaboratorLinkAdmin(
               .from("collaborator_partner_products")
               .insert(toAdd.map((product_id) => ({ user_id: recipient.userId, product_id })));
             if (accessError && accessError.code !== "23505") {
-              console.warn("Non-fatal collaborator product access map warning:", accessError.message);
+              console.warn(
+                "Non-fatal collaborator product access map warning:",
+                accessError.message,
+              );
             }
           }
         } catch (err) {
@@ -174,24 +253,36 @@ export async function createCollaboratorLinkAdmin(
       return { ...link, url: `/?ref=${link.code}` };
     }
 
-    if (linkError?.code === "23505" && String(linkError.message).toLowerCase().includes("code")) continue;
-    if (linkError?.code === "23505") throw new Error("A collaborator link with that data already exists. Choose another name.");
+    if (linkError?.code === "23505" && String(linkError.message).toLowerCase().includes("code"))
+      continue;
+    if (linkError?.code === "23505")
+      throw new Error("A collaborator link with that data already exists. Choose another name.");
     if (linkError) throw new Error(`Could not create collaborator: ${linkError.message}`);
   }
 
   throw new Error("Could not generate a unique referral code. Please try again.");
 }
 
-export async function setCollaboratorProductAccessAdmin(accessToken: string | undefined, userId: string, productIds: string[]) {
+export async function setCollaboratorProductAccessAdmin(
+  accessToken: string | undefined,
+  userId: string,
+  productIds: string[],
+) {
   await requireAdmin(accessToken);
   const db = adminDb(accessToken);
   const clean = [...new Set(productIds.filter(Boolean))];
 
-  const { error: deleteError } = await db.from("collaborator_partner_products").delete().eq("user_id", userId);
+  const { error: deleteError } = await db
+    .from("collaborator_partner_products")
+    .delete()
+    .eq("user_id", userId);
   if (deleteError) throw deleteError;
 
   if (clean.length) {
-    const { data: validProducts, error: productError } = await db.from("products").select("id").in("id", clean);
+    const { data: validProducts, error: productError } = await db
+      .from("products")
+      .select("id")
+      .in("id", clean);
     if (productError) throw productError;
     const valid = new Set((validProducts ?? []).map((row) => String(row.id)));
     const invalid = clean.filter((id) => !valid.has(id));
@@ -221,11 +312,16 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
   const profileMap = new Map((profiles ?? []).map((profile) => [String(profile.id), profile]));
 
   const { data: accessRows } = userIds.length
-    ? await db.from("collaborator_partner_products").select("user_id,product_id").in("user_id", userIds)
+    ? await db
+        .from("collaborator_partner_products")
+        .select("user_id,product_id")
+        .in("user_id", userIds)
     : { data: [] as { user_id: string; product_id: string }[] };
   const productIdsByUser = new Map<string, string[]>();
   for (const row of (accessRows ?? []) as { user_id: string; product_id: string }[]) {
-    productIdsByUser.set(row.user_id, [...new Set([...(productIdsByUser.get(row.user_id) ?? []), row.product_id])]);
+    productIdsByUser.set(row.user_id, [
+      ...new Set([...(productIdsByUser.get(row.user_id) ?? []), row.product_id]),
+    ]);
   }
 
   const result = [] as Array<{
@@ -235,17 +331,44 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
     active: boolean;
     product_ids: string[];
     products: Product[];
-    totals: { visitors: number; page_views: number; sales: number; revenue: number };
-    links: Array<LinkRow & { url: string; visitors: number; page_views: number; sales: number; revenue: number }>;
+    totals: {
+      visitors: number;
+      page_views: number;
+      signups: number;
+      sales: number;
+      revenue: number;
+    };
+    links: Array<
+      LinkRow & {
+        url: string;
+        visitors: number;
+        page_views: number;
+        signups: number;
+        sales: number;
+        revenue: number;
+      }
+    >;
   }>;
 
   for (const userId of userIds) {
     const productIds = productIdsByUser.get(userId) ?? [];
     const userRows = rows.filter((row) => row.user_id === userId);
-    const links = await Promise.all(userRows.map(async (row) => ({ ...row, url: `/?ref=${row.code}`, ...(await safeStats(db, row, productIds)) })));
+    const links = await Promise.all(
+      userRows.map(async (row) => ({
+        ...row,
+        url: `/?ref=${row.code}`,
+        ...(await safeStats(db, row, productIds)),
+      })),
+    );
     const totals = links.reduce(
-      (sum, link) => ({ visitors: sum.visitors + link.visitors, page_views: sum.page_views + link.page_views, sales: sum.sales + link.sales, revenue: sum.revenue + link.revenue }),
-      { visitors: 0, page_views: 0, sales: 0, revenue: 0 },
+      (sum, link) => ({
+        visitors: sum.visitors + link.visitors,
+        page_views: sum.page_views + link.page_views,
+        signups: sum.signups + link.signups,
+        sales: sum.sales + link.sales,
+        revenue: sum.revenue + link.revenue,
+      }),
+      { visitors: 0, page_views: 0, signups: 0, sales: 0, revenue: 0 },
     );
     const profile = profileMap.get(userId);
     result.push({
@@ -284,16 +407,26 @@ export async function getCollaboratorDashboardAdmin(accessToken?: string) {
 
   const rows = (linkRows ?? []) as LinkRow[];
   const activeLinks = rows.filter((link) => link.active);
-  if (!activeLinks.length) throw new Error("Collaborator access has been revoked or has not been assigned");
+  if (!activeLinks.length)
+    throw new Error("Collaborator access has been revoked or has not been assigned");
 
   // Auto-heal mismatched user_ids
   try {
     const mismatched = activeLinks.filter((l) => l.user_id !== user.id);
     if (mismatched.length > 0) {
-      await db.from("collaborator_links").update({ user_id: user.id }).in("id", mismatched.map((m) => m.id));
+      await db
+        .from("collaborator_links")
+        .update({ user_id: user.id })
+        .in(
+          "id",
+          mismatched.map((m) => m.id),
+        );
       for (const m of mismatched) {
         if (m.user_id) {
-          await db.from("collaborator_partner_products").update({ user_id: user.id }).eq("user_id", m.user_id);
+          await db
+            .from("collaborator_partner_products")
+            .update({ user_id: user.id })
+            .eq("user_id", m.user_id);
         }
       }
     }
@@ -306,7 +439,9 @@ export async function getCollaboratorDashboardAdmin(accessToken?: string) {
     .from("collaborator_partner_products")
     .select("product_id")
     .in("user_id", userIdsToCheck);
-  const productIds = [...new Set(((accessData ?? []) as { product_id: string }[]).map((r) => r.product_id))];
+  const productIds = [
+    ...new Set(((accessData ?? []) as { product_id: string }[]).map((r) => r.product_id)),
+  ];
 
   const products = await getProducts(db, productIds);
   const links = await Promise.all(
@@ -320,11 +455,19 @@ export async function getCollaboratorDashboardAdmin(accessToken?: string) {
     (sum, link) => ({
       visitors: sum.visitors + link.visitors,
       page_views: sum.page_views + link.page_views,
+      signups: sum.signups + link.signups,
       sales: sum.sales + link.sales,
       revenue: sum.revenue + link.revenue,
     }),
-    { visitors: 0, page_views: 0, sales: 0, revenue: 0 },
+    { visitors: 0, page_views: 0, signups: 0, sales: 0, revenue: 0 },
   );
 
-  return { userId: user.id, email: user.email ?? links[0]?.email ?? null, links, products, productIds, totals };
+  return {
+    userId: user.id,
+    email: user.email ?? links[0]?.email ?? null,
+    links,
+    products,
+    productIds,
+    totals,
+  };
 }

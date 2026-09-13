@@ -253,7 +253,9 @@ function ProductPage() {
             {sections.map((section) => (
               <section key={section.id} className="glass rounded-4xl p-8">
                 <h2 className="font-display text-2xl font-extrabold text-ink">{section.title}</h2>
-                <p className="mt-4 whitespace-pre-line leading-relaxed text-ink/75">{section.content}</p>
+                <p className="mt-4 whitespace-pre-line leading-relaxed text-ink/75">
+                  {section.content}
+                </p>
               </section>
             ))}
           </div>

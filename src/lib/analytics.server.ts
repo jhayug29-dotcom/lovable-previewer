@@ -41,7 +41,10 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
 
   let productIds: string[] = [];
   try {
-    const { data: assigned } = await db.from("seller_products").select("product_id").eq("user_id", user.id);
+    const { data: assigned } = await db
+      .from("seller_products")
+      .select("product_id")
+      .eq("user_id", user.id);
     productIds = (assigned ?? []).map((r) => r.product_id as string);
   } catch {
     productIds = [];
@@ -74,7 +77,10 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
         try {
           const linksToUpdate = byEmail.filter((l) => l.user_id !== user.id).map((l) => l.id);
           if (linksToUpdate.length > 0) {
-            await db.from("collaborator_links").update({ user_id: user.id }).in("id", linksToUpdate);
+            await db
+              .from("collaborator_links")
+              .update({ user_id: user.id })
+              .in("id", linksToUpdate);
           }
           for (const link of byEmail) {
             if (link.user_id && link.user_id !== user.id) {
@@ -149,7 +155,9 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
   const weekAgo = new Date(now - 7 * DAY).toISOString();
   const monthAgo = new Date(now - 30 * DAY).toISOString();
 
-  const { data: productRows } = await db.from("products").select("id, title, category, price, active, sales");
+  const { data: productRows } = await db
+    .from("products")
+    .select("id, title, category, price, active, sales");
   const allProducts = (productRows ?? []) as {
     id: string;
     title: string;
@@ -158,14 +166,20 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
     active: boolean;
     sales?: number | null;
   }[];
-  const products = access.admin ? allProducts : allProducts.filter((p) => access.productIds.includes(p.id));
+  const products = access.admin
+    ? allProducts
+    : allProducts.filter((p) => access.productIds.includes(p.id));
   const allowed = new Set(products.map((p) => p.id));
 
   let orderQuery = db
     .from("orders")
     .select("product_id, amount, status, created_at, paid_at")
     .order("created_at", { ascending: false });
-  if (!access.admin) orderQuery = orderQuery.in("product_id", products.map((p) => p.id));
+  if (!access.admin)
+    orderQuery = orderQuery.in(
+      "product_id",
+      products.map((p) => p.id),
+    );
 
   let orderRows:
     | {
@@ -235,7 +249,10 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
     }
     if (o.product_id) {
       orderCountByProduct.set(o.product_id, (orderCountByProduct.get(o.product_id) ?? 0) + 1);
-      orderRevenueByProduct.set(o.product_id, (orderRevenueByProduct.get(o.product_id) ?? 0) + amount);
+      orderRevenueByProduct.set(
+        o.product_id,
+        (orderRevenueByProduct.get(o.product_id) ?? 0) + amount,
+      );
     }
   }
 
@@ -266,7 +283,11 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
 
   const categories = new Map<string, { category: string; orders: number; revenue: number }>();
   for (const stat of stats.values()) {
-    const entry = categories.get(stat.category) ?? { category: stat.category, orders: 0, revenue: 0 };
+    const entry = categories.get(stat.category) ?? {
+      category: stat.category,
+      orders: 0,
+      revenue: 0,
+    };
     entry.orders += stat.orders;
     entry.revenue += stat.revenue;
     categories.set(stat.category, entry);
@@ -283,7 +304,11 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
 
   if (access.admin) {
     try {
-      const { data: viewRows } = await db.from("page_views").select("session_id, created_at").gte("created_at", monthAgo).limit(50_000);
+      const { data: viewRows } = await db
+        .from("page_views")
+        .select("session_id, created_at")
+        .gte("created_at", monthAgo)
+        .limit(50_000);
       const monthSessions = new Set<string>();
       const weekSessions = new Set<string>();
       for (const v of (viewRows ?? []) as { session_id: string; created_at: string }[]) {
@@ -314,7 +339,10 @@ export async function getAnalytics(accessToken: string | undefined): Promise<Ana
 
     if (getServiceRoleKey()) {
       try {
-        const { data: userList } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
+        const { data: userList } = await adminClient().auth.admin.listUsers({
+          page: 1,
+          perPage: 1000,
+        });
         let adminSignupsMonth = 0;
         let adminSignupsWeek = 0;
         for (const u of userList?.users ?? []) {
@@ -380,18 +408,96 @@ export async function listSellers(accessToken: string | undefined): Promise<Sell
   const profileMap = new Map((profiles ?? []).map((p) => [p.id as string, p]));
   return [...byUser.entries()].map(([userId, productIds]) => {
     const prof = profileMap.get(userId);
-    return { userId, email: prof?.email ?? "(unknown account)", fullName: (prof?.full_name as string | undefined) ?? null, productIds };
+    return {
+      userId,
+      email: prof?.email ?? "(unknown account)",
+      fullName: (prof?.full_name as string | undefined) ?? null,
+      productIds,
+    };
   });
 }
 
-export async function setSellerProducts(accessToken: string | undefined, userId: string, productIds: string[]): Promise<{ ok: true }> {
+export async function setSellerProducts(
+  accessToken: string | undefined,
+  userId: string,
+  productIds: string[],
+): Promise<{ ok: true }> {
   await requireAdmin(accessToken);
   const db = getDbClient(accessToken);
   const { error: delError } = await db.from("seller_products").delete().eq("user_id", userId);
   if (delError) throw delError;
   if (productIds.length > 0) {
-    const { error } = await db.from("seller_products").insert(productIds.map((product_id) => ({ user_id: userId, product_id })));
+    const { error } = await db
+      .from("seller_products")
+      .insert(productIds.map((product_id) => ({ user_id: userId, product_id })));
     if (error) throw error;
   }
   return { ok: true };
+}
+
+export async function recordPageViewServer(params: {
+  path: string;
+  sessionId?: string;
+  userId?: string | null;
+  collaboratorCode?: string | null;
+  collaboratorLinkId?: string | null;
+}) {
+  try {
+    const db = adminClient();
+    const cleanPath = (params.path || "/").slice(0, 500);
+    const cleanSession = params.sessionId?.trim() || null;
+    let cleanCode = params.collaboratorCode?.trim() || null;
+    let linkId = params.collaboratorLinkId?.trim() || null;
+    const userId = params.userId?.trim() || null;
+
+    if (cleanCode && !linkId) {
+      try {
+        const { data } = await db
+          .from("collaborator_links")
+          .select("id, code")
+          .eq("code", cleanCode)
+          .maybeSingle();
+        if (data?.id) {
+          linkId = data.id;
+        }
+      } catch {
+        try {
+          const { data: rpcData } = await db.rpc("resolve_collaborator_link", {
+            link_code: cleanCode,
+          });
+          if (rpcData) linkId = String(rpcData);
+        } catch {
+          // Ignore RPC failure
+        }
+      }
+    } else if (linkId && !cleanCode) {
+      try {
+        const { data } = await db
+          .from("collaborator_links")
+          .select("code")
+          .eq("id", linkId)
+          .maybeSingle();
+        if (data?.code) cleanCode = data.code;
+      } catch {
+        // Ignore link code lookup failure
+      }
+    }
+
+    const { error } = await db.from("page_views").insert({
+      path: cleanPath,
+      session_id: cleanSession,
+      user_id: userId,
+      collaborator_code: cleanCode,
+      collaborator_link_id: linkId,
+    });
+
+    if (error) {
+      console.warn("Could not record page view in db:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, linkId, code: cleanCode };
+  } catch (err) {
+    console.warn("recordPageViewServer error:", err);
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }

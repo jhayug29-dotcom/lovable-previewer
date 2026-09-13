@@ -42,7 +42,8 @@ export async function listCollaboratorPartnersSafe(accessToken?: string) {
     .from("collaborator_partner_products")
     .select("user_id,product_id")
     .in("user_id", userIds);
-  if (accessError) throw new Error(`Could not load collaborator product access: ${accessError.message}`);
+  if (accessError)
+    throw new Error(`Could not load collaborator product access: ${accessError.message}`);
 
   const productIdsByUser = new Map<string, string[]>();
   for (const row of accessRows ?? []) {
@@ -59,13 +60,15 @@ export async function listCollaboratorPartnersSafe(accessToken?: string) {
       .from("products")
       .select("id,title,category,price,active")
       .in("id", allProductIds);
-    if (productsError) throw new Error(`Could not load collaborator products: ${productsError.message}`);
+    if (productsError)
+      throw new Error(`Could not load collaborator products: ${productsError.message}`);
     products = (productRows ?? []) as Product[];
   }
 
   const productsById = new Map(products.map((product) => [product.id, product]));
   const rowsByUser = new Map<string, LinkRow[]>();
-  for (const row of rows) rowsByUser.set(row.user_id, [...(rowsByUser.get(row.user_id) ?? []), row]);
+  for (const row of rows)
+    rowsByUser.set(row.user_id, [...(rowsByUser.get(row.user_id) ?? []), row]);
 
   return [...rowsByUser.entries()].map(([userId, userLinks]) => {
     const productIds = [...new Set(productIdsByUser.get(userId) ?? [])];
