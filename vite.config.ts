@@ -10,8 +10,32 @@ import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 // right server output. Inside Lovable the preset is forced to Cloudflare anyway.
 const preset = process.env["NITRO_PRESET"] ?? (process.env["VERCEL"] ? "vercel" : undefined);
 
+const cashfreeSalePricingGuard = {
+  name: "editly-cashfree-sale-pricing-guard",
+  enforce: "pre" as const,
+  transform(code: string, id: string) {
+    if (!id.replaceAll("\\", "/").endsWith("/src/lib/cashfree.server.ts")) return null;
+
+    const duplicateSaleLine =
+      "  const salePrice = await applySalePricing(product.id, Number(product.price));\n  const amount = await applyCoupon(salePrice, input.couponCode, product.id);";
+    const correctedLine =
+      "  // catalog.loadProduct() already applies the active store sale; never discount the sale price twice.\n  const amount = await applyCoupon(Number(product.price), input.couponCode, product.id);";
+
+    if (code.includes(duplicateSaleLine)) {
+      return {
+        code: code.replace(duplicateSaleLine, correctedLine),
+        map: null,
+      };
+    }
+
+    // Already fixed (or intentionally changed upstream); do not alter the module.
+    return null;
+  },
+};
+
 export default defineConfig({
   vite: {
+    plugins: [cashfreeSalePricingGuard],
     server: {
       host: "0.0.0.0",
       port: 3000,
