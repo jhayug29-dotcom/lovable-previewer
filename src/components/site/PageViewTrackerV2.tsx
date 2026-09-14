@@ -8,6 +8,7 @@ import { getReferralCode, getVisitorSessionId, saveReferralCode } from "@/lib/re
 /** Product-aware anonymous and authenticated page-view tracking with collaborator attribution. */
 export function PageViewTrackerV2() {
   const path = useRouterState({ select: (state) => state.location.pathname });
+  const search = useRouterState({ select: (state) => state.location.search });
   const logView = useServerFn(recordPageView);
   const lastRecordedRef = useRef<string>("");
 
@@ -16,8 +17,15 @@ export function PageViewTrackerV2() {
     if (path.startsWith("/admin")) return;
 
     // 1. Detect and persist any incoming ref from query params or storage/cookie
-    const params = new URLSearchParams(window.location.search);
-    const incomingRef = params.get("ref");
+    const searchString = window.location.search || (typeof search === "string" ? search : "");
+    const params = new URLSearchParams(searchString.startsWith("?") ? searchString : `?${searchString}`);
+    const incomingRef =
+      params.get("ref") ||
+      params.get("c") ||
+      params.get("code") ||
+      params.get("collab") ||
+      params.get("collaborator");
+
     if (incomingRef) {
       saveReferralCode(incomingRef);
     }
@@ -54,10 +62,10 @@ export function PageViewTrackerV2() {
       } catch (err) {
         console.warn("Could not record visitor view via server function:", err);
       }
-    }, 400);
+    }, 300);
 
     return () => window.clearTimeout(timer);
-  }, [path, logView]);
+  }, [path, search, logView]);
 
   return null;
 }

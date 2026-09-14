@@ -344,34 +344,49 @@ function ProductPage() {
 
         {/* Reviews */}
         <div className="mt-8">
-          <h2 className="font-display text-3xl font-extrabold text-ink">Reviews</h2>
-          <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {product.reviews.map((review, i) => (
-              <div
-                key={review.handle}
-                className="glass hover-pop animate-rise-in rounded-4xl p-7"
-                style={{ animationDelay: `${i * 90}ms` }}
-              >
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: 5 }).map((_, s) => (
-                    <Star
-                      key={s}
-                      className={`size-4 ${s < review.rating ? "fill-accent text-accent" : "text-muted-foreground/40"}`}
-                      strokeWidth={1.5}
-                    />
-                  ))}
-                </div>
-                <p className="mt-4 leading-relaxed text-ink/85">“{review.body}”</p>
-                <div className="mt-5 flex items-center justify-between text-sm">
-                  <span className="font-semibold text-ink">
-                    {review.name}{" "}
-                    <span className="font-normal text-muted-foreground">{review.handle}</span>
-                  </span>
-                  <span className="text-muted-foreground">{review.date}</span>
-                </div>
-              </div>
-            ))}
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-3xl font-extrabold text-ink">Reviews</h2>
+            {product.reviews.length > 0 ? (
+              <span className="rounded-full bg-accent/15 px-3 py-1 text-xs font-bold text-accent">
+                {product.reviews.length} {product.reviews.length === 1 ? "review" : "reviews"}
+              </span>
+            ) : null}
           </div>
+          {product.reviews.length > 0 ? (
+            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {product.reviews.map((review, i) => (
+                <div
+                  key={`${review.handle || "rev"}-${i}`}
+                  className="glass hover-pop animate-rise-in rounded-4xl p-7"
+                  style={{ animationDelay: `${i * 90}ms` }}
+                >
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, s) => (
+                      <Star
+                        key={s}
+                        className={`size-4 ${s < review.rating ? "fill-accent text-accent" : "text-muted-foreground/40"}`}
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                  </div>
+                  <p className="mt-4 leading-relaxed text-ink/85">“{review.body}”</p>
+                  <div className="mt-5 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-ink">
+                      {review.name}{" "}
+                      <span className="font-normal text-muted-foreground">{review.handle}</span>
+                    </span>
+                    <span className="text-muted-foreground">{review.date}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-6 rounded-3xl border border-ink/5 bg-black/5 p-8 text-center backdrop-blur-md dark:bg-white/5">
+              <p className="text-sm font-medium text-muted-foreground">
+                No reviews yet for this product.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Related */}

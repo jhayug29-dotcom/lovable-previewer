@@ -78,20 +78,28 @@ async function statsForLink(
   let sales = 0;
   let revenue = 0;
 
-  // 1. Fetch Views (query only real columns: session_id, path, user_id, created_at)
+  const attributedUserSet = new Set<string>();
   try {
+    const filters = [
+      `collaborator_code.eq.${collaboratorCode}`,
+      `collaborator_link_id.eq.${id}`,
+      `collaborator_code.eq.${id}`,
+    ];
+
     const { data: views, error: viewError } = await db
       .from("page_views")
       .select("session_id, path, user_id, created_at")
-      .or(`collaborator_code.eq.${collaboratorCode},collaborator_link_id.eq.${id}`)
+      .or(filters.join(","))
       .limit(100000);
 
     if (!viewError && views) {
       page_views = views.length;
       const uniqueSessions = new Set(views.map((v) => v.session_id).filter(Boolean));
       visitors = uniqueSessions.size;
-      const uniqueUsers = new Set(views.map((v) => v.user_id).filter(Boolean));
-      signups = uniqueUsers.size;
+      for (const v of views) {
+        if (v.user_id) attributedUserSet.add(v.user_id);
+      }
+      signups = attributedUserSet.size;
     }
   } catch (err) {
     console.warn("View stats fetch warning for link:", collaboratorCode, err);
@@ -101,8 +109,7 @@ async function statsForLink(
   try {
     const { data: orders, error: orderError } = await db
       .from("orders")
-      .select("id, product_id, amount, status, user_id, created_at")
-      .eq("collaborator_link_id", id)
+      .select("id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at")
       .limit(100000);
 
     if (!orderError && orders) {
@@ -115,12 +122,22 @@ async function statsForLink(
           amount: number | string | null;
           status: string;
           user_id: string | null;
+          customer_email: string | null;
+          collaborator_link_id: string | null;
         }[]
-      ).filter(
-        (order) =>
-          PAID_STATUSES.has((order.status ?? "").toUpperCase()) &&
-          (!allowed || (order.product_id ? allowed.has(order.product_id) : true)),
-      );
+      ).filter((order) => {
+        const isPaid = PAID_STATUSES.has((order.status ?? "").toUpperCase());
+        if (!isPaid) return false;
+
+        const isDirect = order.collaborator_link_id === id;
+        const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
+        if (!isDirect && !isAttributedUser) return false;
+
+        if (allowed && order.product_id) {
+          return allowed.has(order.product_id);
+        }
+        return true;
+      });
 
       sales = visible.length;
       revenue = visible.reduce((sum, order) => sum + (Number(order.amount) || 0), 0);

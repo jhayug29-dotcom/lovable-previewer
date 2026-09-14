@@ -155,6 +155,7 @@ export async function createOrder(input: CreateOrderInput) {
       customer_email: input.customerEmail,
       customer_name: input.customerName,
       customer_phone: input.customerPhone,
+      download_link: product.download_link,
       origin: input.origin,
       collaborator_link_id: collaborator?.id ?? null,
     });
@@ -177,6 +178,8 @@ type SettleRow = {
   status: string;
   amount: number;
   user_id?: string | null;
+  product_id?: string | null;
+  download_link?: string | null;
   collaborator_link_id?: string | null;
   coupon_code: string | null;
   customer_email: string | null;
@@ -188,20 +191,62 @@ type SettleRow = {
 };
 
 const ORDER_COLUMNS =
-  "id, status, amount, user_id, collaborator_link_id, coupon_code, customer_email, customer_phone, customer_name, origin, receipt_sent_at, products(*)";
+  "id, status, amount, user_id, product_id, download_link, collaborator_link_id, coupon_code, customer_email, customer_phone, customer_name, origin, receipt_sent_at, products(*)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
-  const { data } = await adminClient()
+  const db = adminClient();
+  const { data } = await db
     .from("orders")
     .select(ORDER_COLUMNS)
     .eq("cf_order_id", cfOrderId)
     .maybeSingle();
-  return (data as SettleRow | null) ?? null;
+
+  if (!data) return null;
+  const row = data as SettleRow;
+
+  // Resilient fallback: If products join didn't populate, look up product directly
+  if ((!row.products || !row.products.download_link) && row.product_id) {
+    try {
+      const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
+      const prod = await fetchCatalogProduct(row.product_id);
+      if (prod) {
+        row.products = {
+          id: prod.id,
+          slug: prod.slug,
+          title: prod.title,
+          download_link: prod.downloadLink ?? row.download_link ?? null,
+        };
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Ensure download_link is populated from either place
+  if (row.products && !row.products.download_link && row.download_link) {
+    row.products.download_link = row.download_link;
+  }
+
+  return row;
 }
 
 async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<string | null> {
   const db = adminClient();
-  const link = row.products?.download_link ?? null;
+  let link = row.products?.download_link ?? row.download_link ?? null;
+
+  // Fallback direct product search if link is still missing
+  if (!link && (row.product_id || row.products?.slug)) {
+    try {
+      const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
+      const prod = await fetchCatalogProduct(row.product_id || row.products?.slug || "");
+      if (prod?.downloadLink) {
+        link = prod.downloadLink;
+        if (row.products) row.products.download_link = link;
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   let resolvedLinkId = row.collaborator_link_id;
   if (!resolvedLinkId) {
@@ -212,7 +257,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     if (deduced?.id) resolvedLinkId = deduced.id;
   }
 
-  if (row.status !== "PAID") {
+  if (row.status !== "PAID" || !row.receipt_sent_at) {
     await db
       .from("orders")
       .update({
@@ -240,7 +285,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       orderId: cfOrderId,
       linkId: resolvedLinkId,
       amount: Number(row.amount ?? 0),
-      productId: row.products?.id,
+      productId: row.products?.id ?? row.product_id,
     });
   }
 
@@ -248,12 +293,14 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     const fallback = row.origin ? `${row.origin}/product/${row.products?.slug ?? ""}` : "";
     const sent = await sendReceiptEmail({
       toEmail: row.customer_email,
-      customerName: row.customer_name ?? row.customer_email.split("@")[0] ?? "there",
-      customerPhone: row.customer_phone ?? "",
+      customerName:
+        row.customer_name?.trim() || row.customer_email.split("@")[0] || "Valued Customer",
+      customerPhone: row.customer_phone?.trim() || "",
       productName: row.products?.title ?? "Editly Store purchase",
       amount: Number(row.amount ?? 0),
       orderId: cfOrderId,
       downloadLink: link ?? fallback,
+      storeName: "Editly Store",
     });
     if (sent)
       await db
@@ -273,6 +320,7 @@ export type VerifiedOrder = {
   downloadLink: string | null;
   email: string | null;
   phone: string | null;
+  customerName: string | null;
   receiptSent: boolean;
   paidAt: string;
 };
@@ -299,10 +347,13 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
     productTitle: row?.products?.title ?? "Editly Store purchase",
     productSlug: row?.products?.slug ?? "",
     downloadLink: paid
-      ? link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
+      ? link ||
+        row?.download_link ||
+        (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
       : null,
     email: row?.customer_email ?? null,
     phone: row?.customer_phone ?? null,
+    customerName: row?.customer_name ?? null,
     receiptSent: paid ? Boolean(row?.receipt_sent_at) || Boolean(link) : false,
     paidAt: new Date().toISOString(),
   };
@@ -346,6 +397,22 @@ export async function claimFree(
       amount: 0,
       productId: product.id,
     });
+  }
+
+  if (user.email) {
+    void sendReceiptEmail({
+      toEmail: user.email,
+      customerName:
+        (user.user_metadata?.["full_name"] as string | undefined) ??
+        user.email.split("@")[0] ??
+        "Valued Customer",
+      customerPhone: (user.user_metadata?.["phone"] as string | undefined) ?? "",
+      productName: product.title,
+      amount: 0,
+      orderId: cfOrderId,
+      downloadLink: product.download_link ?? "",
+      storeName: "Editly Store",
+    }).catch(() => false);
   }
 
   return { downloadLink: product.download_link, productTitle: product.title };

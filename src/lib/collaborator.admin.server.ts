@@ -58,13 +58,22 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
   let sales = 0;
   let revenue = 0;
 
-  // 1. Safe page_views query (only real columns: session_id, path, user_id, created_at)
+  // 1. Safe page_views query (capturing code, link_id, or name match)
   const attributedUserSet = new Set<string>();
   try {
+    const filters = [
+      `collaborator_code.eq.${link.code}`,
+      `collaborator_link_id.eq.${link.id}`,
+      `collaborator_code.eq.${link.id}`,
+    ];
+    if (link.name && link.name.trim()) {
+      filters.push(`collaborator_code.ilike.${link.name.trim()}`);
+    }
+
     const { data: views, error: viewError } = await db
       .from("page_views")
       .select("session_id, path, user_id, created_at")
-      .or(`collaborator_code.eq.${link.code},collaborator_link_id.eq.${link.id}`)
+      .or(filters.join(","))
       .limit(100000);
 
     if (!viewError && views) {
@@ -80,11 +89,11 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
     console.warn("View stats fetch warning for link:", link.code, err);
   }
 
-  // 2. Comprehensive orders query (attributing via link id or attributed user)
+  // 2. Comprehensive orders query (attributing via link id, attributed user, or email)
   try {
     const { data: orders, error: orderError } = await db
       .from("orders")
-      .select("id, product_id, amount, status, user_id, collaborator_link_id, created_at")
+      .select("id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at")
       .limit(100000);
 
     if (!orderError && orders) {
@@ -96,6 +105,7 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
           amount: number | string | null;
           status: string;
           user_id: string | null;
+          customer_email: string | null;
           collaborator_link_id: string | null;
         }[]
       ).filter((order) => {
@@ -104,10 +114,13 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
 
         const isDirect = order.collaborator_link_id === link.id;
         const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
-        if (!isDirect && !isAttributedUser) return false;
+        const isAttributedEmail =
+          Boolean(order.customer_email && link.email && order.customer_email.toLowerCase() === link.email.toLowerCase());
 
-        if (allowedProductIds.length > 0) {
-          return order.product_id ? allowed.has(order.product_id) : false;
+        if (!isDirect && !isAttributedUser && !isAttributedEmail) return false;
+
+        if (allowedProductIds.length > 0 && order.product_id) {
+          return allowed.has(order.product_id);
         }
         return true;
       });

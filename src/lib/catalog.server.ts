@@ -26,6 +26,7 @@ function isSupabaseConfigured(): boolean {
 function publicClient(): SupabaseClient | null {
   const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL");
   const key =
+    env("SUPABASE_SERVICE_ROLE_KEY") ??
     env("VITE_SUPABASE_PUBLISHABLE_KEY") ??
     env("VITE_SUPABASE_ANON_KEY") ??
     env("SUPABASE_PUBLISHABLE_KEY") ??
@@ -37,6 +38,11 @@ function publicClient(): SupabaseClient | null {
 const TTL_MS = 30_000;
 let cache: { at: number; products: DbProduct[] } | null = null;
 let inflight: Promise<DbProduct[]> | null = null;
+
+export function clearCatalogCache(): void {
+  cache = null;
+  inflight = null;
+}
 
 async function queryProducts(): Promise<DbProduct[]> {
   const client = publicClient();
@@ -174,6 +180,21 @@ export async function loadProduct(slug: string): Promise<DbProduct | null> {
         if (!basic.error && basic.data) {
           data = basic.data;
           error = null;
+        }
+      }
+
+      if (data && (!Array.isArray((data as Row)["reviews"]) || (data as Row)["reviews"].length === 0)) {
+        try {
+          const { data: revs } = await db
+            .from("reviews")
+            .select("*")
+            .eq("product_id", (data as Row).id)
+            .order("created_at", { ascending: false });
+          if (revs && revs.length > 0) {
+            (data as Row).reviews = revs;
+          }
+        } catch {
+          // ignore
         }
       }
 

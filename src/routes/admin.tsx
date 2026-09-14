@@ -912,30 +912,82 @@ function ReviewsTab() {
         </PrimaryButton>
       </Card>
       <Card title="Existing reviews">
-        <ReviewList />
+        <ReviewList products={rows} selectedProductId={productId} onSelectProduct={setProductId} />
       </Card>
     </div>
   );
 }
 
-type ReviewRow = { id: string; name: string; handle: string; rating: number; body: string };
+type ReviewRow = {
+  id: string;
+  product_id?: string;
+  name: string;
+  handle: string;
+  rating: number;
+  body: string;
+  created_at?: string;
+};
 
-function ReviewList() {
+function ReviewList({
+  products,
+  selectedProductId,
+  onSelectProduct,
+}: {
+  products: ProductRow[];
+  selectedProductId: string;
+  onSelectProduct: (id: string) => void;
+}) {
   const { data: rows = [] } = useTable<ReviewRow>("reviews");
   const remove = useRemove("reviews");
+
+  const productMap = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
+  const filtered = useMemo(() => {
+    if (!selectedProductId) return rows;
+    return rows.filter((r) => r.product_id === selectedProductId);
+  }, [rows, selectedProductId]);
+
   return (
-    <RowList
-      rows={rows}
-      onDelete={(id) => remove.mutate(id)}
-      render={(r) => (
-        <>
-          <span className="font-semibold">{r.name}</span>{" "}
-          <span className="text-muted-foreground">
-            {r.handle} · {r.rating}★ — {r.body}
-          </span>
-        </>
-      )}
-    />
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="font-semibold text-muted-foreground">
+          Showing {filtered.length} of {rows.length} reviews
+        </span>
+        {selectedProductId ? (
+          <button
+            type="button"
+            onClick={() => onSelectProduct("")}
+            className="font-medium text-primary hover:underline"
+          >
+            Show all products
+          </button>
+        ) : null}
+      </div>
+      <RowList
+        rows={filtered}
+        onDelete={(id) => remove.mutate(id)}
+        render={(r) => {
+          const prod = r.product_id ? productMap.get(r.product_id) : null;
+          return (
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-ink">{r.name}</span>
+                <span className="text-xs text-muted-foreground">{r.handle}</span>
+                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent">
+                  {r.rating}★
+                </span>
+                {prod ? (
+                  <span className="truncate rounded-md bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    {prod.title}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{r.body}</p>
+            </div>
+          );
+        }}
+      />
+    </div>
   );
 }
 

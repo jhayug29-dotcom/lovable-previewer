@@ -455,36 +455,16 @@ export async function recordPageViewServer(params: {
     let linkId = params.collaboratorLinkId?.trim() || null;
     const userId = params.userId?.trim() || null;
 
-    if (cleanCode && !linkId) {
+    if (cleanCode || linkId) {
       try {
-        const { data } = await db
-          .from("collaborator_links")
-          .select("id, code")
-          .eq("code", cleanCode)
-          .maybeSingle();
-        if (data?.id) {
-          linkId = data.id;
+        const { resolveCollaboratorLink } = await import("./collaborator.engine.server");
+        const resolved = await resolveCollaboratorLink(cleanCode || linkId || "");
+        if (resolved?.id) {
+          linkId = resolved.id;
+          cleanCode = resolved.code;
         }
       } catch {
-        try {
-          const { data: rpcData } = await db.rpc("resolve_collaborator_link", {
-            link_code: cleanCode,
-          });
-          if (rpcData) linkId = String(rpcData);
-        } catch {
-          // Ignore RPC failure
-        }
-      }
-    } else if (linkId && !cleanCode) {
-      try {
-        const { data } = await db
-          .from("collaborator_links")
-          .select("code")
-          .eq("id", linkId)
-          .maybeSingle();
-        if (data?.code) cleanCode = data.code;
-      } catch {
-        // Ignore link code lookup failure
+        // Continue with raw values if lookup fails
       }
     }
 
@@ -512,6 +492,16 @@ export async function recordPageViewServer(params: {
       console.warn("Could not record page view in db:", error.message);
       return { success: false, error: error.message };
     }
+
+    if (linkId) {
+      try {
+        const { broadcastCollaboratorRealtimeEvent } = await import("./collaborator.engine.server");
+        broadcastCollaboratorRealtimeEvent("page_view", { linkId, code: cleanCode, path: cleanPath });
+      } catch {
+        // Ignore broadcast failure
+      }
+    }
+
     return { success: true, linkId, code: cleanCode };
   } catch (err) {
     console.warn("recordPageViewServer error:", err);

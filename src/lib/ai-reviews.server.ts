@@ -1,4 +1,5 @@
 import { requireAdmin, adminClient } from "./supabase.server";
+import { clearCatalogCache } from "./catalog.server";
 
 export type GeneratedReview = { name: string; handle: string; rating: number; body: string };
 
@@ -79,18 +80,18 @@ Return ONLY valid JSON: an array of ${count} objects with keys "name", "handle",
 - rating: integer 4 or 5 (make roughly 1 in 5 a 4)
 - body: 1-2 sentences, 12-30 words, specific about editing workflow, no emojis, no marketing tone`;
 
-      // Try gemini-2.5-flash first, then gemini-1.5-flash
-      const models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-flash-latest"];
+      // Supported modern models: gemini-3.6-flash, gemini-3.5-flash
+      const models = ["gemini-3.6-flash", "gemini-3.5-flash"];
       let success = false;
 
       for (const model of models) {
         if (success) break;
         try {
           const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
               method: "POST",
-              headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: { responseMimeType: "application/json", temperature: 0.9 },
@@ -103,7 +104,8 @@ Return ONLY valid JSON: an array of ${count} objects with keys "name", "handle",
               candidates?: { content?: { parts?: { text?: string }[] } }[];
             };
             const text = payload.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-            const parsed = JSON.parse(text) as GeneratedReview[];
+            const cleanJson = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+            const parsed = JSON.parse(cleanJson) as GeneratedReview[];
             if (Array.isArray(parsed) && parsed.length > 0) {
               reviews = parsed.slice(0, count).map((r) => ({
                 name: String(r.name ?? "Anonymous"),
@@ -128,12 +130,20 @@ Return ONLY valid JSON: an array of ${count} objects with keys "name", "handle",
   }
 
   if (input.save && reviews.length > 0) {
-    try {
-      const db = adminClient();
-      await db.from("reviews").insert(reviews.map((r) => ({ ...r, product_id: input.productId })));
-    } catch (err) {
-      console.warn("Failed to persist generated reviews to database:", err);
+    const db = adminClient();
+    const rowsToInsert = reviews.map((r) => ({
+      product_id: input.productId,
+      name: r.name,
+      handle: r.handle,
+      rating: r.rating,
+      body: r.body,
+    }));
+    const { error: insertError } = await db.from("reviews").insert(rowsToInsert);
+    if (insertError) {
+      console.error("Failed to persist generated reviews to database:", insertError);
+      throw new Error(`Failed to save reviews: ${insertError.message}`);
     }
+    clearCatalogCache();
   }
 
   return reviews;
