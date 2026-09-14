@@ -3,7 +3,6 @@ import { sendReceiptEmail } from "./receipt.server";
 import {
   broadcastCollaboratorRealtimeEvent,
   intelligentResolveCollaborator,
-  resolveCollaboratorLink,
 } from "./collaborator.engine.server";
 
 const CF_BASE =
@@ -109,7 +108,7 @@ export async function createOrder(input: CreateOrderInput) {
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
   const salePrice = await applySalePricing(product.id, Number(product.price));
-  const amount = await applyCoupon(salePrice, input.couponCode, product.id as string);
+  const amount = await applyCoupon(salePrice, input.couponCode, product.id);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
   const collaborator = await intelligentResolveCollaborator({
@@ -143,7 +142,7 @@ export async function createOrder(input: CreateOrderInput) {
     );
   }
 
-  await adminClient()
+  const { error: orderInsertError } = await adminClient()
     .from("orders")
     .insert({
       user_id: user?.id ?? null,
@@ -159,6 +158,8 @@ export async function createOrder(input: CreateOrderInput) {
       origin: input.origin,
       collaborator_link_id: collaborator?.id ?? null,
     });
+
+  if (orderInsertError) throw new Error(`Could not record order: ${orderInsertError.message}`);
 
   if (collaborator?.id) {
     broadcastCollaboratorRealtimeEvent("order_pending", {
@@ -195,16 +196,16 @@ const ORDER_COLUMNS =
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   const db = adminClient();
-  const { data } = await db
+  const { data, error } = await db
     .from("orders")
     .select(ORDER_COLUMNS)
     .eq("cf_order_id", cfOrderId)
     .maybeSingle();
 
+  if (error) throw new Error(`Could not load order ${cfOrderId}: ${error.message}`);
   if (!data) return null;
   const row = data as SettleRow;
 
-  // Resilient fallback: If products join didn't populate, look up product directly
   if ((!row.products || !row.products.download_link) && row.product_id) {
     try {
       const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
@@ -218,11 +219,10 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
         };
       }
     } catch {
-      // ignore
+      // Product metadata fallback is best effort.
     }
   }
 
-  // Ensure download_link is populated from either place
   if (row.products && !row.products.download_link && row.download_link) {
     row.products.download_link = row.download_link;
   }
@@ -230,11 +230,28 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   return row;
 }
 
+const PAID_STATUSES = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"] as const;
+
+/** Keep the denormalized products.sales counter aligned with the authoritative orders table. */
+async function syncProductSalesCounter(productId: string | null | undefined) {
+  if (!productId) return;
+  const db = adminClient();
+  const { data, error } = await db
+    .from("orders")
+    .select("id")
+    .eq("product_id", productId)
+    .in("status", [...PAID_STATUSES]);
+  if (error) throw new Error(`Could not sync product sales: ${error.message}`);
+
+  const sales = data?.length ?? 0;
+  const { error: updateError } = await db.from("products").update({ sales }).eq("id", productId);
+  if (updateError) throw new Error(`Could not update product sales: ${updateError.message}`);
+}
+
 async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<string | null> {
   const db = adminClient();
   let link = row.products?.download_link ?? row.download_link ?? null;
 
-  // Fallback direct product search if link is still missing
   if (!link && (row.product_id || row.products?.slug)) {
     try {
       const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
@@ -244,7 +261,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
         if (row.products) row.products.download_link = link;
       }
     } catch {
-      // ignore
+      // Best effort only; the payment should still be settled.
     }
   }
 
@@ -257,30 +274,42 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     if (deduced?.id) resolvedLinkId = deduced.id;
   }
 
-  if (row.status !== "PAID" || !row.receipt_sent_at) {
-    await db
+  const alreadyPaid = row.status === "PAID";
+  if (!alreadyPaid || !row.receipt_sent_at) {
+    const updatePayload: Record<string, unknown> = {
+      status: "PAID",
+      download_link: link,
+      paid_at: new Date().toISOString(),
+    };
+    if (resolvedLinkId) updatePayload.collaborator_link_id = resolvedLinkId;
+
+    const { error: updateError } = await db
       .from("orders")
-      .update({
-        status: "PAID",
-        download_link: link,
-        paid_at: new Date().toISOString(),
-        ...(resolvedLinkId ? { collaborator_link_id: resolvedLinkId } : {}),
-      })
+      .update(updatePayload)
       .eq("id", row.id);
+    if (updateError) throw new Error(`Could not settle order: ${updateError.message}`);
+
     if (row.coupon_code) {
-      const { data: coupon } = await db
+      const { data: coupon, error: couponError } = await db
         .from("coupons")
         .select("id, used_count")
         .ilike("code", row.coupon_code.trim())
         .maybeSingle();
-      const found = coupon as { id: string; used_count: number } | null;
-      if (found)
+      if (!couponError && coupon) {
         await db
           .from("coupons")
-          .update({ used_count: (found.used_count ?? 0) + 1 })
-          .eq("id", found.id);
+          .update({ used_count: (coupon.used_count ?? 0) + 1 })
+          .eq("id", coupon.id);
+      }
     }
+  }
 
+  // Always reconcile the denormalized counter. This makes admin analytics reflect a
+  // payment immediately, even when the buyer reaches the payment/status page before
+  // a webhook arrives.
+  await syncProductSalesCounter(row.product_id ?? row.products?.id);
+
+  if (!alreadyPaid) {
     broadcastCollaboratorRealtimeEvent("order_paid", {
       orderId: cfOrderId,
       linkId: resolvedLinkId,
@@ -302,11 +331,12 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       downloadLink: link ?? fallback,
       storeName: "Editly Store",
     });
-    if (sent)
+    if (sent) {
       await db
         .from("orders")
         .update({ receipt_sent_at: new Date().toISOString() })
         .eq("id", row.id);
+    }
   }
 
   return link;
@@ -375,7 +405,7 @@ export async function claimFree(
 
   const cfOrderId = `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  await adminClient()
+  const { error: orderError } = await adminClient()
     .from("orders")
     .insert({
       user_id: user.id,
@@ -388,6 +418,9 @@ export async function claimFree(
       paid_at: new Date().toISOString(),
       collaborator_link_id: collaborator?.id ?? null,
     });
+
+  if (orderError) throw new Error(`Could not record free order: ${orderError.message}`);
+  await syncProductSalesCounter(product.id);
 
   if (collaborator?.id) {
     broadcastCollaboratorRealtimeEvent("order_paid", {
@@ -402,11 +435,8 @@ export async function claimFree(
   if (user.email) {
     void sendReceiptEmail({
       toEmail: user.email,
-      customerName:
-        (user.user_metadata?.["full_name"] as string | undefined) ??
-        user.email.split("@")[0] ??
-        "Valued Customer",
-      customerPhone: (user.user_metadata?.["phone"] as string | undefined) ?? "",
+      customerName: user.email.split("@")[0] || "Valued Customer",
+      customerPhone: "",
       productName: product.title,
       amount: 0,
       orderId: cfOrderId,
@@ -426,5 +456,6 @@ export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED"
     return;
   }
   if (row.status === "PAID") return;
-  await adminClient().from("orders").update({ status: "FAILED" }).eq("id", row.id);
+  const { error } = await adminClient().from("orders").update({ status: "FAILED" }).eq("id", row.id);
+  if (error) throw new Error(`Could not mark order failed: ${error.message}`);
 }
