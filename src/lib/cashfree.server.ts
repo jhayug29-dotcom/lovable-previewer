@@ -108,6 +108,44 @@ export type CreateOrderInput = {
   collaboratorCode?: string | undefined;
 };
 
+async function persistPendingOrder(input: {
+  userId: string | null;
+  product: ProductRow;
+  cfOrderId: string;
+  amount: number;
+  couponCode?: string | undefined;
+  customerEmail: string;
+  customerName: string;
+  customerPhone: string;
+  origin: string;
+  collaboratorLinkId: string | null;
+}) {
+  try {
+    const { error } = await adminClient().from("orders").insert({
+      user_id: input.userId,
+      product_id: input.product.id,
+      cf_order_id: input.cfOrderId,
+      amount: input.amount,
+      status: "PENDING",
+      coupon_code: input.couponCode ?? null,
+      customer_email: input.customerEmail,
+      customer_name: input.customerName,
+      customer_phone: input.customerPhone,
+      download_link: input.product.download_link,
+      origin: input.origin,
+      collaborator_link_id: input.collaboratorLinkId,
+    });
+    if (error) {
+      console.error("[Cashfree] Pending order persistence failed; checkout will continue:", error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[Cashfree] Pending order persistence threw; checkout will continue:", error);
+    return false;
+  }
+}
+
 export async function createOrder(input: CreateOrderInput) {
   const product = await loadProduct(input.slug);
   if (product.is_free) throw new Error("This product is free — no payment needed");
@@ -135,8 +173,18 @@ export async function createOrder(input: CreateOrderInput) {
         customer_email: input.customerEmail,
         customer_phone: input.customerPhone.replace(/\D/g, "").slice(-10).padStart(10, "0"),
       },
-      order_meta: { return_url: `${input.origin}/payment/status?order_id=${cfOrderId}` },
-      order_note: product.title.slice(0, 50),
+      order_meta: {
+        return_url: `${input.origin}/payment/status?order_id=${cfOrderId}`,
+      },
+      order_note: product.title.slice(0, 200),
+      order_tags: {
+        product_id: product.id,
+        product_slug: product.slug,
+        user_id: user?.id ?? "",
+        collaborator_link_id: collaborator?.id ?? "",
+        coupon_code: input.couponCode ?? "",
+        origin: input.origin.slice(0, 200),
+      },
     }),
   });
 
@@ -149,24 +197,18 @@ export async function createOrder(input: CreateOrderInput) {
     throw new Error(`Cashfree ${CASHFREE_MODE} order creation failed: ${detail}`);
   }
 
-  const { error: orderInsertError } = await adminClient()
-    .from("orders")
-    .insert({
-      user_id: user?.id ?? null,
-      product_id: product.id,
-      cf_order_id: cfOrderId,
-      amount,
-      status: "PENDING",
-      coupon_code: input.couponCode ?? null,
-      customer_email: input.customerEmail,
-      customer_name: input.customerName,
-      customer_phone: input.customerPhone,
-      download_link: product.download_link,
-      origin: input.origin,
-      collaborator_link_id: collaborator?.id ?? null,
-    });
-
-  if (orderInsertError) throw new Error(`Could not record order: ${orderInsertError.message}`);
+  const persisted = await persistPendingOrder({
+    userId: user?.id ?? null,
+    product,
+    cfOrderId,
+    amount,
+    couponCode: input.couponCode,
+    customerEmail: input.customerEmail,
+    customerName: input.customerName,
+    customerPhone: input.customerPhone,
+    origin: input.origin,
+    collaboratorLinkId: collaborator?.id ?? null,
+  });
 
   if (collaborator?.id) {
     broadcastCollaboratorRealtimeEvent("order_pending", {
@@ -183,6 +225,7 @@ export async function createOrder(input: CreateOrderInput) {
     paymentSessionId: payload.payment_session_id,
     amount,
     cashfreeMode: CASHFREE_MODE,
+    orderPersisted: persisted,
   };
 }
 
@@ -240,6 +283,84 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   }
 
   return row;
+}
+
+type CashfreeOrderPayload = {
+  order_status?: string;
+  order_amount?: number;
+  message?: string;
+  order_tags?: Record<string, string | undefined>;
+  order_meta?: { return_url?: string };
+  customer_details?: {
+    customer_id?: string;
+    customer_email?: string;
+    customer_phone?: string;
+    customer_name?: string;
+  };
+};
+
+async function fetchCashfreeOrder(cfOrderId: string): Promise<CashfreeOrderPayload> {
+  const response = await fetch(`${CF_BASE}/orders/${cfOrderId}`, { headers: cfHeaders() });
+  const payload = (await response.json()) as CashfreeOrderPayload;
+  if (!response.ok) throw new Error(payload.message ?? `Could not fetch Cashfree order (${response.status})`);
+  return payload;
+}
+
+async function recoverOrderFromCashfree(
+  cfOrderId: string,
+  payload: CashfreeOrderPayload,
+): Promise<SettleRow | null> {
+  const tags = payload.order_tags ?? {};
+  const productId = tags.product_id || null;
+  const productSlug = tags.product_slug || "";
+  const origin = tags.origin || (() => {
+    try {
+      return payload.order_meta?.return_url ? new URL(payload.order_meta.return_url).origin : null;
+    } catch {
+      return null;
+    }
+  })();
+  const customer = payload.customer_details ?? {};
+  const userId = tags.user_id || customer.customer_id || null;
+  const collaboratorLinkId = tags.collaborator_link_id || null;
+
+  if (!productId && !productSlug) return null;
+
+  let product: ProductRow | null = null;
+  try {
+    const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
+    product = await fetchCatalogProduct(productId || productSlug);
+  } catch {
+    product = null;
+  }
+
+  const status =
+    payload.order_status === "PAID"
+      ? "PAID"
+      : payload.order_status === "ACTIVE"
+        ? "PENDING"
+        : "FAILED";
+
+  const row = {
+    user_id: userId,
+    product_id: productId || product?.id || productSlug,
+    cf_order_id: cfOrderId,
+    amount: Number(payload.order_amount ?? 0),
+    status,
+    coupon_code: tags.coupon_code || null,
+    customer_email: customer.customer_email || null,
+    customer_name: customer.customer_name || null,
+    customer_phone: customer.customer_phone || null,
+    download_link: product?.download_link ?? null,
+    origin,
+    collaborator_link_id: collaboratorLinkId || null,
+    paid_at: status === "PAID" ? new Date().toISOString() : null,
+  };
+
+  const { error } = await adminClient().from("orders").upsert(row, { onConflict: "cf_order_id" });
+  if (error) throw new Error(`Could not recover order ${cfOrderId}: ${error.message}`);
+
+  return loadOrder(cfOrderId);
 }
 
 const PAID_STATUSES = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"] as const;
@@ -364,20 +485,19 @@ export type VerifiedOrder = {
 };
 
 export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
-  const response = await fetch(`${CF_BASE}/orders/${cfOrderId}`, { headers: cfHeaders() });
-  const payload = (await response.json()) as {
-    order_status?: string;
-    order_amount?: number;
-    message?: string;
-  };
-  if (!response.ok) throw new Error(payload.message ?? "Could not verify the payment");
+  const payload = await fetchCashfreeOrder(cfOrderId);
   const paid = payload.order_status === "PAID";
   const status: VerifiedOrder["status"] = paid
     ? "PAID"
     : payload.order_status === "ACTIVE"
       ? "PENDING"
       : "FAILED";
-  const row = await loadOrder(cfOrderId);
+
+  let row = await loadOrder(cfOrderId);
+  if (!row) {
+    row = await recoverOrderFromCashfree(cfOrderId, payload);
+  }
+
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
   return {
     status,
@@ -389,9 +509,9 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
         row?.download_link ||
         (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
       : null,
-    email: row?.customer_email ?? null,
-    phone: row?.customer_phone ?? null,
-    customerName: row?.customer_name ?? null,
+    email: row?.customer_email ?? payload.customer_details?.customer_email ?? null,
+    phone: row?.customer_phone ?? payload.customer_details?.customer_phone ?? null,
+    customerName: row?.customer_name ?? payload.customer_details?.customer_name ?? null,
     receiptSent: paid ? Boolean(row?.receipt_sent_at) || Boolean(link) : false,
     paidAt: new Date().toISOString(),
   };
@@ -457,7 +577,15 @@ export async function claimFree(
 }
 
 export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED") {
-  const row = await loadOrder(cfOrderId);
+  let row = await loadOrder(cfOrderId);
+  if (!row) {
+    try {
+      const payload = await fetchCashfreeOrder(cfOrderId);
+      row = await recoverOrderFromCashfree(cfOrderId, payload);
+    } catch {
+      row = null;
+    }
+  }
   if (!row) return;
   if (status === "PAID") {
     await settlePaidOrder(cfOrderId, row);
