@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { products as fallbackProducts } from "@/lib/products";
+import { products as fallbackProducts, getProduct } from "@/lib/products";
 import {
   mapProduct,
   PRODUCT_SELECT,
@@ -28,13 +28,13 @@ export async function fetchProducts(): Promise<DbProduct[]> {
 }
 
 export async function fetchProduct(slug: string): Promise<DbProduct | undefined> {
-  if (!supabase) return fallbackProducts.find((p) => p.slug === slug);
+  if (!supabase) return getProduct(slug);
   const { data, error } = await supabase
     .from("products")
     .select(SELECT)
     .eq("slug", slug)
     .maybeSingle();
-  if (error || !data) return fallbackProducts.find((p) => p.slug === slug);
+  if (error || !data) return getProduct(slug);
   return mapProduct(data as Row);
 }
 
