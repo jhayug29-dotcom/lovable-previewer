@@ -126,7 +126,9 @@ function PaymentStatusPage() {
                 {result.productTitle} · {formatPrice(result.amount)}
               </p>
               <a
-                href={result.downloadLink || `${window.location.origin}/product/${result.productSlug}`}
+                href={
+                  result.downloadLink || `${window.location.origin}/product/${result.productSlug}`
+                }
                 target="_blank"
                 rel="noreferrer"
                 className="btn-shine mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5"

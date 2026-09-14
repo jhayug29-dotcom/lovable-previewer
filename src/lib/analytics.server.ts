@@ -4,6 +4,8 @@ import {
   requireUser,
   adminClient,
   getServiceRoleKey,
+  isSupabaseServerConfigured,
+  isOwnerOrAdminEmail,
 } from "./supabase.server";
 
 export type PanelAccess = {
@@ -24,8 +26,8 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
     return empty;
   }
 
-  // Owner account is unconditionally an admin.
-  if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") {
+  // Owner/Admin accounts are unconditionally admins.
+  if (isOwnerOrAdminEmail(user.email)) {
     return { admin: true, seller: false, collaborator: false, productIds: [] };
   }
 
@@ -442,6 +444,9 @@ export async function recordPageViewServer(params: {
   collaboratorCode?: string | null;
   collaboratorLinkId?: string | null;
 }) {
+  if (!isSupabaseServerConfigured()) {
+    return { success: false, reason: "Supabase not configured" };
+  }
   try {
     const db = adminClient();
     const cleanPath = (params.path || "/").slice(0, 500);
@@ -483,13 +488,25 @@ export async function recordPageViewServer(params: {
       }
     }
 
-    const { error } = await db.from("page_views").insert({
+    let { error } = await db.from("page_views").insert({
       path: cleanPath,
       session_id: cleanSession,
       user_id: userId,
       collaborator_code: cleanCode,
       collaborator_link_id: linkId,
     });
+
+    if (error) {
+      // Fallback: If collaborator columns don't exist in page_views table yet, insert standard fields
+      const basicInsert = await db.from("page_views").insert({
+        path: cleanPath,
+        session_id: cleanSession,
+        user_id: userId,
+      });
+      if (!basicInsert.error) {
+        error = null;
+      }
+    }
 
     if (error) {
       console.warn("Could not record page view in db:", error.message);

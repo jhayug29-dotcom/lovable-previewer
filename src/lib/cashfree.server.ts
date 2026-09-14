@@ -298,7 +298,9 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
     amount: Number(payload.order_amount ?? row?.amount ?? 0),
     productTitle: row?.products?.title ?? "Editly Store purchase",
     productSlug: row?.products?.slug ?? "",
-    downloadLink: paid ? (link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)) : null,
+    downloadLink: paid
+      ? link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
+      : null,
     email: row?.customer_email ?? null,
     phone: row?.customer_phone ?? null,
     receiptSent: paid ? Boolean(row?.receipt_sent_at) || Boolean(link) : false,

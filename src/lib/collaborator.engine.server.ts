@@ -1,4 +1,4 @@
-import { adminClient } from "./supabase.server";
+import { adminClient, isSupabaseServerConfigured } from "./supabase.server";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -21,7 +21,7 @@ export type ResolvedCollaborator = {
 export async function resolveCollaboratorLink(
   codeOrId?: string | null,
 ): Promise<ResolvedCollaborator | null> {
-  if (!codeOrId) return null;
+  if (!codeOrId || !isSupabaseServerConfigured()) return null;
   const clean = codeOrId.trim();
   if (!clean) return null;
 
@@ -115,6 +115,8 @@ export async function intelligentResolveCollaborator(params: {
   customerEmail?: string | null;
   sessionId?: string | null;
 }): Promise<ResolvedCollaborator | null> {
+  if (!isSupabaseServerConfigured()) return null;
+
   // A. If code provided directly, resolve it
   if (params.collaboratorCode) {
     const direct = await resolveCollaboratorLink(params.collaboratorCode);
@@ -222,6 +224,7 @@ export function broadcastCollaboratorRealtimeEvent(
   event: string,
   payload: Record<string, unknown>,
 ) {
+  if (!isSupabaseServerConfigured()) return;
   try {
     const channel = adminClient().channel("collaborator-realtime-sync");
     channel.subscribe((status) => {
@@ -256,6 +259,9 @@ export async function recordCollaboratorSignupServer(input: {
   sessionId?: string | null;
   fullName?: string | null;
 }) {
+  if (!isSupabaseServerConfigured()) {
+    return { ok: false, message: "Supabase not configured" };
+  }
   const db = adminClient();
   const userId = input.userId?.trim();
   if (!userId || !isValidUuid(userId)) {
@@ -326,6 +332,7 @@ export async function recordCollaboratorSignupServer(input: {
  * Auto-heals orders that belong to collaborator signups but were missing collaborator_link_id.
  */
 export async function autoHealCollaboratorOrders(): Promise<number> {
+  if (!isSupabaseServerConfigured()) return 0;
   const db = adminClient();
   let healed = 0;
 

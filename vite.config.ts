@@ -17,6 +17,30 @@ export default defineConfig({
       port: 3000,
       allowedHosts: true,
     },
+    define: {
+      "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(
+        process.env["VITE_SUPABASE_URL"] ||
+          process.env["SUPABASE_URL"] ||
+          process.env["STORE_SUPABASE_URL"] ||
+          "",
+      ),
+      "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(
+        process.env["VITE_SUPABASE_ANON_KEY"] ||
+          process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["SUPABASE_ANON_KEY"] ||
+          process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["STORE_SUPABASE_PUBLISHABLE_KEY"] ||
+          "",
+      ),
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(
+        process.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["VITE_SUPABASE_ANON_KEY"] ||
+          process.env["SUPABASE_PUBLISHABLE_KEY"] ||
+          process.env["SUPABASE_ANON_KEY"] ||
+          process.env["STORE_SUPABASE_PUBLISHABLE_KEY"] ||
+          "",
+      ),
+    },
   },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).

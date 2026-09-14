@@ -6,8 +6,7 @@ import { ProductCard } from "@/components/site/ProductCard";
 import { BuyButton } from "@/components/site/BuyButton";
 import { formatPrice } from "@/lib/products";
 import { getStoreProduct } from "@/lib/catalog.functions";
-import { loadProductSections, type ProductSection } from "@/lib/catalog.server";
-import type { DbProduct } from "@/lib/catalog-map";
+import type { DbProduct, ProductSection } from "@/lib/catalog-map";
 import { useState, useEffect } from "react";
 
 import { getBreadcrumbsSchema, getProductSchema, SITE_URL } from "@/lib/seo";
@@ -58,10 +57,13 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
 
 export const Route = createFileRoute("/product/$slug")({
   loader: async ({ params }) => {
-    const { product, related } = await getStoreProduct({ data: { slug: params.slug } });
-    if (!product) throw notFound();
-    const sections = product.id ? await loadProductSections(product.id) : [];
-    return { product, related, sections };
+    const data = await getStoreProduct({ data: { slug: params.slug } });
+    if (!data.product) throw notFound();
+    return {
+      product: data.product,
+      related: data.related,
+      sections: (data as { sections?: ProductSection[] }).sections ?? [],
+    };
   },
   head: ({ loaderData }) => {
     const product = loaderData?.product;

@@ -21,8 +21,22 @@ const AuthContext = createContext<AuthState>({
 const roleCache = new Map<string, boolean>();
 const inflight = new Map<string, Promise<boolean>>();
 
+const KNOWN_ADMIN_EMAILS = new Set(["growchannel2026@gmail.com", "jhayug29@gmail.com"]);
+
+function isKnownAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (KNOWN_ADMIN_EMAILS.has(normalized)) return true;
+  const extra = import.meta.env["VITE_ADMIN_EMAILS"] as string | undefined;
+  if (extra) {
+    const list = extra.split(",").map((e) => e.trim().toLowerCase());
+    if (list.includes(normalized)) return true;
+  }
+  return false;
+}
+
 async function isUserAdmin(client: NonNullable<typeof supabase>, user: User) {
-  if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") return true;
+  if (isKnownAdminEmail(user.email)) return true;
 
   const cached = roleCache.get(user.id);
   if (cached !== undefined) return cached;

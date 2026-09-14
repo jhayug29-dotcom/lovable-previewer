@@ -5,6 +5,17 @@ function getEnv(name: string): string | undefined {
   return value?.trim() || undefined;
 }
 
+export function isSupabaseServerConfigured(): boolean {
+  const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
+  const key =
+    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("VITE_SUPABASE_ANON_KEY") ??
+    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("SUPABASE_ANON_KEY") ??
+    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
+  return Boolean(url && key);
+}
+
 /**
  * Use the same Supabase project configuration as the browser client first.
  * This prevents a stale SUPABASE_URL/SUPABASE_* variable on Vercel from
@@ -87,10 +98,24 @@ export async function requireUser(accessToken: string | undefined): Promise<Auth
   return { id: data.user.id, email: data.user.email };
 }
 
+const KNOWN_ADMIN_EMAILS = new Set(["growchannel2026@gmail.com", "jhayug29@gmail.com"]);
+
+export function isOwnerOrAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (KNOWN_ADMIN_EMAILS.has(normalized)) return true;
+  const extra = process.env["ADMIN_EMAILS"] ?? process.env["VITE_ADMIN_EMAILS"];
+  if (extra) {
+    const list = extra.split(",").map((e) => e.trim().toLowerCase());
+    if (list.includes(normalized)) return true;
+  }
+  return false;
+}
+
 export async function requireAdmin(accessToken: string | undefined): Promise<AuthedUser> {
   const user = await requireUser(accessToken);
 
-  if (user.email && user.email.toLowerCase() === "growchannel2026@gmail.com") {
+  if (isOwnerOrAdminEmail(user.email)) {
     return user;
   }
 

@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { createOrder, verifyOrder, claimFree } from "./cashfree.server";
-import { generateReviews } from "./ai-reviews.server";
 
 export const createCashfreeOrder = createServerFn({ method: "POST" })
   .validator((data) =>
@@ -21,11 +19,17 @@ export const createCashfreeOrder = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => createOrder(data));
+  .handler(async ({ data }) => {
+    const { createOrder } = await import("./cashfree.server");
+    return createOrder(data);
+  });
 
 export const verifyCashfreeOrder = createServerFn({ method: "POST" })
   .validator((data) => z.object({ orderId: z.string().min(1) }).parse(data))
-  .handler(async ({ data }) => verifyOrder(data.orderId));
+  .handler(async ({ data }) => {
+    const { verifyOrder } = await import("./cashfree.server");
+    return verifyOrder(data.orderId);
+  });
 
 export const claimFreeProduct = createServerFn({ method: "POST" })
   .validator((data) =>
@@ -40,7 +44,10 @@ export const claimFreeProduct = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => claimFree(data.slug, data.accessToken, data.collaboratorCode));
+  .handler(async ({ data }) => {
+    const { claimFree } = await import("./cashfree.server");
+    return claimFree(data.slug, data.accessToken, data.collaboratorCode);
+  });
 
 export const generateAiReviews = createServerFn({ method: "POST" })
   .validator((data) =>
@@ -55,4 +62,7 @@ export const generateAiReviews = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => generateReviews(data));
+  .handler(async ({ data }) => {
+    const { generateReviews } = await import("./ai-reviews.server");
+    return generateReviews(data);
+  });

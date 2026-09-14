@@ -1,9 +1,15 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /** Project URL + publishable key are safe in client code and must be supplied by the host environment. */
-const url = import.meta.env["VITE_SUPABASE_URL"] as string | undefined;
+const url = (import.meta.env["VITE_SUPABASE_URL"] ??
+  import.meta.env["SUPABASE_URL"] ??
+  import.meta.env["STORE_SUPABASE_URL"]) as string | undefined;
+
 const key = (import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ??
-  import.meta.env["VITE_SUPABASE_ANON_KEY"]) as string | undefined;
+  import.meta.env["VITE_SUPABASE_ANON_KEY"] ??
+  import.meta.env["SUPABASE_PUBLISHABLE_KEY"] ??
+  import.meta.env["SUPABASE_ANON_KEY"] ??
+  import.meta.env["STORE_SUPABASE_PUBLISHABLE_KEY"]) as string | undefined;
 
 /** True only when the host supplied a complete Supabase client configuration. */
 export const isSupabaseConfigured = Boolean(url && key);

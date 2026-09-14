@@ -1,4 +1,10 @@
-import { adminClient, getDbClient, getServiceRoleKey, requireAdmin } from "./supabase.server";
+import {
+  adminClient,
+  getDbClient,
+  getServiceRoleKey,
+  requireAdmin,
+  isOwnerOrAdminEmail,
+} from "./supabase.server";
 
 export type AdminUser = {
   id: string;
@@ -57,7 +63,7 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
   const userMap = new Map<string, AdminUser>();
 
   for (const u of authUsers) {
-    const isOwner = u.email?.toLowerCase() === "growchannel2026@gmail.com";
+    const isOwner = isOwnerOrAdminEmail(u.email);
     userMap.set(u.id, {
       id: u.id,
       email: u.email ?? "(no email)",
@@ -68,7 +74,7 @@ export async function listUsers(accessToken: string | undefined): Promise<AdminU
   }
 
   for (const p of (profileRows ?? []) as { id: string; email?: string; full_name?: string }[]) {
-    const isOwner = p.email?.toLowerCase() === "growchannel2026@gmail.com";
+    const isOwner = isOwnerOrAdminEmail(p.email);
     if (!userMap.has(p.id)) {
       userMap.set(p.id, {
         id: p.id,

@@ -10,9 +10,14 @@ export const getStoreProducts = createServerFn({ method: "GET" }).handler(async 
 export const getStoreProduct = createServerFn({ method: "GET" })
   .validator((data) => z.object({ slug: z.string().min(1).max(200) }).parse(data))
   .handler(async ({ data }) => {
-    const { loadProduct, loadProducts } = await import("./catalog.server");
+    const { loadProduct, loadProducts, loadProductSections } = await import("./catalog.server");
     const [product, all] = await Promise.all([loadProduct(data.slug), loadProducts()]);
-    return { product, related: all.filter((p) => p.slug !== data.slug).slice(0, 3) };
+    const sections = product?.id ? await loadProductSections(product.id) : [];
+    return {
+      product,
+      related: all.filter((p) => p.slug !== data.slug).slice(0, 3),
+      sections,
+    };
   });
 
 /** Active sale + festive banners for the storefront. Public, cached server-side. */
