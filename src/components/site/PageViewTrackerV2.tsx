@@ -18,7 +18,9 @@ export function PageViewTrackerV2() {
 
     // 1. Detect and persist any incoming ref from query params or storage/cookie
     const searchString = window.location.search || (typeof search === "string" ? search : "");
-    const params = new URLSearchParams(searchString.startsWith("?") ? searchString : `?${searchString}`);
+    const params = new URLSearchParams(
+      searchString.startsWith("?") ? searchString : `?${searchString}`,
+    );
     const incomingRef =
       params.get("ref") ||
       params.get("c") ||

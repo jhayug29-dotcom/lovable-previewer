@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Film, Music, Wand2, ArrowUpRight, Star, Check } from "lucide-react";
 
 import { getStoreProducts } from "@/lib/catalog.functions";
-import { formatPrice } from "@/lib/products";
+import { formatPrice, products as staticFallbackProducts } from "@/lib/products";
 import type { DbProduct } from "@/lib/catalog-map";
 import { getOrganizationSchema, SITE_URL } from "@/lib/seo";
 
@@ -21,6 +21,7 @@ import { CursorFollow } from "@/components/magic/CursorFollow";
 import { Meteors } from "@/components/magic/Meteors";
 import { SHIMMER_SURFACE, ShimmerLayers } from "@/components/magic/Shimmer";
 import { SilkWave } from "@/components/magic/SilkWave";
+import { PromoBanners } from "@/components/site/PromoBanners";
 
 // Decorative background clips (muted, aria-hidden). Self-hosted from `public/`
 // as plain H.264 MP4 — no CDN and no adaptive-streaming manifest, so the repo
@@ -94,7 +95,11 @@ const FEATURES = [
 ];
 
 function Landing() {
-  const { products } = Route.useLoaderData() as { products: DbProduct[] };
+  const loaderData = Route.useLoaderData() as { products: DbProduct[] } | undefined;
+  const products =
+    loaderData?.products && loaderData.products.length > 0
+      ? loaderData.products
+      : staticFallbackProducts;
   const featured = products.slice(0, 4);
   // Tile every product's cover onto the orbital wheel; repeat the set when the
   // catalog is small so the ring stays visually full (never identical neighbours).
@@ -326,6 +331,10 @@ function Landing() {
         className="border-t border-border/30 px-5 py-32 sm:px-8 md:px-16 md:py-44 lg:px-28"
       >
         <div className="mx-auto max-w-6xl">
+          <div className="mb-10">
+            <PromoBanners />
+          </div>
+
           <div className="flex flex-wrap items-end justify-between gap-4">
             <motion.h2 {...fadeUp(0)} className="text-4xl tracking-tight md:text-6xl">
               Packs editors <span className="font-instrument font-normal italic">keep</span>{" "}
@@ -342,8 +351,8 @@ function Landing() {
             </motion.div>
           </div>
 
-          <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {featured.map((product, i) => (
+          <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((product, i) => (
               <motion.div key={product.slug} {...fadeUp(0.06 * i)}>
                 <DarkProductCard product={product} />
               </motion.div>

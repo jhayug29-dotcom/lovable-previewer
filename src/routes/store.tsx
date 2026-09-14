@@ -6,7 +6,7 @@ import { ProductCard } from "@/components/site/ProductCard";
 import { PromoBanners } from "@/components/site/PromoBanners";
 import { StoreGreeting } from "@/components/site/StoreGreeting";
 import { SupportChat } from "@/components/site/SupportChat";
-import { categories, type Category } from "@/lib/products";
+import { categories, products as staticFallbackProducts, type Category } from "@/lib/products";
 import { getStoreProducts } from "@/lib/catalog.functions";
 import type { DbProduct } from "@/lib/catalog-map";
 
@@ -15,7 +15,8 @@ import { getCollectionSchema, SITE_URL } from "@/lib/seo";
 export const Route = createFileRoute("/store")({
   loader: async () => ({ products: await getStoreProducts() }),
   head: ({ loaderData }) => {
-    const products = (loaderData as { products: DbProduct[] } | undefined)?.products ?? [];
+    const products =
+      (loaderData as { products: DbProduct[] } | undefined)?.products ?? staticFallbackProducts;
     return {
       links: [{ rel: "canonical", href: `${SITE_URL}/store` }],
       meta: [
@@ -66,7 +67,11 @@ const sortOptions: { key: SortKey; label: string }[] = [
 ];
 
 function StorePage() {
-  const { products } = Route.useLoaderData() as { products: DbProduct[] };
+  const loaderData = Route.useLoaderData() as { products: DbProduct[] } | undefined;
+  const products =
+    loaderData?.products && loaderData.products.length > 0
+      ? loaderData.products
+      : staticFallbackProducts;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<Category | "All">("All");
   const [sort, setSort] = useState<SortKey>("popular");

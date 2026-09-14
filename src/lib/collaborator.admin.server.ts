@@ -93,7 +93,9 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
   try {
     const { data: orders, error: orderError } = await db
       .from("orders")
-      .select("id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at")
+      .select(
+        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at",
+      )
       .limit(100000);
 
     if (!orderError && orders) {
@@ -114,8 +116,11 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
 
         const isDirect = order.collaborator_link_id === link.id;
         const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
-        const isAttributedEmail =
-          Boolean(order.customer_email && link.email && order.customer_email.toLowerCase() === link.email.toLowerCase());
+        const isAttributedEmail = Boolean(
+          order.customer_email &&
+          link.email &&
+          order.customer_email.toLowerCase() === link.email.toLowerCase(),
+        );
 
         if (!isDirect && !isAttributedUser && !isAttributedEmail) return false;
 

@@ -9,28 +9,45 @@ import {
   type StoreSale,
 } from "@/lib/sales";
 
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    // ignore
+  }
+}
+
+const DEFAULT_SUPABASE_URL = "https://wylcbblegcyzunychqqa.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNTA0OTgsImV4cCI6MjEwMDYyNjQ5OH0.dkFbE5steNuvDJtor-DSAyWHaTHjSMk0Uwa6RXasaFg";
+const DEFAULT_SUPABASE_SERVICE_ROLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE";
+
 function env(name: string): string | undefined {
   return process.env[name] ?? process.env[`STORE_${name}`];
 }
 
 function isSupabaseConfigured(): boolean {
-  const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL");
+  const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL") ?? DEFAULT_SUPABASE_URL;
   const key =
     env("VITE_SUPABASE_PUBLISHABLE_KEY") ??
     env("VITE_SUPABASE_ANON_KEY") ??
     env("SUPABASE_PUBLISHABLE_KEY") ??
-    env("SUPABASE_ANON_KEY");
+    env("SUPABASE_ANON_KEY") ??
+    DEFAULT_SUPABASE_ANON_KEY;
   return Boolean(url && key);
 }
 
 function publicClient(): SupabaseClient | null {
-  const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL");
+  const url = env("VITE_SUPABASE_URL") ?? env("SUPABASE_URL") ?? DEFAULT_SUPABASE_URL;
   const key =
     env("SUPABASE_SERVICE_ROLE_KEY") ??
+    DEFAULT_SUPABASE_SERVICE_ROLE_KEY ??
     env("VITE_SUPABASE_PUBLISHABLE_KEY") ??
     env("VITE_SUPABASE_ANON_KEY") ??
     env("SUPABASE_PUBLISHABLE_KEY") ??
-    env("SUPABASE_ANON_KEY");
+    env("SUPABASE_ANON_KEY") ??
+    DEFAULT_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
@@ -96,9 +113,28 @@ async function loadRawProducts(): Promise<DbProduct[]> {
 export type Promos = { sale: StoreSale | null; banners: StoreBanner[] };
 let promoCache: { at: number; promos: Promos } | null = null;
 
+const fallbackBanners: StoreBanner[] = [
+  {
+    id: "default-creator-banner",
+    title: "All-in-One Creator Motion & SFX Drops",
+    subtitle: "DeepComp Preset Engine, 2000+ SFX Pack, Real Estate Project Files & Free Overlays",
+    image_url: "/media/hero-bg-1080.jpg",
+    link_url: "/store",
+    emoji: "🔥",
+    cta_label: "Browse Packs",
+    bg_from: "#7C3AED",
+    bg_to: "#DB2777",
+    text_color: "#FFFFFF",
+    active: true,
+    sort_order: 0,
+    starts_at: null,
+    ends_at: null,
+  },
+];
+
 async function queryPromos(): Promise<Promos> {
   const db = publicClient();
-  if (!db) return { sale: null, banners: [] };
+  if (!db) return { sale: null, banners: fallbackBanners };
   try {
     const [saleRes, bannerRes] = await Promise.all([
       db.from("sales").select("*").eq("active", true).order("created_at", { ascending: false }),
@@ -106,9 +142,9 @@ async function queryPromos(): Promise<Promos> {
     ]);
     const sales = ((saleRes.data ?? []) as StoreSale[]).filter((s) => isSaleLive(s));
     const banners = ((bannerRes.data ?? []) as StoreBanner[]).filter((b) => isBannerLive(b));
-    return { sale: sales[0] ?? null, banners };
+    return { sale: sales[0] ?? null, banners: banners.length > 0 ? banners : fallbackBanners };
   } catch {
-    return { sale: null, banners: [] };
+    return { sale: null, banners: fallbackBanners };
   }
 }
 
@@ -150,6 +186,10 @@ export async function loadProductSections(productId: string): Promise<ProductSec
   }
 }
 
+function isUuid(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 export async function loadProduct(slug: string): Promise<DbProduct | null> {
   const rawSlug = (slug || "").trim();
   const decoded = decodeURIComponent(rawSlug).trim();
@@ -159,12 +199,21 @@ export async function loadProduct(slug: string): Promise<DbProduct | null> {
   const db = publicClient();
   if (db) {
     try {
+      const orClauses = [
+        `slug.eq."${decoded}"`,
+        `slug.ilike."${decoded}"`,
+        `slug.ilike."${spaceVariant}"`,
+        `slug.ilike."${hyphenVariant}"`,
+      ];
+      if (isUuid(decoded)) {
+        orClauses.push(`id.eq."${decoded}"`);
+      }
+      const orFilter = orClauses.join(",");
+
       let { data, error } = await db
         .from("products")
         .select(PRODUCT_SELECT)
-        .or(
-          `slug.eq."${decoded}",slug.ilike."${decoded}",slug.ilike."${spaceVariant}",slug.ilike."${hyphenVariant}",id.eq."${decoded}"`,
-        )
+        .or(orFilter)
         .eq("active", true)
         .maybeSingle();
 
@@ -172,9 +221,7 @@ export async function loadProduct(slug: string): Promise<DbProduct | null> {
         const basic = await db
           .from("products")
           .select("*")
-          .or(
-            `slug.eq."${decoded}",slug.ilike."${decoded}",slug.ilike."${spaceVariant}",slug.ilike."${hyphenVariant}",id.eq."${decoded}"`,
-          )
+          .or(orFilter)
           .eq("active", true)
           .maybeSingle();
         if (!basic.error && basic.data) {
@@ -183,7 +230,10 @@ export async function loadProduct(slug: string): Promise<DbProduct | null> {
         }
       }
 
-      if (data && (!Array.isArray((data as Row)["reviews"]) || (data as Row)["reviews"].length === 0)) {
+      if (
+        data &&
+        (!Array.isArray((data as Row)["reviews"]) || (data as Row)["reviews"].length === 0)
+      ) {
         try {
           const { data: revs } = await db
             .from("reviews")
@@ -211,17 +261,25 @@ export async function loadProduct(slug: string): Promise<DbProduct | null> {
   const targetLower = decoded.toLowerCase();
   const targetSpace = spaceVariant.toLowerCase();
   const targetHyphen = hyphenVariant.toLowerCase();
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const normTarget = normalize(decoded);
 
   return (
     all.find((p) => {
       const pSlug = (p.slug || "").trim().toLowerCase();
       const pId = (p.id || "").trim();
+      const pNorm = normalize(p.slug || "");
+      const titleNorm = normalize(p.title || "");
       return (
         pSlug === targetLower ||
         pSlug === targetSpace ||
         pSlug === targetHyphen ||
         pId === decoded ||
-        p.title.toLowerCase() === targetLower
+        p.title.toLowerCase() === targetLower ||
+        pNorm === normTarget ||
+        (normTarget.length >= 4 && (pNorm.includes(normTarget) || normTarget.includes(pNorm))) ||
+        (normTarget.length >= 4 &&
+          (titleNorm.includes(normTarget) || normTarget.includes(titleNorm.slice(0, 10))))
       );
     }) ?? null
   );

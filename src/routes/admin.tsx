@@ -34,6 +34,7 @@ import {
   fetchAnalytics,
   fetchSellers,
   saveSellerProducts,
+  syncAndRestoreAnalytics,
 } from "@/lib/analytics.functions";
 
 import { categories } from "@/lib/products";
@@ -762,13 +763,13 @@ function ProductsTab() {
           value={sectionsText}
           onChange={setSectionsText}
         />
-        <Field
+        <Text
           label="Launch Time (e.g. 2026-09-13T12:00)"
           type="datetime-local"
           value={form.launch_time}
           onChange={set("launch_time") as (v: string) => void}
         />
-        <ImageUrlInput
+        <MediaField
           label="Timer Image URL"
           value={form.timer_image_url || ""}
           onChange={set("timer_image_url") as (v: string) => void}
@@ -1992,20 +1993,53 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 }
 
 function AnalyticsTab() {
+  const qc = useQueryClient();
   const accessToken = useAccessToken();
-  const { data, isLoading, error } = useQuery({
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["analytics", accessToken ?? ""],
     queryFn: () => fetchAnalytics({ data: { accessToken } }),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 
+  const handleSyncRestore = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncAndRestoreAnalytics({ data: { accessToken } });
+      toast.success(
+        `Analytics data restored: ${res.restoredOrders} orders reconciled, ${res.syncedProducts} products updated!`,
+      );
+      await qc.invalidateQueries({ queryKey: ["analytics"] });
+      await qc.invalidateQueries({ queryKey: ["products"] });
+      await qc.invalidateQueries({ queryKey: ["orders"] });
+      await refetch();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to sync analytics");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (isLoading) return <Loader2 className="size-6 animate-spin text-ink/60" />;
   if (error || !data)
     return (
-      <p className="text-sm text-muted-foreground">
-        Analytics aren't available yet. Run the latest database upgrade script.
-      </p>
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">Analytics data is currently unavailable.</p>
+        <button
+          onClick={handleSyncRestore}
+          disabled={isSyncing}
+          className="inline-flex items-center gap-2 rounded-2xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-ink/90 disabled:opacity-50"
+        >
+          {isSyncing ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Sparkles className="size-4" />
+          )}
+          Restore & Sync Analytics
+        </button>
+      </div>
     );
 
   const isAdminScope = data.scope === "admin";
@@ -2013,6 +2047,29 @@ function AnalyticsTab() {
 
   return (
     <div className="space-y-6">
+      {isAdminScope ? (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/60 bg-white/50 p-4 backdrop-blur-md">
+          <div>
+            <h3 className="font-display font-bold text-ink">Store Analytics & Sales Ledger</h3>
+            <p className="text-xs text-muted-foreground">
+              Real-time reconciled data across all orders, products, and partner channels.
+            </p>
+          </div>
+          <button
+            onClick={handleSyncRestore}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 rounded-2xl bg-ink px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-ink/90 disabled:opacity-50"
+          >
+            {isSyncing ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="size-3.5" />
+            )}
+            {isSyncing ? "Syncing..." : "Sync & Restore Sales Data"}
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
           label="Products"
@@ -2107,20 +2164,20 @@ function AnalyticsTab() {
         </Card>
       </div>
 
-      <Card title="Last 30 days">
+      <Card title="Daily sales & revenue activity">
         <div className="flex h-40 items-end gap-1">
           {data.daily.map((d) => (
             <div key={d.day} className="group relative flex-1">
               <div
                 className="w-full rounded-t-md bg-primary/70 transition-all duration-500 group-hover:bg-primary"
-                style={{ height: `${Math.max(2, (d.revenue / peak) * 140)}px` }}
+                style={{ height: `${Math.max(4, (d.revenue / peak) * 140)}px` }}
                 title={`${d.day}: ${d.orders} sales · ${inr(d.revenue)}`}
               />
             </div>
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Daily revenue. Hover a bar for the exact figures.
+          Hover a bar to inspect the exact daily figures.
         </p>
       </Card>
     </div>

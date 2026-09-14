@@ -109,7 +109,9 @@ async function statsForLink(
   try {
     const { data: orders, error: orderError } = await db
       .from("orders")
-      .select("id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at")
+      .select(
+        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at",
+      )
       .limit(100000);
 
     if (!orderError && orders) {

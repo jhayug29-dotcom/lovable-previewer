@@ -11,6 +11,12 @@ export const fetchAnalytics = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
   .handler(async ({ data }) => (await import("./analytics.server")).getAnalytics(data.accessToken));
 
+export const syncAndRestoreAnalytics = createServerFn({ method: "POST" })
+  .validator((d) => token.parse(d))
+  .handler(async ({ data }) =>
+    (await import("./analytics.server")).syncAndRestoreAnalyticsServer(data.accessToken),
+  );
+
 export const fetchSellers = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
   .handler(async ({ data }) => (await import("./analytics.server")).listSellers(data.accessToken));

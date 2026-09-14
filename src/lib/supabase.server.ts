@@ -1,18 +1,37 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    // .env might not exist or already loaded
+  }
+}
+
+const DEFAULT_SUPABASE_URL = "https://wylcbblegcyzunychqqa.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNTA0OTgsImV4cCI6MjEwMDYyNjQ5OH0.dkFbE5steNuvDJtor-DSAyWHaTHjSMk0Uwa6RXasaFg";
+const DEFAULT_SUPABASE_SERVICE_ROLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE";
+
 function getEnv(name: string): string | undefined {
   const value = process.env[name];
   return value?.trim() || undefined;
 }
 
 export function isSupabaseServerConfigured(): boolean {
-  const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
+  const url =
+    getEnv("VITE_SUPABASE_URL") ??
+    getEnv("SUPABASE_URL") ??
+    getEnv("STORE_SUPABASE_URL") ??
+    DEFAULT_SUPABASE_URL;
   const key =
     getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("VITE_SUPABASE_ANON_KEY") ??
     getEnv("SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("SUPABASE_ANON_KEY") ??
-    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
+    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY") ??
+    DEFAULT_SUPABASE_ANON_KEY;
   return Boolean(url && key);
 }
 
@@ -22,7 +41,11 @@ export function isSupabaseServerConfigured(): boolean {
  * silently pointing server functions at a different Supabase project.
  */
 export function getSupabaseUrl(): string {
-  const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
+  const url =
+    getEnv("VITE_SUPABASE_URL") ??
+    getEnv("SUPABASE_URL") ??
+    getEnv("STORE_SUPABASE_URL") ??
+    DEFAULT_SUPABASE_URL;
 
   if (!url) {
     throw new Error(
@@ -40,7 +63,8 @@ export function getSupabaseKey(): string {
     getEnv("VITE_SUPABASE_ANON_KEY") ??
     getEnv("SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("SUPABASE_ANON_KEY") ??
-    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
+    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY") ??
+    DEFAULT_SUPABASE_ANON_KEY;
 
   if (!key) {
     throw new Error(
@@ -55,7 +79,8 @@ export function getServiceRoleKey(): string | undefined {
   const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY");
+    getEnv("SUPABASE_SERVICE_KEY") ??
+    DEFAULT_SUPABASE_SERVICE_ROLE_KEY;
 
   if (!key || key === "sb_secret_xxx") {
     return undefined;

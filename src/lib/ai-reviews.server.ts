@@ -104,7 +104,10 @@ Return ONLY valid JSON: an array of ${count} objects with keys "name", "handle",
               candidates?: { content?: { parts?: { text?: string }[] } }[];
             };
             const text = payload.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-            const cleanJson = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+            const cleanJson = text
+              .replace(/^```(?:json)?\s*/i, "")
+              .replace(/\s*```$/i, "")
+              .trim();
             const parsed = JSON.parse(cleanJson) as GeneratedReview[];
             if (Array.isArray(parsed) && parsed.length > 0) {
               reviews = parsed.slice(0, count).map((r) => ({
