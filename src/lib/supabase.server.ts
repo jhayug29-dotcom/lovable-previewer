@@ -141,6 +141,15 @@ export async function requireAdmin(accessToken: string | undefined): Promise<Aut
   const user = await requireUser(accessToken);
 
   if (isOwnerOrAdminEmail(user.email)) {
+    // Auto-grant the DB admin role if they are an owner, so RLS policies pass
+    try {
+      const sClient = adminClient();
+      await sClient
+        .from("user_roles")
+        .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id, role" });
+    } catch (e) {
+      // Ignore errors if service role fails
+    }
     return user;
   }
 

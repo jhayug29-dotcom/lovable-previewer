@@ -28,6 +28,14 @@ export async function panelAccess(accessToken: string | undefined): Promise<Pane
 
   // Owner/Admin accounts are unconditionally admins.
   if (isOwnerOrAdminEmail(user.email)) {
+    try {
+      const sClient = adminClient();
+      await sClient
+        .from("user_roles")
+        .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id, role" });
+    } catch (e) {
+      // ignore
+    }
     return { admin: true, seller: false, collaborator: false, productIds: [] };
   }
 

@@ -432,27 +432,48 @@ function useSave(table: string) {
       if (table === "products") {
         delete row["launch_time"];
         delete row["timer_image_url"];
+
+        // Parse JSON fields back to arrays/objects
+        const parseJson = (val: unknown) => {
+          if (typeof val !== "string" || !val.trim()) return [];
+          try {
+            return JSON.parse(val);
+          } catch {
+            return [val]; // fallback for malformed JSON
+          }
+        };
+
+        if ("features" in row) row.features = parseJson(row.features);
+        if ("file_info" in row) row.file_info = parseJson(row.file_info);
+        if ("how_to_use" in row) row.how_to_use = parseJson(row.how_to_use);
       }
 
       let attempts = 0;
       while (attempts < 5) {
         attempts++;
-        const { error } = row["id"]
+        const { error, data } = row["id"]
           ? await supabase
               .from(table)
               .update(row)
               .eq("id", row["id"] as string)
-          : await supabase.from(table).insert(row);
-        if (!error) return;
+              .select()
+          : await supabase.from(table).insert(row).select();
 
-        // If a column is missing from the table schema cache, strip it and retry automatically
-        const match = error.message?.match(/Could not find the '([^']+)' column/i);
-        if (match && match[1] && match[1] in row) {
-          console.warn(`Column '${match[1]}' not in ${table} table, stripping and retrying save`);
-          delete row[match[1]];
-          continue;
+        if (error) {
+          // If a column is missing from the table schema cache, strip it and retry automatically
+          const match = error.message?.match(/Could not find the '([^']+)' column/i);
+          if (match && match[1] && match[1] in row) {
+            console.warn(`Column '${match[1]}' not in ${table} table, stripping and retrying save`);
+            delete row[match[1]];
+            continue;
+          }
+          throw error;
         }
-        throw error;
+
+        if (!data || data.length === 0) {
+          throw new Error("Save failed: No rows were updated. Check your permissions.");
+        }
+        return;
       }
     },
     onSuccess: async () => {
