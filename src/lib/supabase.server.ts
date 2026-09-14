@@ -7,14 +7,19 @@ function getEnv(name: string): string | undefined {
 
 /** Resolve the deployment's single Supabase project. No repository fallbacks. */
 export function getSupabaseUrl(): string {
-  const url =
-    getEnv("SUPABASE_URL") ??
-    getEnv("VITE_SUPABASE_URL") ??
-    getEnv("STORE_SUPABASE_URL");
+  const browserUrl = getEnv("VITE_SUPABASE_URL");
+  const serverUrl = getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
 
+  if (browserUrl && serverUrl && browserUrl !== serverUrl) {
+    throw new Error(
+      "Supabase deployment mismatch: VITE_SUPABASE_URL and SUPABASE_URL point to different projects.",
+    );
+  }
+
+  const url = browserUrl ?? serverUrl;
   if (!url) {
     throw new Error(
-      "Supabase is not configured. Set SUPABASE_URL and VITE_SUPABASE_URL in the deployment environment.",
+      "Supabase is not configured. Set VITE_SUPABASE_URL and SUPABASE_URL in the deployment environment.",
     );
   }
   return url;
@@ -23,15 +28,15 @@ export function getSupabaseUrl(): string {
 /** Browser-safe publishable/anon key for user-scoped requests. */
 export function getSupabaseKey(): string {
   const key =
-    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
-    getEnv("SUPABASE_ANON_KEY") ??
     getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("VITE_SUPABASE_ANON_KEY") ??
+    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("SUPABASE_ANON_KEY") ??
     getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
 
   if (!key) {
     throw new Error(
-      "Supabase is not configured. Set SUPABASE_PUBLISHABLE_KEY and VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.",
+      "Supabase is not configured. Set VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) in the deployment environment.",
     );
   }
   return key;
