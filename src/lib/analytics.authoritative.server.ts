@@ -12,7 +12,11 @@ function isPaid(status: string | null | undefined) {
 function cashfreeConfig() {
   const appId = process.env["CASHFREE_APP_ID"]?.trim();
   const secret = process.env["CASHFREE_SECRET_KEY"]?.trim();
-  const mode = (process.env["CASHFREE_MODE"] ?? process.env["VITE_CASHFREE_MODE"] ?? "production").trim() === "sandbox" ? "sandbox" : "production";
+  const mode =
+    (process.env["CASHFREE_MODE"] ?? process.env["VITE_CASHFREE_MODE"] ?? "production").trim() ===
+    "sandbox"
+      ? "sandbox"
+      : "production";
   if (!appId || !secret) return null;
   return {
     appId,
@@ -21,7 +25,9 @@ function cashfreeConfig() {
   };
 }
 
-async function verifyCashfreeOrder(cfOrderId: string): Promise<"PAID" | "PENDING" | "FAILED" | null> {
+async function verifyCashfreeOrder(
+  cfOrderId: string,
+): Promise<"PAID" | "PENDING" | "FAILED" | null> {
   const cfg = cashfreeConfig();
   if (!cfg || !cfOrderId) return null;
   try {
@@ -48,7 +54,9 @@ async function verifyCashfreeOrder(cfOrderId: string): Promise<"PAID" | "PENDING
 async function reconcilePendingOrders(db: ReturnType<typeof adminClient>) {
   const { data: pendingRows } = await db
     .from("orders")
-    .select("id, cf_order_id, product_id, collaborator_link_id, user_id, customer_email, amount, created_at, paid_at, status")
+    .select(
+      "id, cf_order_id, product_id, collaborator_link_id, user_id, customer_email, amount, created_at, paid_at, status",
+    )
     .eq("status", "PENDING")
     .order("created_at", { ascending: false })
     .limit(50);
@@ -63,6 +71,7 @@ async function reconcilePendingOrders(db: ReturnType<typeof adminClient>) {
             userId: order.user_id,
             customerEmail: order.customer_email,
           }).catch(() => null);
+
       const { error } = await db
         .from("orders")
         .update({
@@ -79,17 +88,40 @@ async function reconcilePendingOrders(db: ReturnType<typeof adminClient>) {
   return changed;
 }
 
-async function syncSalesCounters(db: ReturnType<typeof adminClient>, products: { id: string; sales?: number | null }[]) {
-  const { data: orderRows } = await db.from("orders").select("product_id, status");
+async function getPaidOrderStats(db: ReturnType<typeof adminClient>) {
+  const { data: orderRows } = await db.from("orders").select("product_id, amount, status");
   const counts = new Map<string, number>();
+  const revenue = new Map<string, number>();
+  let totalOrders = 0;
+  let totalRevenue = 0;
+
   for (const row of orderRows ?? []) {
-    if (!row.product_id || !isPaid(row.status)) continue;
-    counts.set(row.product_id, (counts.get(row.product_id) ?? 0) + 1);
+    if (!isPaid(row.status)) continue;
+    totalOrders += 1;
+    const amount = Number(row.amount) || 0;
+    totalRevenue += amount;
+    if (row.product_id) {
+      counts.set(row.product_id, (counts.get(row.product_id) ?? 0) + 1);
+      revenue.set(row.product_id, (revenue.get(row.product_id) ?? 0) + amount);
+    }
   }
 
+  return { counts, revenue, totalOrders, totalRevenue };
+}
+
+async function syncSalesCounters(
+  db: ReturnType<typeof adminClient>,
+  products: { id: string; sales?: number | null }[],
+  paidCounts: Map<string, number>,
+) {
+  // Never destroy previously recorded sales because a temporary DB/RLS/connection
+  // issue returned an incomplete set of orders. Historical counters are preserved;
+  // only confirmed paid orders can increase them.
   for (const product of products) {
-    const expected = counts.get(product.id) ?? 0;
-    if (Number(product.sales ?? 0) !== expected) {
+    const previous = Math.max(0, Number(product.sales ?? 0));
+    const confirmed = paidCounts.get(product.id) ?? 0;
+    const expected = Math.max(previous, confirmed);
+    if (expected > previous) {
       await db.from("products").update({ sales: expected }).eq("id", product.id);
     }
   }
@@ -124,7 +156,8 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
     sales?: number | null;
   }[];
 
-  await syncSalesCounters(db, allProducts);
+  const paidStats = await getPaidOrderStats(db);
+  await syncSalesCounters(db, allProducts, paidStats.counts);
 
   const products = access.admin
     ? allProducts
@@ -133,10 +166,11 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
 
   const { data: orderRows } = await db
     .from("orders")
-    .select("id, product_id, amount, status, created_at, paid_at, coupon_code, user_id, customer_email, collaborator_link_id")
+    .select(
+      "id, product_id, amount, status, created_at, paid_at, coupon_code, user_id, customer_email, collaborator_link_id",
+    )
     .order("created_at", { ascending: false });
 
-  // Best-effort attribution healing for paid historical orders.
   if (access.admin) {
     for (const row of orderRows ?? []) {
       if (!isPaid(row.status) || row.collaborator_link_id) continue;
@@ -155,28 +189,32 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
   );
 
   const stats = new Map<string, ProductStat>(
-    products.map((p) => [
-      p.id,
-      {
-        productId: p.id,
-        title: p.title,
-        category: p.category,
-        price: Number(p.price) || 0,
-        active: Boolean(p.active),
-        orders: 0,
-        revenue: 0,
-      },
-    ]),
+    products.map((p) => {
+      const persistedSales = Math.max(0, Number(p.sales) || 0);
+      const confirmedOrders = paidStats.counts.get(p.id) ?? 0;
+      const confirmedRevenue = paidStats.revenue.get(p.id) ?? 0;
+      return [
+        p.id,
+        {
+          productId: p.id,
+          title: p.title,
+          category: p.category,
+          price: Number(p.price) || 0,
+          active: Boolean(p.active),
+          orders: Math.max(persistedSales, confirmedOrders),
+          revenue: Math.max(confirmedRevenue, persistedSales * (Number(p.price) || 0)),
+        },
+      ];
+    }),
   );
 
-  const nowDate = new Date(now);
   const dayBuckets = new Map<string, { orders: number; revenue: number }>();
   for (let i = 29; i >= 0; i -= 1) {
     const key = new Date(now - i * DAY).toISOString().slice(0, 10);
     dayBuckets.set(key, { orders: 0, revenue: 0 });
   }
 
-  let totalRevenue = 0;
+  let orderRevenue = 0;
   let ordersThisMonth = 0;
   let revenueThisMonth = 0;
   let ordersThisWeek = 0;
@@ -186,7 +224,7 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
 
   for (const order of orders) {
     const amount = Number(order.amount) || 0;
-    totalRevenue += amount;
+    orderRevenue += amount;
     const when = order.paid_at || order.created_at;
     const timestamp = new Date(when).getTime();
     const day = String(when).slice(0, 10);
@@ -209,15 +247,22 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
     if (order.product_id) {
       const stat = stats.get(order.product_id);
       if (stat) {
-        stat.orders += 1;
-        stat.revenue += amount;
-        const category = categories.get(stat.category) ?? { category: stat.category, orders: 0, revenue: 0 };
+        const category = categories.get(stat.category) ?? {
+          category: stat.category,
+          orders: 0,
+          revenue: 0,
+        };
         category.orders += 1;
         category.revenue += amount;
         categories.set(stat.category, category);
       }
     }
   }
+
+  const persistedTotalOrders = [...stats.values()].reduce((sum, p) => sum + p.orders, 0);
+  const persistedTotalRevenue = [...stats.values()].reduce((sum, p) => sum + p.revenue, 0);
+  const totalOrders = Math.max(orders.length, persistedTotalOrders);
+  const totalRevenue = Math.max(orderRevenue, persistedTotalRevenue);
 
   let visitorsWeek = 0;
   let visitorsMonth = 0;
@@ -254,10 +299,10 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
       if (p.created_at >= weekAgo) signupsWeek += 1;
     }
 
-    const { data: users } = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const { data: users } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
     for (const user of users?.users ?? []) {
-      if (user.created_at >= monthAgo) signupsMonth = Math.max(signupsMonth, signupsMonth + 0);
-      if (user.created_at >= weekAgo) signupsWeek = Math.max(signupsWeek, signupsWeek + 0);
+      if (user.created_at >= monthAgo) signupsMonth += 1;
+      if (user.created_at >= weekAgo) signupsWeek += 1;
       if (user.last_sign_in_at) {
         if (user.last_sign_in_at >= monthAgo) signInsMonth += 1;
         if (user.last_sign_in_at >= weekAgo) signInsWeek += 1;
@@ -273,7 +318,7 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
     scope: access.admin ? "admin" : "seller",
     productCount: products.length,
     activeProductCount: products.filter((p) => p.active).length,
-    totalOrders: orders.length,
+    totalOrders,
     totalRevenue,
     ordersThisMonth,
     revenueThisMonth,
@@ -290,7 +335,7 @@ export async function getAuthoritativeAnalytics(accessToken: string | undefined)
     products: [...stats.values()].sort((a, b) => b.revenue - a.revenue),
     categories: [...categories.values()].sort((a, b) => b.revenue - a.revenue),
     daily,
-    allTimeSalesCount: orders.length,
+    allTimeSalesCount: totalOrders,
     allTimeRevenue: totalRevenue,
   };
 }
