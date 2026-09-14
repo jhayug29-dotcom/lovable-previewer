@@ -220,18 +220,6 @@ function ProductPage() {
             </h1>
             <p className="mt-3 text-base text-ink/75">{product.tagline}</p>
 
-            <div className="mt-5 flex items-center gap-3 text-sm">
-              <span className="flex items-center gap-1 font-semibold text-ink">
-                <Star className="size-4 fill-accent text-accent" strokeWidth={1.5} />
-                {product.rating}
-              </span>
-              <span className="text-muted-foreground">{product.reviewCount} reviews</span>
-              <span className="text-muted-foreground">•</span>
-              <span className="text-muted-foreground">
-                {product.sales.toLocaleString("en-IN")} sales
-              </span>
-            </div>
-
             <div className="mt-7 flex items-end gap-3">
               <span className="font-display text-4xl font-extrabold text-ink">
                 {product.isFree ? "Free" : formatPrice(product.price)}
