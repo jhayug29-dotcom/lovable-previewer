@@ -63,6 +63,21 @@ export function adminClient(): SupabaseClient {
   });
 }
 
+/**
+ * Explicit feature/configuration check exported for server modules that need a
+ * lightweight guard before creating a Supabase client. Keep this named export
+ * stable across deployments so Vite/Rollup cannot bind to a missing symbol.
+ */
+export function isSupabaseServerConfigured(): boolean {
+  try {
+    getSupabaseUrl();
+    getSupabaseKey();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Publishable-key client scoped to a user's bearer token — RLS applies as that user. */
 export function userClient(accessToken: string): SupabaseClient {
   return createClient(getSupabaseUrl(), getSupabaseKey(), {
