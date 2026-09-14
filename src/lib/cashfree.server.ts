@@ -5,8 +5,13 @@ import {
   intelligentResolveCollaborator,
 } from "./collaborator.engine.server";
 
+const CASHFREE_MODE: "production" | "sandbox" =
+  (process.env["CASHFREE_MODE"] ?? process.env["VITE_CASHFREE_MODE"]) === "sandbox"
+    ? "sandbox"
+    : "production";
+
 const CF_BASE =
-  process.env["CASHFREE_MODE"] === "sandbox"
+  CASHFREE_MODE === "sandbox"
     ? "https://sandbox.cashfree.com/pg"
     : "https://api.cashfree.com/pg";
 const CF_VERSION = "2023-08-01";
@@ -135,11 +140,13 @@ export async function createOrder(input: CreateOrderInput) {
     }),
   });
 
-  const payload = (await response.json()) as { payment_session_id?: string; message?: string };
+  const payload = (await response.json()) as {
+    payment_session_id?: string;
+    message?: string;
+  };
   if (!response.ok || !payload.payment_session_id) {
-    throw new Error(
-      payload.message ?? "Could not start the payment (Cashfree rejected order creation)",
-    );
+    const detail = payload.message ?? `HTTP ${response.status}`;
+    throw new Error(`Cashfree ${CASHFREE_MODE} order creation failed: ${detail}`);
   }
 
   const { error: orderInsertError } = await adminClient()
@@ -171,7 +178,12 @@ export async function createOrder(input: CreateOrderInput) {
     });
   }
 
-  return { orderId: cfOrderId, paymentSessionId: payload.payment_session_id, amount };
+  return {
+    orderId: cfOrderId,
+    paymentSessionId: payload.payment_session_id,
+    amount,
+    cashfreeMode: CASHFREE_MODE,
+  };
 }
 
 type SettleRow = {
@@ -232,7 +244,6 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
 
 const PAID_STATUSES = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"] as const;
 
-/** Keep the denormalized products.sales counter aligned with the authoritative orders table. */
 async function syncProductSalesCounter(productId: string | null | undefined) {
   if (!productId) return;
   const db = adminClient();
@@ -304,9 +315,6 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     }
   }
 
-  // Always reconcile the denormalized counter. This makes admin analytics reflect a
-  // payment immediately, even when the buyer reaches the payment/status page before
-  // a webhook arrives.
   await syncProductSalesCounter(row.product_id ?? row.products?.id);
 
   if (!alreadyPaid) {
