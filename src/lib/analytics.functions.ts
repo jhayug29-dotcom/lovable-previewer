@@ -10,7 +10,7 @@ export const checkPanelAccess = createServerFn({ method: "POST" })
 export const fetchAnalytics = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
   .handler(async ({ data }) =>
-    (await import("./analytics.authoritative.server")).getAuthoritativeAnalytics(data.accessToken),
+    (await import("./analytics.live.server")).getLiveAnalytics(data.accessToken),
   );
 
 export const syncAndRestoreAnalytics = createServerFn({ method: "POST" })
