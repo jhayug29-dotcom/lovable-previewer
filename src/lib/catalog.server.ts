@@ -52,7 +52,7 @@ function publicClient(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-const TTL_MS = 1_000;
+const TTL_MS = 0; // Forced disabled for Vercel
 let cache: { at: number; products: DbProduct[] } | null = null;
 let inflight: Promise<DbProduct[]> | null = null;
 

@@ -13,7 +13,7 @@ import type { DbProduct } from "@/lib/catalog-map";
 import { getCollectionSchema, SITE_URL } from "@/lib/seo";
 
 export const Route = createFileRoute("/store")({
-  loader: async () => ({ products: await getStoreProducts() }),
+  staleTime: 0, loader: async () => ({ products: await getStoreProducts() }),
   head: ({ loaderData }) => {
     const products =
       (loaderData as { products: DbProduct[] } | undefined)?.products ?? staticFallbackProducts;

@@ -31,7 +31,7 @@ const MISSION_VIDEO = "/media/mission.mp4";
 const SOLUTION_VIDEO = "/media/solution.mp4";
 
 export const Route = createFileRoute("/")({
-  loader: async () => ({ products: await getStoreProducts() }),
+  staleTime: 0, loader: async () => ({ products: await getStoreProducts() }),
   head: () => ({
     links: [{ rel: "canonical", href: `${SITE_URL}/` }],
     meta: [

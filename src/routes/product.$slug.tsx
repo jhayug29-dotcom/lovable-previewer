@@ -56,7 +56,7 @@ function CountdownTimer({ targetDate }: { targetDate: string }) {
 }
 
 export const Route = createFileRoute("/product/$slug")({
-  loader: async ({ params }) => {
+  staleTime: 0, loader: async ({ params }) => {
     const data = await getStoreProduct({ data: { slug: params.slug } });
     if (!data.product) throw notFound();
     return {
