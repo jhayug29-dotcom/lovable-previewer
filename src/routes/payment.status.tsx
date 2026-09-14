@@ -68,6 +68,7 @@ function PaymentStatusPage() {
             const ok = await sendReceipt({
               toEmail: data.email,
               customerName: data.email.split("@")[0] ?? "there",
+              customerPhone: data.phone ?? "",
               productName: data.productTitle,
               amount: data.amount,
               orderId,
@@ -124,21 +125,15 @@ function PaymentStatusPage() {
               <p className="mt-2 text-sm text-muted-foreground">
                 {result.productTitle} · {formatPrice(result.amount)}
               </p>
-              {result.downloadLink ? (
-                <a
-                  href={result.downloadLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn-shine mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5"
-                >
-                  <Download className="size-5" strokeWidth={1.8} />
-                  Download your files
-                </a>
-              ) : (
-                <p className="mt-6 rounded-2xl bg-white/60 px-5 py-4 text-sm text-ink/80">
-                  Your download link is being prepared and will arrive by email shortly.
-                </p>
-              )}
+              <a
+                href={result.downloadLink || `${window.location.origin}/product/${result.productSlug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-shine mt-7 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-8 py-4 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5"
+              >
+                <Download className="size-5" strokeWidth={1.8} />
+                {result.downloadLink ? "Download your files" : "View your product"}
+              </a>
               <p className="mt-5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
                 <Mail className="size-4" strokeWidth={1.7} />
                 {emailed ? "Receipt emailed to you" : "Keep this page for your download link"}

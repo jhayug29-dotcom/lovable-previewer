@@ -578,7 +578,11 @@ function ProductsTab() {
       is_free: row.is_free,
       active: row.active,
       show_on_homepage: row.show_on_homepage !== false,
-      launch_time: row.launch_time ? new Date(row.launch_time).toISOString().slice(0, 16) : "",
+      launch_time: (() => {
+        if (!row.launch_time) return "";
+        const d = new Date(row.launch_time);
+        return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 16);
+      })(),
       timer_image_url: row.timer_image_url ?? "",
     });
     setSectionsText(
@@ -623,7 +627,11 @@ function ProductsTab() {
       }),
       active: form.active,
       show_on_homepage: form.show_on_homepage,
-      launch_time: form.launch_time ? new Date(form.launch_time).toISOString() : null,
+      launch_time: (() => {
+        if (!form.launch_time) return null;
+        const d = new Date(form.launch_time);
+        return isNaN(d.getTime()) ? null : d.toISOString();
+      })(),
       timer_image_url: form.timer_image_url || null,
     });
     const client = supabase;

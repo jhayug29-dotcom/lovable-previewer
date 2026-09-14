@@ -180,6 +180,7 @@ type SettleRow = {
   collaborator_link_id?: string | null;
   coupon_code: string | null;
   customer_email: string | null;
+  customer_phone: string | null;
   customer_name: string | null;
   origin: string | null;
   receipt_sent_at: string | null;
@@ -187,7 +188,7 @@ type SettleRow = {
 };
 
 const ORDER_COLUMNS =
-  "id, status, amount, user_id, collaborator_link_id, coupon_code, customer_email, customer_name, origin, receipt_sent_at, products(*)";
+  "id, status, amount, user_id, collaborator_link_id, coupon_code, customer_email, customer_phone, customer_name, origin, receipt_sent_at, products(*)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
   const { data } = await adminClient()
@@ -248,6 +249,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     const sent = await sendReceiptEmail({
       toEmail: row.customer_email,
       customerName: row.customer_name ?? row.customer_email.split("@")[0] ?? "there",
+      customerPhone: row.customer_phone ?? "",
       productName: row.products?.title ?? "Editly Store purchase",
       amount: Number(row.amount ?? 0),
       orderId: cfOrderId,
@@ -270,6 +272,7 @@ export type VerifiedOrder = {
   productSlug: string;
   downloadLink: string | null;
   email: string | null;
+  phone: string | null;
   receiptSent: boolean;
   paidAt: string;
 };
@@ -295,8 +298,9 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
     amount: Number(payload.order_amount ?? row?.amount ?? 0),
     productTitle: row?.products?.title ?? "Editly Store purchase",
     productSlug: row?.products?.slug ?? "",
-    downloadLink: paid ? link : null,
+    downloadLink: paid ? (link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)) : null,
     email: row?.customer_email ?? null,
+    phone: row?.customer_phone ?? null,
     receiptSent: paid ? Boolean(row?.receipt_sent_at) || Boolean(link) : false,
     paidAt: new Date().toISOString(),
   };

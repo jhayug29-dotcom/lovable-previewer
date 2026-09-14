@@ -4,6 +4,7 @@ import { EMAILJS, isEmailjsConfigured } from "./email-config";
 export type ReceiptInput = {
   toEmail: string;
   customerName: string;
+  customerPhone: string;
   productName: string;
   amount: number;
   orderId: string;
@@ -25,6 +26,8 @@ export async function sendReceipt(input: ReceiptInput): Promise<boolean> {
       order_id: input.orderId,
       order_date: new Date().toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }),
       download_link: input.downloadLink,
+      customer_email: input.toEmail,
+      customer_phone: input.customerPhone,
     },
     { publicKey: EMAILJS.publicKey },
   );

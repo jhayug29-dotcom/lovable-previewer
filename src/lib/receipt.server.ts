@@ -16,6 +16,7 @@ function cfg(name: string, fallback?: string): string | undefined {
 export type ReceiptPayload = {
   toEmail: string;
   customerName: string;
+  customerPhone: string;
   productName: string;
   amount: number;
   orderId: string;
@@ -55,6 +56,8 @@ export async function sendReceiptEmail(payload: ReceiptPayload): Promise<boolean
             timeZone: "Asia/Kolkata",
           }),
           download_link: payload.downloadLink,
+          customer_email: payload.toEmail,
+          customer_phone: payload.customerPhone,
         },
       }),
     });
