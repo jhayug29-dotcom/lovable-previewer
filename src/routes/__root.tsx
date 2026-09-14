@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -8,13 +8,13 @@ import {
   Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
-
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "../contexts/AuthContext";
 import { Toaster } from "../components/ui/sonner";
 import { PageViewTrackerV2 } from "../components/site/PageViewTrackerV2";
+import { reportLovableError } from "../lib/lovable-error-reporting";
+import { supabase } from "../integrations/supabase/client";
+import { useEffect, type ReactNode } from "react";
 
 function NotFoundComponent() {
   return (
@@ -66,7 +66,7 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
           </button>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground"
           >
             Go home
           </a>
@@ -74,6 +74,45 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
       </div>
     </div>
   );
+}
+
+function AnalyticsRealtimeBridge() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let refreshTimer: number | null = null;
+    const invalidateAnalytics = () => {
+      if (!window.location.pathname.startsWith("/admin")) return;
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["analytics"] });
+      }, 250);
+    };
+
+    const channel = supabase
+      ? supabase
+          .channel("editly-admin-analytics-live")
+          .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, invalidateAnalytics)
+          .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, invalidateAnalytics)
+          .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, invalidateAnalytics)
+          .on("postgres_changes", { event: "*", schema: "public", table: "products" }, invalidateAnalytics)
+          .subscribe()
+      : null;
+
+    const poll = window.setInterval(() => {
+      if (document.visibilityState === "visible") invalidateAnalytics();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(poll);
+      if (refreshTimer !== null) window.clearTimeout(refreshTimer);
+      if (channel) void supabase?.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  return null;
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
@@ -117,10 +156,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "canonical", href: "https://editly-store.vercel.app/" },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
+      { rel: "stylesheet", href: appCss },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -158,6 +194,7 @@ function RootComponent() {
       <AuthProvider>
         <Outlet />
         <PageViewTrackerV2 />
+        <AnalyticsRealtimeBridge />
         <Toaster position="top-center" />
       </AuthProvider>
     </QueryClientProvider>
