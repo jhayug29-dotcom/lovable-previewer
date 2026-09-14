@@ -45,29 +45,10 @@ async function loadProduct(slug: string): Promise<ProductRow> {
     id: product.id ?? product.slug,
     slug: product.slug,
     title: product.title,
-    price: product.price,
+    price: Number(product.price),
     is_free: Boolean(product.isFree),
     download_link: product.downloadLink ?? null,
   };
-}
-
-async function applySalePricing(productId: string, price: number): Promise<number> {
-  try {
-    const { loadPromos } = await import("./catalog.server");
-    const { sale } = await loadPromos();
-    if (!sale) return price;
-    const ids = sale.product_ids ?? [];
-    if (ids.length > 0 && !ids.includes(productId)) return price;
-    const next =
-      sale.sale_type === "flat" && sale.flat_price !== null
-        ? Math.round(sale.flat_price)
-        : sale.percent_off
-          ? Math.round(price * (1 - sale.percent_off / 100))
-          : price;
-    return next > 0 && next < price ? next : price;
-  } catch {
-    return price;
-  }
 }
 
 async function applyCoupon(
@@ -150,8 +131,9 @@ export async function createOrder(input: CreateOrderInput) {
   const product = await loadProduct(input.slug);
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
-  const salePrice = await applySalePricing(product.id, Number(product.price));
-  const amount = await applyCoupon(salePrice, input.couponCode, product.id);
+  // catalog.loadProduct() already applies the currently active store sale.
+  // Never apply the same sale a second time here.
+  const amount = await applyCoupon(product.price, input.couponCode, product.id);
   const cfOrderId = `editly_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const user = input.accessToken ? await requireUser(input.accessToken).catch(() => null) : null;
   const collaborator = await intelligentResolveCollaborator({
@@ -256,7 +238,6 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
     .select(ORDER_COLUMNS)
     .eq("cf_order_id", cfOrderId)
     .maybeSingle();
-
   if (error) throw new Error(`Could not load order ${cfOrderId}: ${error.message}`);
   if (!data) return null;
   const row = data as SettleRow;
@@ -274,14 +255,13 @@ async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
         };
       }
     } catch {
-      // Product metadata fallback is best effort.
+      // Best effort only.
     }
   }
 
   if (row.products && !row.products.download_link && row.download_link) {
     row.products.download_link = row.download_link;
   }
-
   return row;
 }
 
@@ -302,7 +282,9 @@ type CashfreeOrderPayload = {
 async function fetchCashfreeOrder(cfOrderId: string): Promise<CashfreeOrderPayload> {
   const response = await fetch(`${CF_BASE}/orders/${cfOrderId}`, { headers: cfHeaders() });
   const payload = (await response.json()) as CashfreeOrderPayload;
-  if (!response.ok) throw new Error(payload.message ?? `Could not fetch Cashfree order (${response.status})`);
+  if (!response.ok) {
+    throw new Error(payload.message ?? `Could not fetch Cashfree order (${response.status})`);
+  }
   return payload;
 }
 
@@ -323,13 +305,23 @@ async function recoverOrderFromCashfree(
   const customer = payload.customer_details ?? {};
   const userId = tags.user_id || customer.customer_id || null;
   const collaboratorLinkId = tags.collaborator_link_id || null;
-
   if (!productId && !productSlug) return null;
 
   let product: ProductRow | null = null;
   try {
     const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
-    product = await fetchCatalogProduct(productId || productSlug);
+    product = await fetchCatalogProduct(productId || productSlug).then((p) =>
+      p
+        ? {
+            id: p.id ?? p.slug,
+            slug: p.slug,
+            title: p.title,
+            price: Number(p.price),
+            is_free: Boolean(p.isFree),
+            download_link: p.downloadLink ?? null,
+          }
+        : null,
+    );
   } catch {
     product = null;
   }
@@ -359,7 +351,6 @@ async function recoverOrderFromCashfree(
 
   const { error } = await adminClient().from("orders").upsert(row, { onConflict: "cf_order_id" });
   if (error) throw new Error(`Could not recover order ${cfOrderId}: ${error.message}`);
-
   return loadOrder(cfOrderId);
 }
 
@@ -374,7 +365,6 @@ async function syncProductSalesCounter(productId: string | null | undefined) {
     .eq("product_id", productId)
     .in("status", [...PAID_STATUSES]);
   if (error) throw new Error(`Could not sync product sales: ${error.message}`);
-
   const sales = data?.length ?? 0;
   const { error: updateError } = await db.from("products").update({ sales }).eq("id", productId);
   if (updateError) throw new Error(`Could not update product sales: ${updateError.message}`);
@@ -393,7 +383,7 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
         if (row.products) row.products.download_link = link;
       }
     } catch {
-      // Best effort only; the payment should still be settled.
+      // Best effort only.
     }
   }
 
@@ -467,7 +457,6 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
         .eq("id", row.id);
     }
   }
-
   return link;
 }
 
@@ -494,20 +483,16 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
       : "FAILED";
 
   let row = await loadOrder(cfOrderId);
-  if (!row) {
-    row = await recoverOrderFromCashfree(cfOrderId, payload);
-  }
-
+  if (!row) row = await recoverOrderFromCashfree(cfOrderId, payload);
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
+
   return {
     status,
     amount: Number(payload.order_amount ?? row?.amount ?? 0),
     productTitle: row?.products?.title ?? "Editly Store purchase",
     productSlug: row?.products?.slug ?? "",
     downloadLink: paid
-      ? link ||
-        row?.download_link ||
-        (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
+      ? link || row?.download_link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
       : null,
     email: row?.customer_email ?? payload.customer_details?.customer_email ?? null,
     phone: row?.customer_phone ?? payload.customer_details?.customer_phone ?? null,
@@ -530,24 +515,21 @@ export async function claimFree(
     userId: user.id,
     customerEmail: user.email,
   });
-
   const cfOrderId = `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-  const { error: orderError } = await adminClient()
-    .from("orders")
-    .insert({
-      user_id: user.id,
-      product_id: product.id,
-      cf_order_id: cfOrderId,
-      amount: 0,
-      status: "PAID",
-      customer_email: user.email,
-      download_link: product.download_link,
-      paid_at: new Date().toISOString(),
-      collaborator_link_id: collaborator?.id ?? null,
-    });
-
+  const { error: orderError } = await adminClient().from("orders").insert({
+    user_id: user.id,
+    product_id: product.id,
+    cf_order_id: cfOrderId,
+    amount: 0,
+    status: "PAID",
+    customer_email: user.email,
+    download_link: product.download_link,
+    paid_at: new Date().toISOString(),
+    collaborator_link_id: collaborator?.id ?? null,
+  });
   if (orderError) throw new Error(`Could not record free order: ${orderError.message}`);
+
   await syncProductSalesCounter(product.id);
 
   if (collaborator?.id) {
@@ -580,8 +562,7 @@ export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED"
   let row = await loadOrder(cfOrderId);
   if (!row) {
     try {
-      const payload = await fetchCashfreeOrder(cfOrderId);
-      row = await recoverOrderFromCashfree(cfOrderId, payload);
+      row = await recoverOrderFromCashfree(cfOrderId, await fetchCashfreeOrder(cfOrderId));
     } catch {
       row = null;
     }
