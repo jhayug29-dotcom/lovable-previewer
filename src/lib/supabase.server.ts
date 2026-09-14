@@ -1,98 +1,72 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-if (typeof process.loadEnvFile === "function") {
-  try {
-    process.loadEnvFile(".env");
-  } catch {
-    // .env might not exist or already loaded
-  }
-}
-
-const DEFAULT_SUPABASE_URL = "https://wylcbblegcyzunychqqa.supabase.co";
-const DEFAULT_SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNTA0OTgsImV4cCI6MjEwMDYyNjQ5OH0.dkFbE5steNuvDJtor-DSAyWHaTHjSMk0Uwa6RXasaFg";
-const DEFAULT_SUPABASE_SERVICE_ROLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE";
-
 function getEnv(name: string): string | undefined {
   const value = process.env[name];
   return value?.trim() || undefined;
 }
 
-export function isSupabaseServerConfigured(): boolean {
-  const url =
-    getEnv("VITE_SUPABASE_URL") ??
-    getEnv("SUPABASE_URL") ??
-    getEnv("STORE_SUPABASE_URL") ??
-    DEFAULT_SUPABASE_URL;
-  const key =
-    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
-    getEnv("VITE_SUPABASE_ANON_KEY") ??
-    getEnv("SUPABASE_PUBLISHABLE_KEY") ??
-    getEnv("SUPABASE_ANON_KEY") ??
-    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY") ??
-    DEFAULT_SUPABASE_ANON_KEY;
-  return Boolean(url && key);
-}
-
-/**
- * Use the same Supabase project configuration as the browser client first.
- * This prevents a stale SUPABASE_URL/SUPABASE_* variable on Vercel from
- * silently pointing server functions at a different Supabase project.
- */
+/** Resolve the deployment's single Supabase project. No repository fallbacks. */
 export function getSupabaseUrl(): string {
   const url =
-    getEnv("VITE_SUPABASE_URL") ??
     getEnv("SUPABASE_URL") ??
-    getEnv("STORE_SUPABASE_URL") ??
-    DEFAULT_SUPABASE_URL;
+    getEnv("VITE_SUPABASE_URL") ??
+    getEnv("STORE_SUPABASE_URL");
 
   if (!url) {
     throw new Error(
-      "Supabase is not configured. Set VITE_SUPABASE_URL (or SUPABASE_URL) in the deployment environment.",
+      "Supabase is not configured. Set SUPABASE_URL and VITE_SUPABASE_URL in the deployment environment.",
     );
   }
-
   return url;
 }
 
-/** Server-side publishable/anon key. Keep it aligned with the browser client. */
+/** Browser-safe publishable/anon key for user-scoped requests. */
 export function getSupabaseKey(): string {
   const key =
-    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
-    getEnv("VITE_SUPABASE_ANON_KEY") ??
     getEnv("SUPABASE_PUBLISHABLE_KEY") ??
     getEnv("SUPABASE_ANON_KEY") ??
-    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY") ??
-    DEFAULT_SUPABASE_ANON_KEY;
+    getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
+    getEnv("VITE_SUPABASE_ANON_KEY") ??
+    getEnv("STORE_SUPABASE_PUBLISHABLE_KEY");
 
   if (!key) {
     throw new Error(
-      "Supabase is not configured. Set VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) in the deployment environment.",
+      "Supabase is not configured. Set SUPABASE_PUBLISHABLE_KEY and VITE_SUPABASE_PUBLISHABLE_KEY in the deployment environment.",
     );
   }
-
   return key;
 }
 
+/** Server-only privileged key. Never hard-code this in source. */
 export function getServiceRoleKey(): string | undefined {
   const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY") ??
-    DEFAULT_SUPABASE_SERVICE_ROLE_KEY;
+    getEnv("SUPABASE_SERVICE_KEY");
 
-  if (!key || key === "sb_secret_xxx") {
-    return undefined;
-  }
-  return key;
+  return key && key !== "sb_secret_xxx" ? key : undefined;
 }
 
-/** Service-role client — bypasses RLS when configured. Server-only, privileged work only. */
+export function isSupabaseServerConfigured(): boolean {
+  try {
+    getSupabaseUrl();
+    getSupabaseKey();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Service-role client for trusted server operations. */
 export function adminClient(): SupabaseClient {
   const serviceKey = getServiceRoleKey();
-  const key = serviceKey || getSupabaseKey();
-  return createClient(getSupabaseUrl(), key, {
+  if (!serviceKey) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is missing in the deployment environment. Privileged server operations cannot run safely.",
+    );
+  }
+
+  return createClient(getSupabaseUrl(), serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -105,7 +79,6 @@ export function userClient(accessToken: string): SupabaseClient {
   });
 }
 
-/** Returns the most appropriate Supabase client: userClient if token provided, otherwise adminClient. */
 export function getDbClient(accessToken?: string): SupabaseClient {
   if (accessToken) return userClient(accessToken);
   return adminClient();
@@ -141,26 +114,23 @@ export async function requireAdmin(accessToken: string | undefined): Promise<Aut
   const user = await requireUser(accessToken);
 
   if (isOwnerOrAdminEmail(user.email)) {
-    // Auto-grant the DB admin role if they are an owner, so RLS policies pass
-    try {
-      const sClient = adminClient();
-      await sClient
-        .from("user_roles")
-        .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id, role" });
-    } catch (e) {
-      // Ignore errors if service role fails
-    }
+    const sClient = adminClient();
+    const { error } = await sClient
+      .from("user_roles")
+      .upsert({ user_id: user.id, role: "admin" }, { onConflict: "user_id, role" });
+    if (error) throw new Error(`Could not grant admin role: ${error.message}`);
     return user;
   }
 
   const client = getDbClient(accessToken);
-  const { data } = await client
+  const { data, error } = await client
     .from("user_roles")
     .select("role")
     .eq("user_id", user.id)
     .eq("role", "admin")
     .maybeSingle();
 
+  if (error) throw new Error(`Could not verify admin role: ${error.message}`);
   if (!data) throw new Error("Admin access required");
   return user;
 }
