@@ -428,11 +428,9 @@ function useSave(table: string) {
   return useMutation({
     mutationFn: async (initialRow: Record<string, unknown>) => {
       if (!supabase) throw new Error("Backend not connected");
-      const row = { ...initialRow };
-      if (table === "products") {
-        delete row["launch_time"];
-        delete row["timer_image_url"];
-      }
+      const row = Object.fromEntries(
+        Object.entries(initialRow).filter(([, value]) => value !== undefined),
+      );
 
       let attempts = 0;
       while (attempts < 5) {
@@ -457,13 +455,13 @@ function useSave(table: string) {
     },
     onSuccess: async () => {
       toast.success("Saved");
-      void qc.invalidateQueries();
+      await qc.invalidateQueries();
       try {
         await invalidateStoreCache();
       } catch {
         // ignore offline / network errors
       }
-      void router.invalidate();
+      await router.invalidate();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
@@ -639,7 +637,7 @@ function ProductsTab() {
         .split("\n")
         .map((s) => s.trim())
         .filter(Boolean);
-    save.mutate({
+    await save.mutateAsync({
       ...(form.id ? { id: form.id } : {}),
       slug: form.slug.trim(),
       title: form.title.trim(),

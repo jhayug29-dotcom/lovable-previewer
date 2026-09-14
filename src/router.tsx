@@ -7,7 +7,7 @@ export const getRouter = () => {
     defaultOptions: {
       queries: {
         // Serve cached data instantly, refresh quietly in the background.
-        staleTime: 60_000,
+        staleTime: 0,
         gcTime: 5 * 60_000,
         refetchOnWindowFocus: false,
         retry: 1,
@@ -22,8 +22,8 @@ export const getRouter = () => {
     // Warm the next page (code + data) as soon as a link is hovered/focused.
     defaultPreload: "intent",
     defaultPreloadDelay: 60,
-    defaultPreloadStaleTime: 30_000,
-    defaultStaleTime: 30_000,
+    defaultPreloadStaleTime: 0,
+    defaultStaleTime: 0,
   });
 
   return router;
