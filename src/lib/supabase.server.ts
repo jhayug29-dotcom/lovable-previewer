@@ -5,27 +5,23 @@ function getEnv(name: string): string | undefined {
   return value?.trim() || undefined;
 }
 
-/** Resolve the deployment's single Supabase project. No repository fallbacks. */
+/**
+ * Use the browser Supabase project first, matching the known-good deployment behavior.
+ * Do not silently point server functions at a second project.
+ */
 export function getSupabaseUrl(): string {
-  const browserUrl = getEnv("VITE_SUPABASE_URL");
-  const serverUrl = getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
+  const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? getEnv("STORE_SUPABASE_URL");
 
-  if (browserUrl && serverUrl && browserUrl !== serverUrl) {
-    throw new Error(
-      "Supabase deployment mismatch: VITE_SUPABASE_URL and SUPABASE_URL point to different projects.",
-    );
-  }
-
-  const url = browserUrl ?? serverUrl;
   if (!url) {
     throw new Error(
-      "Supabase is not configured. Set VITE_SUPABASE_URL and SUPABASE_URL in the deployment environment.",
+      "Supabase is not configured. Set VITE_SUPABASE_URL (or SUPABASE_URL) in the deployment environment.",
     );
   }
+
   return url;
 }
 
-/** Browser-safe publishable/anon key for user-scoped requests. */
+/** Server-side publishable/anon key, aligned with the browser client. */
 export function getSupabaseKey(): string {
   const key =
     getEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ??
@@ -39,41 +35,30 @@ export function getSupabaseKey(): string {
       "Supabase is not configured. Set VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY) in the deployment environment.",
     );
   }
+
   return key;
 }
 
-/** Server-only privileged key. Prefer the modern sb_secret_* key when both old and new variables exist. */
+/**
+ * Keep the old working environment-variable names first, while also supporting
+ * the newer SUPABASE_SECRET_KEY alias.
+ */
 export function getServiceRoleKey(): string | undefined {
-  const modernSecret =
-    getEnv("SUPABASE_SECRET_KEY") ?? getEnv("STORE_SUPABASE_SECRET_KEY");
-  const legacyServiceRole =
+  const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY");
+    getEnv("SUPABASE_SERVICE_KEY") ??
+    getEnv("SUPABASE_SECRET_KEY") ??
+    getEnv("STORE_SUPABASE_SECRET_KEY");
 
-  return modernSecret && modernSecret !== "sb_secret_xxx" ? modernSecret : legacyServiceRole;
+  if (!key || key === "sb_secret_xxx") return undefined;
+  return key;
 }
 
-export function isSupabaseServerConfigured(): boolean {
-  try {
-    getSupabaseUrl();
-    getSupabaseKey();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Service-role/secret-key client for trusted server operations. */
+/** Service-role client. Falls back to the publishable key exactly like the known-good deployment. */
 export function adminClient(): SupabaseClient {
-  const serviceKey = getServiceRoleKey();
-  if (!serviceKey) {
-    throw new Error(
-      "No privileged Supabase server key is configured. Set SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY in Vercel.",
-    );
-  }
-
-  return createClient(getSupabaseUrl(), serviceKey, {
+  const key = getServiceRoleKey() || getSupabaseKey();
+  return createClient(getSupabaseUrl(), key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
