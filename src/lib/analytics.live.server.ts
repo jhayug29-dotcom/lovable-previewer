@@ -8,53 +8,63 @@ function isPaid(status: unknown) {
   return PAID.has(String(status ?? "").toUpperCase());
 }
 
-async function readBoth<T>(
+/**
+ * For analytics reads, prefer the same authenticated Supabase client used by the
+ * admin UI. This avoids turning a privileged-key configuration problem into an
+ * apparently healthy all-zero dashboard. A privileged read is only a fallback.
+ */
+async function readLive<T>(
   accessToken: string | undefined,
-  query: (db: ReturnType<typeof adminClient>) => Promise<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<{ rows: T[]; source: "privileged" | "user" | "none"; privilegedError?: string; userError?: string }> {
-  let privilegedRows: T[] = [];
-  let userRows: T[] = [];
-  let privilegedError: string | undefined;
-  let userError: string | undefined;
-
-  try {
-    const result = await query(adminClient());
-    if (result.error) privilegedError = result.error.message;
-    privilegedRows = result.data ?? [];
-  } catch (error) {
-    privilegedError = error instanceof Error ? error.message : String(error);
-  }
-
+  query: (db: ReturnType<typeof getDbClient>) => Promise<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ rows: T[]; error?: string }> {
   if (accessToken) {
     try {
-      const result = await query(getDbClient(accessToken));
-      if (result.error) userError = result.error.message;
-      userRows = result.data ?? [];
+      const userDb = getDbClient(accessToken);
+      const result = await query(userDb);
+      if (!result.error && result.data && result.data.length > 0) {
+        return { rows: result.data };
+      }
+      if (result.error) {
+        // Keep the error as diagnostic information and try the authoritative client.
+        const adminDb = adminClient();
+        const fallback = await query(adminDb);
+        if (!fallback.error && fallback.data) return { rows: fallback.data };
+        return { rows: [], error: `${result.error.message}; ${fallback.error?.message ?? "admin fallback returned no rows"}` };
+      }
     } catch (error) {
-      userError = error instanceof Error ? error.message : String(error);
+      const message = error instanceof Error ? error.message : String(error);
+      try {
+        const fallback = await query(adminClient());
+        if (!fallback.error && fallback.data) return { rows: fallback.data };
+        return { rows: [], error: `${message}; ${fallback.error?.message ?? "admin fallback returned no rows"}` };
+      } catch (fallbackError) {
+        return { rows: [], error: `${message}; ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}` };
+      }
     }
   }
 
-  if (privilegedRows.length >= userRows.length && privilegedRows.length > 0) {
-    return { rows: privilegedRows, source: "privileged", privilegedError, userError };
+  try {
+    const result = await query(adminClient());
+    if (!result.error && result.data) return { rows: result.data };
+    return { rows: [], error: result.error?.message ?? "No analytics rows returned" };
+  } catch (error) {
+    return { rows: [], error: error instanceof Error ? error.message : String(error) };
   }
-  if (userRows.length > 0) {
-    return { rows: userRows, source: "user", privilegedError, userError };
-  }
-  return { rows: [], source: "none", privilegedError, userError };
 }
 
 export async function getLiveAnalytics(accessToken: string | undefined): Promise<Analytics> {
   const access = await panelAccess(accessToken);
   if (!access.admin && !access.seller) throw new Error("Not allowed");
+  if (!accessToken) throw new Error("A signed-in admin session is required for live analytics");
+
   const now = Date.now();
   const weekAgo = new Date(now - 7 * DAY).toISOString();
   const monthAgo = new Date(now - 30 * DAY).toISOString();
 
-  const productRead = await readBoth(accessToken, (db) =>
+  const productRead = await readLive(accessToken, (db) =>
     db.from("products").select("id, title, category, price, active, sales"),
   );
-  const orderRead = await readBoth(accessToken, (db) =>
+  const orderRead = await readLive(accessToken, (db) =>
     db.from("orders").select("id, product_id, amount, status, created_at, paid_at"),
   );
 
@@ -142,8 +152,6 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
   for (const product of products) {
     const stat = stats.get(product.id)!;
     stat.orders = Math.max(stat.orders, paidCounts.get(product.id) ?? 0);
-    // Revenue shown for a product comes only from real paid orders.
-    stat.revenue = stat.revenue || 0;
   }
 
   let visitorsWeek = 0;
@@ -156,7 +164,7 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
   let signInsMonth = 0;
 
   if (access.admin) {
-    const views = await readBoth(accessToken, (db) =>
+    const views = await readLive(accessToken, (db) =>
       db.from("page_views").select("session_id, created_at").gte("created_at", monthAgo).limit(50_000),
     );
     const monthSessions = new Set<string>();
@@ -172,7 +180,7 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
     visitorsMonth = monthSessions.size;
     visitorsWeek = weekSessions.size;
 
-    const profiles = await readBoth(accessToken, (db) => db.from("profiles").select("id, created_at"));
+    const profiles = await readLive(accessToken, (db) => db.from("profiles").select("id, created_at"));
     const signupIds = new Set<string>();
     for (const row of profiles.rows as { id: string; created_at: string | null }[]) {
       if (!row.created_at) continue;
@@ -193,23 +201,27 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
         }
       }
     } catch {
-      // Auth admin may be unavailable when the privileged key is not valid; profile counts remain usable.
+      // Keep profile-based signup counts when admin auth access is unavailable.
     }
   }
 
-  // Do not silently report an apparently healthy all-zero dashboard when every source failed.
-  const hasData = products.length > 0 || orders.length > 0 || visitorsMonth > 0 || signupsMonth > 0;
-  if (!hasData && (productRead.privilegedError || orderRead.privilegedError)) {
+  const hasAnyRows = products.length > 0 || orderRead.rows.length > 0 || viewsFallbackNonEmpty(access.admin, visitorsMonth, signupsMonth);
+  if (!hasAnyRows && (productRead.error || orderRead.error)) {
     throw new Error(
-      `Analytics backend read failed. Products: ${productRead.privilegedError ?? "no rows"}. Orders: ${orderRead.privilegedError ?? "no rows"}. Check that Vercel Supabase URL and key belong to the same project.`,
+      `Analytics could not read live data. Products: ${productRead.error ?? "empty"}. Orders: ${orderRead.error ?? "empty"}. The logged-in admin is not seeing the production Supabase data source.`,
     );
   }
+
+  const allTimeSalesCount = Math.max(
+    orders.length,
+    [...stats.values()].reduce((n, p) => n + p.orders, 0),
+  );
 
   return {
     scope: access.admin ? "admin" : "seller",
     productCount: products.length,
     activeProductCount: products.filter((p) => p.active).length,
-    totalOrders: Math.max(orders.length, [...stats.values()].reduce((n, p) => n + p.orders, 0)),
+    totalOrders: allTimeSalesCount,
     totalRevenue,
     ordersThisMonth,
     revenueThisMonth,
@@ -226,7 +238,11 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
     products: [...stats.values()].sort((a, b) => b.revenue - a.revenue),
     categories: [...categories.values()].sort((a, b) => b.revenue - a.revenue),
     daily: [...dailyMap.entries()].map(([day, values]) => ({ day, ...values })),
-    allTimeSalesCount: Math.max(orders.length, [...stats.values()].reduce((n, p) => n + p.orders, 0)),
+    allTimeSalesCount,
     allTimeRevenue: totalRevenue,
   };
+}
+
+function viewsFallbackNonEmpty(isAdmin: boolean, visitors: number, signups: number) {
+  return !isAdmin || visitors > 0 || signups > 0;
 }
