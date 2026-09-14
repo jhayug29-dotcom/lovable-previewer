@@ -42,16 +42,16 @@ export function getSupabaseKey(): string {
   return key;
 }
 
-/** Server-only privileged key. Never hard-code this in source. */
+/** Server-only privileged key. Prefer the modern sb_secret_* key when both old and new variables exist. */
 export function getServiceRoleKey(): string | undefined {
-  const key =
+  const modernSecret =
+    getEnv("SUPABASE_SECRET_KEY") ?? getEnv("STORE_SUPABASE_SECRET_KEY");
+  const legacyServiceRole =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY") ??
-    getEnv("SUPABASE_SECRET_KEY") ??
-    getEnv("STORE_SUPABASE_SECRET_KEY");
+    getEnv("SUPABASE_SERVICE_KEY");
 
-  return key && key !== "sb_secret_xxx" ? key : undefined;
+  return modernSecret && modernSecret !== "sb_secret_xxx" ? modernSecret : legacyServiceRole;
 }
 
 export function isSupabaseServerConfigured(): boolean {
@@ -69,7 +69,7 @@ export function adminClient(): SupabaseClient {
   const serviceKey = getServiceRoleKey();
   if (!serviceKey) {
     throw new Error(
-      "No privileged Supabase server key is configured. Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY in Vercel.",
+      "No privileged Supabase server key is configured. Set SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY in Vercel.",
     );
   }
 
