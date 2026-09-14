@@ -33,15 +33,17 @@ function loadSdk(): Promise<CashfreeFactory> {
   return loader;
 }
 
-/** production unless VITE_CASHFREE_MODE=sandbox — keeps the app portable across environments. */
-const MODE: "production" | "sandbox" =
+const DEFAULT_MODE: "production" | "sandbox" =
   (import.meta.env["VITE_CASHFREE_MODE"] as string | undefined) === "sandbox"
     ? "sandbox"
     : "production";
 
-/** Opens the Cashfree hosted checkout for a payment session. */
-export async function openCashfreeCheckout(paymentSessionId: string) {
+/** Opens the Cashfree hosted checkout. When the server returns its mode, use it so client/server can never disagree. */
+export async function openCashfreeCheckout(
+  paymentSessionId: string,
+  mode: "production" | "sandbox" = DEFAULT_MODE,
+) {
   const factory = await loadSdk();
-  const cashfree = factory({ mode: MODE });
+  const cashfree = factory({ mode });
   await cashfree.checkout({ paymentSessionId, redirectTarget: "_self" });
 }
