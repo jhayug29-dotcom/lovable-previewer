@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, notFound, redirect, isRedirect } from "@tanstack/react-router";
+import { createFileRoute, notFound, redirect, isRedirect, useRouter } from "@tanstack/react-router";
 
 import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { generateAiReviews } from "@/lib/store.functions";
 import { grantAdminAccess, listAdminUsers, revokeAdminAccess } from "@/lib/admin.functions";
+import { invalidateStoreCache } from "@/lib/catalog.functions";
 import {
   checkPanelAccess,
   fetchAnalytics,
@@ -423,20 +424,46 @@ function useTable<T>(table: string, order = "created_at") {
 
 function useSave(table: string) {
   const qc = useQueryClient();
+  const router = useRouter();
   return useMutation({
-    mutationFn: async (row: Record<string, unknown>) => {
+    mutationFn: async (initialRow: Record<string, unknown>) => {
       if (!supabase) throw new Error("Backend not connected");
-      const { error } = row["id"]
-        ? await supabase
-            .from(table)
-            .update(row)
-            .eq("id", row["id"] as string)
-        : await supabase.from(table).insert(row);
-      if (error) throw error;
+      const row = { ...initialRow };
+      if (table === "products") {
+        delete row["launch_time"];
+        delete row["timer_image_url"];
+      }
+
+      let attempts = 0;
+      while (attempts < 5) {
+        attempts++;
+        const { error } = row["id"]
+          ? await supabase
+              .from(table)
+              .update(row)
+              .eq("id", row["id"] as string)
+          : await supabase.from(table).insert(row);
+        if (!error) return;
+
+        // If a column is missing from the table schema cache, strip it and retry automatically
+        const match = error.message?.match(/Could not find the '([^']+)' column/i);
+        if (match && match[1] && match[1] in row) {
+          console.warn(`Column '${match[1]}' not in ${table} table, stripping and retrying save`);
+          delete row[match[1]];
+          continue;
+        }
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Saved");
-      void qc.invalidateQueries({ queryKey: [table] });
+      void qc.invalidateQueries();
+      try {
+        await invalidateStoreCache();
+      } catch {
+        // ignore offline / network errors
+      }
+      void router.invalidate();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Save failed"),
   });
@@ -444,15 +471,22 @@ function useSave(table: string) {
 
 function useRemove(table: string) {
   const qc = useQueryClient();
+  const router = useRouter();
   return useMutation({
     mutationFn: async (id: string) => {
       if (!supabase) throw new Error("Backend not connected");
       const { error } = await supabase.from(table).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Deleted");
-      void qc.invalidateQueries({ queryKey: [table] });
+      void qc.invalidateQueries();
+      try {
+        await invalidateStoreCache();
+      } catch {
+        // ignore
+      }
+      void router.invalidate();
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
@@ -1895,6 +1929,7 @@ const SETTINGS_FIELDS: {
 
 function SettingsTab() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data } = useQuery({ queryKey: ["site-settings"], queryFn: fetchSettings });
   const [form, setForm] = useState<SiteSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
@@ -1909,9 +1944,15 @@ function SettingsTab() {
 
   const save = useMutation({
     mutationFn: () => saveSettings(form),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Contact details updated");
-      void queryClient.invalidateQueries({ queryKey: ["site-settings"] });
+      void queryClient.invalidateQueries();
+      try {
+        await invalidateStoreCache();
+      } catch {
+        // ignore
+      }
+      void router.invalidate();
     },
     onError: (error: Error) => toast.error(error.message),
   });

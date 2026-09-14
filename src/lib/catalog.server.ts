@@ -52,13 +52,14 @@ function publicClient(): SupabaseClient | null {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-const TTL_MS = 30_000;
+const TTL_MS = 1_000;
 let cache: { at: number; products: DbProduct[] } | null = null;
 let inflight: Promise<DbProduct[]> | null = null;
 
 export function clearCatalogCache(): void {
   cache = null;
   inflight = null;
+  promoCache = null;
 }
 
 async function queryProducts(): Promise<DbProduct[]> {
@@ -113,28 +114,9 @@ async function loadRawProducts(): Promise<DbProduct[]> {
 export type Promos = { sale: StoreSale | null; banners: StoreBanner[] };
 let promoCache: { at: number; promos: Promos } | null = null;
 
-const fallbackBanners: StoreBanner[] = [
-  {
-    id: "default-creator-banner",
-    title: "All-in-One Creator Motion & SFX Drops",
-    subtitle: "DeepComp Preset Engine, 2000+ SFX Pack, Real Estate Project Files & Free Overlays",
-    image_url: "/media/hero-bg-1080.jpg",
-    link_url: "/store",
-    emoji: "🔥",
-    cta_label: "Browse Packs",
-    bg_from: "#7C3AED",
-    bg_to: "#DB2777",
-    text_color: "#FFFFFF",
-    active: true,
-    sort_order: 0,
-    starts_at: null,
-    ends_at: null,
-  },
-];
-
 async function queryPromos(): Promise<Promos> {
   const db = publicClient();
-  if (!db) return { sale: null, banners: fallbackBanners };
+  if (!db) return { sale: null, banners: [] };
   try {
     const [saleRes, bannerRes] = await Promise.all([
       db.from("sales").select("*").eq("active", true).order("created_at", { ascending: false }),
@@ -142,9 +124,9 @@ async function queryPromos(): Promise<Promos> {
     ]);
     const sales = ((saleRes.data ?? []) as StoreSale[]).filter((s) => isSaleLive(s));
     const banners = ((bannerRes.data ?? []) as StoreBanner[]).filter((b) => isBannerLive(b));
-    return { sale: sales[0] ?? null, banners: banners.length > 0 ? banners : fallbackBanners };
+    return { sale: sales[0] ?? null, banners };
   } catch {
-    return { sale: null, banners: fallbackBanners };
+    return { sale: null, banners: [] };
   }
 }
 

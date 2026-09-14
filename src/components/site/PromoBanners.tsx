@@ -9,8 +9,8 @@ export function PromoBanners() {
   const { data } = useQuery<Promos>({
     queryKey: ["store-promos"],
     queryFn: () => getStorePromos(),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
   });
 
   const banners = data?.banners ?? [];

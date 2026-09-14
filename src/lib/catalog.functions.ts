@@ -25,3 +25,10 @@ export const getStorePromos = createServerFn({ method: "GET" }).handler(async ()
   const { loadPromos } = await import("./catalog.server");
   return loadPromos();
 });
+
+/** Invalidate server-side catalog & promo caches when changes happen in admin */
+export const invalidateStoreCache = createServerFn({ method: "POST" }).handler(async () => {
+  const { clearCatalogCache } = await import("./catalog.server");
+  clearCatalogCache();
+  return { ok: true };
+});
