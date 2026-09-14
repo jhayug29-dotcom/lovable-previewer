@@ -78,17 +78,27 @@ async function queryPromos(): Promise<Promos> {
   const db = publicClient();
   if (!db) return { sale: null, banners: [] };
 
-  const [saleRes, bannerRes] = await Promise.all([
-    db.from("sales").select("*").eq("active", true).order("created_at", { ascending: false }),
-    db.from("banners").select("*").eq("active", true).order("sort_order", { ascending: true }),
-  ]);
+  try {
+    const [saleRes, bannerRes] = await Promise.all([
+      db.from("sales").select("*").eq("active", true).order("created_at", { ascending: false }),
+      db.from("banners").select("*").eq("active", true).order("sort_order", { ascending: true }),
+    ]);
 
-  if (saleRes.error) throw new Error(`Store sale read failed: ${saleRes.error.message}`);
-  if (bannerRes.error) throw new Error(`Store banner read failed: ${bannerRes.error.message}`);
+    if (saleRes.error || bannerRes.error) {
+      console.warn(
+        "[Store] Promo read unavailable; continuing without promo data:",
+        saleRes.error?.message ?? bannerRes.error?.message,
+      );
+      return { sale: null, banners: [] };
+    }
 
-  const sales = ((saleRes.data ?? []) as StoreSale[]).filter((s) => isSaleLive(s));
-  const banners = ((bannerRes.data ?? []) as StoreBanner[]).filter((b) => isBannerLive(b));
-  return { sale: sales[0] ?? null, banners };
+    const sales = ((saleRes.data ?? []) as StoreSale[]).filter((s) => isSaleLive(s));
+    const banners = ((bannerRes.data ?? []) as StoreBanner[]).filter((b) => isBannerLive(b));
+    return { sale: sales[0] ?? null, banners };
+  } catch (error) {
+    console.warn("[Store] Promo read failed; continuing without promo data:", error);
+    return { sale: null, banners: [] };
+  }
 }
 
 export async function loadPromos(): Promise<Promos> {
