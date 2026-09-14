@@ -1941,12 +1941,34 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
 
 function AnalyticsTab() {
   const accessToken = useAccessToken();
+  const queryClient = useQueryClient();
+  const analyticsQueryKey = useMemo(() => ["analytics", accessToken ?? ""], [accessToken]);
   const { data, isLoading, error } = useQuery({
-    queryKey: ["analytics", accessToken ?? ""],
+    queryKey: analyticsQueryKey,
     queryFn: () => fetchAnalytics({ data: { accessToken } }),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    enabled: Boolean(accessToken),
+    staleTime: 0,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
   });
+
+  useEffect(() => {
+    if (!supabase || !accessToken) return;
+
+    const refreshAnalytics = () => {
+      void queryClient.invalidateQueries({ queryKey: analyticsQueryKey });
+    };
+    const channel = supabase
+      .channel("admin-analytics-refresh")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, refreshAnalytics)
+      .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, refreshAnalytics)
+      .on("postgres_changes", { event: "*", schema: "public", table: "profiles" }, refreshAnalytics)
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [accessToken, queryClient]);
 
   if (isLoading) return <Loader2 className="size-6 animate-spin text-ink/60" />;
   if (error || !data)
