@@ -87,7 +87,7 @@ export function BuyButton({ slug, price, isFree }: Props) {
           ...(collaboratorCode ? { collaboratorCode } : {}),
         },
       });
-      await openCashfreeCheckout(result.paymentSessionId);
+      await openCashfreeCheckout(result.paymentSessionId, result.cashfreeMode);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Payment could not be started");
       setBusy(false);
