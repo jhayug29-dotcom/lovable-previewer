@@ -47,7 +47,9 @@ export function getServiceRoleKey(): string | undefined {
   const key =
     getEnv("SUPABASE_SERVICE_ROLE_KEY") ??
     getEnv("STORE_SUPABASE_SERVICE_ROLE_KEY") ??
-    getEnv("SUPABASE_SERVICE_KEY");
+    getEnv("SUPABASE_SERVICE_KEY") ??
+    getEnv("SUPABASE_SECRET_KEY") ??
+    getEnv("STORE_SUPABASE_SECRET_KEY");
 
   return key && key !== "sb_secret_xxx" ? key : undefined;
 }
@@ -62,12 +64,12 @@ export function isSupabaseServerConfigured(): boolean {
   }
 }
 
-/** Service-role client for trusted server operations. */
+/** Service-role/secret-key client for trusted server operations. */
 export function adminClient(): SupabaseClient {
   const serviceKey = getServiceRoleKey();
   if (!serviceKey) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is missing in the deployment environment. Privileged server operations cannot run safely.",
+      "No privileged Supabase server key is configured. Set SUPABASE_SERVICE_ROLE_KEY or SUPABASE_SECRET_KEY in Vercel.",
     );
   }
 
