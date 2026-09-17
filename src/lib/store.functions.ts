@@ -31,6 +31,20 @@ export const verifyCashfreeOrder = createServerFn({ method: "POST" })
     return verifyOrder(data.orderId);
   });
 
+export const resendReceiptEmail = createServerFn({ method: "POST" })
+  .validator((data) =>
+    z
+      .object({
+        orderId: z.string().min(1),
+        email: z.string().email().optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const { resendOrderReceipt } = await import("./cashfree.server");
+    return resendOrderReceipt(data.orderId, data.email);
+  });
+
 export const claimFreeProduct = createServerFn({ method: "POST" })
   .validator((data) =>
     z

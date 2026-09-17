@@ -49,3 +49,5 @@ node-compile-cache/
 # out of the environment, so they stay out of the repo to keep key handling in
 # one place (.env, which is already ignored above).
 scripts/
+supabase/backup*.json
+

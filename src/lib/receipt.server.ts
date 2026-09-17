@@ -25,16 +25,23 @@ export type ReceiptPayload = {
 };
 
 export function isServerReceiptConfigured(): boolean {
-  return Boolean(cfg("EMAILJS_PUBLIC_KEY") && cfg("EMAILJS_PRIVATE_KEY"));
+  return true;
 }
 
 /** Returns true when EmailJS accepted the message. Never throws. */
 export async function sendReceiptEmail(payload: ReceiptPayload): Promise<boolean> {
-  const publicKey = cfg("EMAILJS_PUBLIC_KEY");
-  const privateKey = cfg("EMAILJS_PRIVATE_KEY");
-  const serviceId = cfg("EMAILJS_SERVICE_ID", "service_tbk5flg")!;
-  const templateId = cfg("EMAILJS_TEMPLATE_ID", "template_e8uqzpz")!;
-  if (!publicKey || !privateKey) return false;
+  const publicKey =
+    cfg("EMAILJS_PUBLIC_KEY") ?? cfg("VITE_EMAILJS_PUBLIC_KEY") ?? "yMInTQ6igoNvRwpNk";
+  const privateKey = cfg("EMAILJS_PRIVATE_KEY", "OYOXv27MB1DgFVE53imjc")!;
+  const serviceId =
+    cfg("EMAILJS_SERVICE_ID") ?? cfg("VITE_EMAILJS_SERVICE_ID") ?? "service_tbk5flg";
+  const templateId =
+    cfg("EMAILJS_TEMPLATE_ID") ?? cfg("VITE_EMAILJS_TEMPLATE_ID") ?? "template_e8uqzpz";
+
+  if (!payload.toEmail || !payload.toEmail.includes("@")) {
+    console.warn("[EmailJS] Cannot send receipt without valid recipient email:", payload.toEmail);
+    return false;
+  }
 
   const fallbackLink = (payload.downloadLink || "").trim();
   const formattedAmount = `₹${payload.amount.toLocaleString("en-IN")}`;

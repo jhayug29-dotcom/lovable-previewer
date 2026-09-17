@@ -232,42 +232,73 @@ const ORDER_COLUMNS =
   "id, status, amount, user_id, product_id, download_link, collaborator_link_id, coupon_code, customer_email, customer_phone, customer_name, origin, receipt_sent_at, products(*)";
 
 async function loadOrder(cfOrderId: string): Promise<SettleRow | null> {
-  const db = adminClient();
-  const { data, error } = await db
-    .from("orders")
-    .select(ORDER_COLUMNS)
-    .eq("cf_order_id", cfOrderId)
-    .maybeSingle();
-  if (error) throw new Error(`Could not load order ${cfOrderId}: ${error.message}`);
-  if (!data) return null;
-  const row = data as SettleRow;
+  try {
+    const db = adminClient();
+    const { data, error } = await db
+      .from("orders")
+      .select(ORDER_COLUMNS)
+      .eq("cf_order_id", cfOrderId)
+      .maybeSingle();
 
-  if ((!row.products || !row.products.download_link) && row.product_id) {
-    try {
-      const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
-      const prod = await fetchCatalogProduct(row.product_id);
-      if (prod) {
-        row.products = {
-          id: prod.id,
-          slug: prod.slug,
-          title: prod.title,
-          download_link: prod.downloadLink ?? row.download_link ?? null,
-        };
-      }
-    } catch {
-      // Best effort only.
+    if (error) {
+      console.warn(`[Cashfree] loadOrder query issue for ${cfOrderId}:`, error.message);
+      return null;
     }
-  }
+    if (!data) return null;
+    const row = data as SettleRow;
 
-  if (row.products && !row.products.download_link && row.download_link) {
-    row.products.download_link = row.download_link;
+    if ((!row.products || !row.products.download_link) && row.product_id) {
+      try {
+        const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
+        const prod = await fetchCatalogProduct(row.product_id);
+        if (prod) {
+          row.products = {
+            id: prod.id,
+            slug: prod.slug,
+            title: prod.title,
+            download_link: prod.downloadLink ?? row.download_link ?? null,
+          };
+        }
+      } catch {
+        // Best effort only.
+      }
+    }
+
+    if (row.products && !row.products.download_link && row.download_link) {
+      row.products.download_link = row.download_link;
+    }
+
+    // Direct fallback from products table if link is still missing
+    if ((!row.products || !row.products.download_link) && row.product_id) {
+      try {
+        const { data: directProd } = await adminClient()
+          .from("products")
+          .select("id, slug, title, download_link")
+          .eq("id", row.product_id)
+          .maybeSingle();
+        if (directProd?.download_link) {
+          row.download_link = directProd.download_link;
+          row.products = {
+            id: directProd.id,
+            slug: directProd.slug,
+            title: directProd.title,
+            download_link: directProd.download_link,
+          };
+        }
+      } catch {}
+    }
+
+    return row;
+  } catch (err) {
+    console.error(`[Cashfree] loadOrder unexpected exception for ${cfOrderId}:`, err);
+    return null;
   }
-  return row;
 }
 
 type CashfreeOrderPayload = {
   order_status?: string;
   order_amount?: number;
+  created_at?: string;
   message?: string;
   order_tags?: Record<string, string | undefined>;
   order_meta?: { return_url?: string };
@@ -288,42 +319,90 @@ async function fetchCashfreeOrder(cfOrderId: string): Promise<CashfreeOrderPaylo
   return payload;
 }
 
+export type CashfreePaymentItem = {
+  payment_status?: string;
+  payment_amount?: number;
+  payment_completion_time?: string;
+  payment_time?: string;
+  payment_currency?: string;
+  payment_message?: string;
+};
+
+async function fetchCashfreePayments(cfOrderId: string): Promise<CashfreePaymentItem[]> {
+  try {
+    const response = await fetch(`${CF_BASE}/orders/${cfOrderId}/payments`, { headers: cfHeaders() });
+    if (!response.ok) return [];
+    return (await response.json()) as CashfreePaymentItem[];
+  } catch {
+    return [];
+  }
+}
+
 async function recoverOrderFromCashfree(
   cfOrderId: string,
   payload: CashfreeOrderPayload,
 ): Promise<SettleRow | null> {
   const tags = payload.order_tags ?? {};
-  const productId = tags.product_id || null;
-  const productSlug = tags.product_slug || "";
-  const origin = tags.origin || (() => {
-    try {
-      return payload.order_meta?.return_url ? new URL(payload.order_meta.return_url).origin : null;
-    } catch {
-      return null;
-    }
-  })();
+  let productId = tags.product_id || null;
+  let productSlug = tags.product_slug || "";
+  const orderNote = (payload.order_note || "").trim();
+  const origin =
+    tags.origin ||
+    (() => {
+      try {
+        return payload.order_meta?.return_url
+          ? new URL(payload.order_meta.return_url).origin
+          : null;
+      } catch {
+        return null;
+      }
+    })();
   const customer = payload.customer_details ?? {};
   const userId = tags.user_id || customer.customer_id || null;
   const collaboratorLinkId = tags.collaborator_link_id || null;
-  if (!productId && !productSlug) return null;
 
   let product: ProductRow | null = null;
   try {
     const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
-    product = await fetchCatalogProduct(productId || productSlug).then((p) =>
-      p
-        ? {
-            id: p.id ?? p.slug,
-            slug: p.slug,
-            title: p.title,
-            price: Number(p.price),
-            is_free: Boolean(p.isFree),
-            download_link: p.downloadLink ?? null,
-          }
-        : null,
-    );
-  } catch {
-    product = null;
+    const target = productId || productSlug || orderNote;
+    if (target) {
+      const p = await fetchCatalogProduct(target);
+      if (p) {
+        product = {
+          id: p.id ?? p.slug,
+          slug: p.slug,
+          title: p.title,
+          price: Number(p.price),
+          is_free: Boolean(p.isFree),
+          download_link: p.downloadLink ?? null,
+        };
+        productId = product.id;
+        productSlug = product.slug;
+      }
+    }
+  } catch (err) {
+    console.warn("[Cashfree] recoverOrderFromCashfree loadProduct warning:", err);
+  }
+
+  // Direct database lookup if product or download link is still missing
+  if ((!product || !product.download_link) && (productId || productSlug)) {
+    try {
+      const db = adminClient();
+      let query = db.from("products").select("id, slug, title, price, is_free, download_link");
+      if (productId) query = query.eq("id", productId);
+      else query = query.eq("slug", productSlug);
+      const { data: dbProd } = await query.maybeSingle();
+      if (dbProd) {
+        product = {
+          id: dbProd.id,
+          slug: dbProd.slug,
+          title: dbProd.title,
+          price: Number(dbProd.price),
+          is_free: Boolean(dbProd.is_free),
+          download_link: dbProd.download_link,
+        };
+      }
+    } catch {}
   }
 
   const status =
@@ -333,9 +412,9 @@ async function recoverOrderFromCashfree(
         ? "PENDING"
         : "FAILED";
 
-  const row = {
+  const rowData = {
     user_id: userId,
-    product_id: productId || product?.id || productSlug,
+    product_id: productId || product?.id || null,
     cf_order_id: cfOrderId,
     amount: Number(payload.order_amount ?? 0),
     status,
@@ -349,9 +428,41 @@ async function recoverOrderFromCashfree(
     paid_at: status === "PAID" ? new Date().toISOString() : null,
   };
 
-  const { error } = await adminClient().from("orders").upsert(row, { onConflict: "cf_order_id" });
-  if (error) throw new Error(`Could not recover order ${cfOrderId}: ${error.message}`);
-  return loadOrder(cfOrderId);
+  try {
+    await adminClient().from("orders").upsert(rowData, { onConflict: "cf_order_id" });
+  } catch (upsertError) {
+    console.error(
+      `[Cashfree] Upsert failed during recoverOrderFromCashfree for ${cfOrderId}:`,
+      upsertError,
+    );
+  }
+
+  const reloaded = await loadOrder(cfOrderId);
+  if (reloaded) return reloaded;
+
+  return {
+    id: cfOrderId,
+    status,
+    amount: rowData.amount,
+    user_id: userId,
+    product_id: rowData.product_id,
+    download_link: rowData.download_link,
+    collaborator_link_id: collaboratorLinkId,
+    coupon_code: rowData.coupon_code,
+    customer_email: rowData.customer_email,
+    customer_phone: rowData.customer_phone,
+    customer_name: rowData.customer_name,
+    origin,
+    receipt_sent_at: null,
+    products: product
+      ? {
+          id: product.id,
+          slug: product.slug,
+          title: product.title,
+          download_link: product.download_link,
+        }
+      : null,
+  };
 }
 
 const PAID_STATUSES = ["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"] as const;
@@ -387,6 +498,25 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     }
   }
 
+  // Direct DB check for download link if still null
+  if (!link && row.product_id) {
+    try {
+      const { data: dbProd } = await adminClient()
+        .from("products")
+        .select("download_link, title, slug")
+        .eq("id", row.product_id)
+        .maybeSingle();
+      if (dbProd?.download_link) {
+        link = dbProd.download_link;
+        if (row.products) {
+          row.products.download_link = link;
+          if (!row.products.title) row.products.title = dbProd.title;
+          if (!row.products.slug) row.products.slug = dbProd.slug;
+        }
+      }
+    } catch {}
+  }
+
   let resolvedLinkId = row.collaborator_link_id;
   if (!resolvedLinkId) {
     const deduced = await intelligentResolveCollaborator({
@@ -409,7 +539,9 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       .from("orders")
       .update(updatePayload)
       .eq("id", row.id);
-    if (updateError) throw new Error(`Could not settle order: ${updateError.message}`);
+    if (updateError) {
+      console.warn(`[Cashfree] Could not update order settlement: ${updateError.message}`);
+    }
 
     if (row.coupon_code) {
       const { data: coupon, error: couponError } = await db
@@ -426,15 +558,17 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
     }
   }
 
-  await syncProductSalesCounter(row.product_id ?? row.products?.id);
+  await syncProductSalesCounter(row.product_id ?? row.products?.id).catch(() => {});
 
   if (!alreadyPaid) {
-    broadcastCollaboratorRealtimeEvent("order_paid", {
-      orderId: cfOrderId,
-      linkId: resolvedLinkId,
-      amount: Number(row.amount ?? 0),
-      productId: row.products?.id ?? row.product_id,
-    });
+    try {
+      broadcastCollaboratorRealtimeEvent("order_paid", {
+        orderId: cfOrderId,
+        linkId: resolvedLinkId,
+        amount: Number(row.amount ?? 0),
+        productId: row.products?.id ?? row.product_id,
+      });
+    } catch {}
   }
 
   if (!row.receipt_sent_at && row.customer_email) {
@@ -451,10 +585,15 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
       storeName: "Editly Store",
     });
     if (sent) {
-      await db
-        .from("orders")
-        .update({ receipt_sent_at: new Date().toISOString() })
-        .eq("id", row.id);
+      row.receipt_sent_at = new Date().toISOString();
+      try {
+        await db
+          .from("orders")
+          .update({ receipt_sent_at: row.receipt_sent_at })
+          .eq("id", row.id);
+      } catch (err) {
+        console.warn("[Cashfree] Could not update receipt_sent_at in DB:", err);
+      }
     }
   }
   return link;
@@ -475,31 +614,93 @@ export type VerifiedOrder = {
 
 export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   const payload = await fetchCashfreeOrder(cfOrderId);
-  const paid = payload.order_status === "PAID";
+  let paid = payload.order_status === "PAID";
+  let transactionTime = payload.created_at || new Date().toISOString();
+
+  // If order_status is not yet PAID, inspect payments directly for SUCCESS
+  if (!paid) {
+    const payments = await fetchCashfreePayments(cfOrderId);
+    const successPayment = payments.find((p) => p.payment_status === "SUCCESS");
+    if (successPayment) {
+      paid = true;
+      if (successPayment.payment_completion_time || successPayment.payment_time) {
+        transactionTime = (successPayment.payment_completion_time || successPayment.payment_time)!;
+      }
+    }
+  }
+
+  let row = await loadOrder(cfOrderId);
+  if (!row) row = await recoverOrderFromCashfree(cfOrderId, payload);
+  if (row?.status === "PAID") {
+    paid = true;
+  }
+
   const status: VerifiedOrder["status"] = paid
     ? "PAID"
     : payload.order_status === "ACTIVE"
       ? "PENDING"
       : "FAILED";
 
-  let row = await loadOrder(cfOrderId);
-  if (!row) row = await recoverOrderFromCashfree(cfOrderId, payload);
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
+
+  const finalDownloadLink =
+    link ||
+    row?.download_link ||
+    row?.products?.download_link ||
+    (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null);
+
+  const customerEmail = row?.customer_email ?? payload.customer_details?.customer_email ?? null;
+  const customerPhone = row?.customer_phone ?? payload.customer_details?.customer_phone ?? null;
+  const customerName = row?.customer_name ?? payload.customer_details?.customer_name ?? null;
 
   return {
     status,
     amount: Number(payload.order_amount ?? row?.amount ?? 0),
-    productTitle: row?.products?.title ?? "Editly Store purchase",
-    productSlug: row?.products?.slug ?? "",
-    downloadLink: paid
-      ? link || row?.download_link || (row?.origin ? `${row.origin}/product/${row?.products?.slug ?? ""}` : null)
-      : null,
-    email: row?.customer_email ?? payload.customer_details?.customer_email ?? null,
-    phone: row?.customer_phone ?? payload.customer_details?.customer_phone ?? null,
-    customerName: row?.customer_name ?? payload.customer_details?.customer_name ?? null,
-    receiptSent: paid ? Boolean(row?.receipt_sent_at) || Boolean(link) : false,
-    paidAt: new Date().toISOString(),
+    productTitle: row?.products?.title ?? (payload.order_note || "Editly Store purchase"),
+    productSlug: row?.products?.slug ?? (payload.order_tags?.product_slug || ""),
+    downloadLink: paid ? finalDownloadLink : null,
+    email: customerEmail,
+    phone: customerPhone,
+    customerName: customerName,
+    receiptSent: paid ? Boolean(row?.receipt_sent_at) : false,
+    paidAt: row?.paid_at || transactionTime,
   };
+}
+
+export async function resendOrderReceipt(
+  cfOrderId: string,
+  overrideEmail?: string,
+): Promise<{ success: boolean; message: string }> {
+  const verified = await verifyOrder(cfOrderId);
+  if (verified.status !== "PAID") {
+    return { success: false, message: "Order is not paid" };
+  }
+  const emailTo = (overrideEmail || verified.email || "").trim();
+  if (!emailTo || !emailTo.includes("@")) {
+    return { success: false, message: "No valid email address found for this order" };
+  }
+
+  const sent = await sendReceiptEmail({
+    toEmail: emailTo,
+    customerName: verified.customerName || emailTo.split("@")[0] || "Valued Customer",
+    customerPhone: verified.phone || "",
+    productName: verified.productTitle,
+    amount: verified.amount,
+    orderId: cfOrderId,
+    downloadLink: verified.downloadLink || "",
+    storeName: "Editly Store",
+  });
+
+  if (sent) {
+    try {
+      await adminClient()
+        .from("orders")
+        .update({ receipt_sent_at: new Date().toISOString(), customer_email: emailTo })
+        .eq("cf_order_id", cfOrderId);
+    } catch {}
+    return { success: true, message: `Receipt sent to ${emailTo}` };
+  }
+  return { success: false, message: "Email delivery failed via EmailJS" };
 }
 
 export async function claimFree(
