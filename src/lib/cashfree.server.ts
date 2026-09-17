@@ -79,7 +79,7 @@ async function applyCoupon(
 }
 
 export type CreateOrderInput = {
-  productId?: string;
+  productId?: string | undefined;
   slug: string;
   origin: string;
   customerName: string;

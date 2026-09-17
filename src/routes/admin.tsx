@@ -2221,6 +2221,7 @@ function AnalyticsTab() {
   const [customEnd, setCustomEnd] = useState<string>("");
 
   const { data: orderRows = [] } = useTable<OrderRow>("orders");
+  const { data: productRows = [] } = useTable<ProductRow>("products");
   const productMap = useMemo(() => new Map(productRows.map((p) => [p.id, p])), [productRows]);
   const completedOrders = useMemo(() => {
     return orderRows.filter((o) =>
