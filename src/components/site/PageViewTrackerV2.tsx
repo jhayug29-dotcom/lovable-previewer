@@ -17,16 +17,29 @@ export function PageViewTrackerV2() {
     if (path.startsWith("/admin")) return;
 
     // 1. Detect and persist any incoming ref from query params or storage/cookie
-    const searchString = window.location.search || (typeof search === "string" ? search : "");
-    const params = new URLSearchParams(
-      searchString.startsWith("?") ? searchString : `?${searchString}`,
-    );
-    const incomingRef =
-      params.get("ref") ||
-      params.get("c") ||
-      params.get("code") ||
-      params.get("collab") ||
-      params.get("collaborator");
+    let incomingRef: string | null = null;
+    if (typeof search === "object" && search !== null) {
+      const s = search as Record<string, unknown>;
+      incomingRef =
+        (s.ref as string) ||
+        (s.c as string) ||
+        (s.code as string) ||
+        (s.collab as string) ||
+        (s.collaborator as string) ||
+        null;
+    }
+    if (!incomingRef) {
+      const searchString = window.location.search || (typeof search === "string" ? search : "");
+      const params = new URLSearchParams(
+        searchString.startsWith("?") ? searchString : `?${searchString}`,
+      );
+      incomingRef =
+        params.get("ref") ||
+        params.get("c") ||
+        params.get("code") ||
+        params.get("collab") ||
+        params.get("collaborator");
+    }
 
     if (incomingRef) {
       saveReferralCode(incomingRef);

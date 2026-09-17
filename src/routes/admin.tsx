@@ -37,6 +37,8 @@ import {
   saveSellerProducts,
   syncAndRestoreAnalytics,
 } from "@/lib/analytics.functions";
+import { AnalyticsTimeframeSelector } from "@/components/admin/AnalyticsTimeframeSelector";
+import type { AnalyticsTimeframe } from "@/lib/timeframe";
 
 import { categories } from "@/lib/products";
 import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from "@/lib/settings";
@@ -2076,13 +2078,50 @@ function AnalyticsTab() {
   const qc = useQueryClient();
   const accessToken = useAccessToken();
   const [isSyncing, setIsSyncing] = useState(false);
+  const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
 
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["analytics", accessToken ?? ""],
-    queryFn: () => fetchAnalytics({ data: { accessToken } }),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
+    queryKey: ["analytics", accessToken ?? "", timeframe, customStart, customEnd],
+    queryFn: () =>
+      fetchAnalytics({
+        data: {
+          accessToken,
+          timeframe,
+          startDate: customStart || undefined,
+          endDate: customEnd || undefined,
+        },
+      }),
+    staleTime: 0,
+    refetchInterval: 4_000,
+    refetchOnWindowFocus: true,
   });
+
+  // Live real-time updates for Admin Analytics
+  useEffect(() => {
+    if (!supabase || !accessToken) return;
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const triggerRefresh = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        void qc.invalidateQueries({ queryKey: ["analytics"] });
+      }, 150);
+    };
+
+    const channel = supabase
+      .channel("admin-analytics-realtime-tab")
+      .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, triggerRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "page_views" }, triggerRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "collaborator_links" }, triggerRefresh)
+      .subscribe();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      void supabase?.removeChannel(channel);
+    };
+  }, [accessToken, qc]);
 
   const handleSyncRestore = async () => {
     setIsSyncing(true);
@@ -2150,13 +2189,46 @@ function AnalyticsTab() {
         </div>
       ) : null}
 
+      <AnalyticsTimeframeSelector
+        timeframe={timeframe}
+        onTimeframeChange={setTimeframe}
+        customStartDate={customStart}
+        customEndDate={customEnd}
+        onCustomRangeChange={(s, e) => {
+          setCustomStart(s);
+          setCustomEnd(e);
+          setTimeframe("custom");
+        }}
+        onRefresh={() => void refetch()}
+        isRefreshing={isFetching}
+      />
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label={`Sales (${data.timeframeLabel || "Period"})`}
+          value={String(data.timeframeOrders ?? data.totalOrders)}
+          hint={inr(data.timeframeRevenue ?? data.totalRevenue)}
+        />
+        <Stat
+          label={`Visitors (${data.timeframeLabel || "Period"})`}
+          value={String(data.visitors ?? data.visitorsWeek ?? 0)}
+          hint={`${data.views ?? data.viewsWeek ?? 0} page views`}
+        />
+        <Stat
+          label="Conversion Rate"
+          value={`${data.conversionRate ?? 0}%`}
+          hint={`Avg order: ${inr(data.averageOrderValue ?? 0)}`}
+        />
+        <Stat
+          label="All-time Sales"
+          value={String(data.totalOrders)}
+          hint={`Lifetime: ${inr(data.totalRevenue)}`}
+        />
         <Stat
           label="Products"
           value={String(data.productCount)}
           hint={`${data.activeProductCount} live`}
         />
-        <Stat label="Total sales" value={String(data.totalOrders)} hint={inr(data.totalRevenue)} />
         <Stat
           label="This month"
           value={String(data.ordersThisMonth)}
@@ -2170,6 +2242,11 @@ function AnalyticsTab() {
         {isAdminScope ? (
           <>
             <Stat
+              label={`Sign-ups (${data.timeframeLabel || "Period"})`}
+              value={String(data.signups ?? 0)}
+              hint={`${data.signIns ?? 0} sign-ins in period`}
+            />
+            <Stat
               label="Visitors (7 days)"
               value={String(data.visitorsWeek)}
               hint={`${data.viewsWeek} page views`}
@@ -2178,11 +2255,6 @@ function AnalyticsTab() {
               label="Visitors (30 days)"
               value={String(data.visitorsMonth)}
               hint={`${data.viewsMonth} page views`}
-            />
-            <Stat
-              label="Sign-ins (7 days)"
-              value={String(data.signInsWeek)}
-              hint={`${data.signupsWeek} new accounts`}
             />
             <Stat
               label="Sign-ins (30 days)"
@@ -2194,7 +2266,7 @@ function AnalyticsTab() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-        <Card title="Sales by product">
+        <Card title={`Sales by product (${data.timeframeLabel || "Selected Period"})`}>
           {data.products.length === 0 ? (
             <p className="text-sm text-muted-foreground">No products assigned yet.</p>
           ) : (
@@ -2222,7 +2294,7 @@ function AnalyticsTab() {
           )}
         </Card>
 
-        <Card title="Sales by category">
+        <Card title={`Sales by category (${data.timeframeLabel || "Selected Period"})`}>
           {data.categories.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing to show yet.</p>
           ) : (
@@ -2244,7 +2316,7 @@ function AnalyticsTab() {
         </Card>
       </div>
 
-      <Card title="Daily sales & revenue activity">
+      <Card title={`Sales & revenue activity (${data.timeframeLabel || "Timeline"})`}>
         <div className="flex h-40 items-end gap-1">
           {data.daily.map((d) => (
             <div key={d.day} className="group relative flex-1">
@@ -2257,7 +2329,7 @@ function AnalyticsTab() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          Hover a bar to inspect the exact daily figures.
+          Hover a bar to inspect the exact figures for each interval.
         </p>
       </Card>
     </div>

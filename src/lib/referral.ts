@@ -6,7 +6,7 @@
 
 const REFERRAL_KEY = "editly_ref";
 const SESSION_KEY = "editly_sid";
-const CODE_REGEX = /^[a-zA-Z0-9_-]{4,80}$/;
+const CODE_REGEX = /^[a-zA-Z0-9_.-]{1,120}$/;
 
 export function sanitizeReferralCode(raw?: string | null): string | null {
   if (!raw) return null;
@@ -40,10 +40,15 @@ export function saveReferralCode(code: string): void {
 export function getReferralCode(): string | null {
   if (typeof window === "undefined") return null;
 
-  // 1. URL query parameter has top precedence
+  // 1. URL query parameter has top precedence (checks ref, c, code, collab, collaborator)
   try {
     const params = new URLSearchParams(window.location.search);
-    const fromUrl = params.get("ref");
+    const fromUrl =
+      params.get("ref") ||
+      params.get("c") ||
+      params.get("code") ||
+      params.get("collab") ||
+      params.get("collaborator");
     const sanitizedUrl = sanitizeReferralCode(fromUrl);
     if (sanitizedUrl) {
       saveReferralCode(sanitizedUrl);

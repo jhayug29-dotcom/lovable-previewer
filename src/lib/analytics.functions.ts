@@ -3,14 +3,26 @@ import { z } from "zod";
 
 const token = z.object({ accessToken: z.string().optional() });
 
+const analyticsFilterSchema = z.object({
+  accessToken: z.string().optional(),
+  timeframe: z.enum(["today", "7d", "1m", "3m", "10m", "custom"]).default("1m"),
+  startDate: z.string().optional().nullable(),
+  endDate: z.string().optional().nullable(),
+});
+
 export const checkPanelAccess = createServerFn({ method: "POST" })
   .validator((d) => token.parse(d))
   .handler(async ({ data }) => (await import("./analytics.server")).panelAccess(data.accessToken));
 
 export const fetchAnalytics = createServerFn({ method: "POST" })
-  .validator((d) => token.parse(d))
+  .validator((d) => analyticsFilterSchema.parse(d))
   .handler(async ({ data }) =>
-    (await import("./analytics.live.server")).getLiveAnalytics(data.accessToken),
+    (await import("./analytics.live.server")).getLiveAnalytics(
+      data.accessToken,
+      data.timeframe,
+      data.startDate,
+      data.endDate,
+    ),
   );
 
 export const syncAndRestoreAnalytics = createServerFn({ method: "POST" })
@@ -36,15 +48,25 @@ export const saveSellerProducts = createServerFn({ method: "POST" })
   );
 
 export const listCollaboratorLinks = createServerFn({ method: "POST" })
-  .validator((d) => token.parse(d))
+  .validator((d) => analyticsFilterSchema.parse(d))
   .handler(async ({ data }) =>
-    (await import("./collaborator.server")).listCollaboratorLinks(data.accessToken),
+    (await import("./collaborator.server")).listCollaboratorLinks(
+      data.accessToken,
+      data.timeframe,
+      data.startDate,
+      data.endDate,
+    ),
   );
 
 export const listCollaboratorPartners = createServerFn({ method: "POST" })
-  .validator((d) => token.parse(d))
+  .validator((d) => analyticsFilterSchema.parse(d))
   .handler(async ({ data }) =>
-    (await import("./collaborator.admin.server")).listCollaboratorPartnersAdmin(data.accessToken),
+    (await import("./collaborator.admin.server")).listCollaboratorPartnersAdmin(
+      data.accessToken,
+      data.timeframe,
+      data.startDate,
+      data.endDate,
+    ),
   );
 
 export const listCollaboratorProducts = createServerFn({ method: "POST" })
@@ -78,14 +100,26 @@ export const createCollaboratorLink = createServerFn({ method: "POST" })
   );
 
 export const toggleCollaboratorLink = createServerFn({ method: "POST" })
-  .validator((d) => token.extend({ id: z.string().uuid(), active: z.boolean() }).parse(d))
-  .handler(async ({ data }) =>
-    (await import("./collaborator.server")).toggleCollaboratorLink(
+  .validator((d) =>
+    token
+      .extend({
+        id: z.string().uuid().optional(),
+        linkId: z.string().uuid().optional(),
+        active: z.boolean(),
+      })
+      .refine((v) => Boolean(v.id || v.linkId), {
+        message: "Link ID is required",
+      })
+      .parse(d),
+  )
+  .handler(async ({ data }) => {
+    const targetId = (data.id || data.linkId)!;
+    return (await import("./collaborator.server")).toggleCollaboratorLink(
       data.accessToken,
-      data.id,
+      targetId,
       data.active,
-    ),
-  );
+    );
+  });
 
 export const revokeCollaboratorPartner = createServerFn({ method: "POST" })
   .validator((d) => token.extend({ userId: z.string().uuid() }).parse(d))
@@ -97,9 +131,24 @@ export const revokeCollaboratorPartner = createServerFn({ method: "POST" })
   );
 
 export const fetchCollaboratorLinkStats = createServerFn({ method: "POST" })
-  .validator((d) => token.extend({ id: z.string().uuid() }).parse(d))
+  .validator((d) =>
+    token
+      .extend({
+        id: z.string().uuid(),
+        timeframe: z.enum(["today", "7d", "1m", "3m", "10m", "custom"]).default("1m"),
+        startDate: z.string().optional().nullable(),
+        endDate: z.string().optional().nullable(),
+      })
+      .parse(d),
+  )
   .handler(async ({ data }) =>
-    (await import("./collaborator.server")).getCollaboratorLinkStats(data.accessToken, data.id),
+    (await import("./collaborator.server")).getCollaboratorLinkStats(
+      data.accessToken,
+      data.id,
+      data.timeframe,
+      data.startDate,
+      data.endDate,
+    ),
   );
 
 export const saveCollaboratorProductAccess = createServerFn({ method: "POST" })
@@ -115,9 +164,14 @@ export const saveCollaboratorProductAccess = createServerFn({ method: "POST" })
   );
 
 export const fetchCollaboratorDashboard = createServerFn({ method: "POST" })
-  .validator((d) => token.parse(d))
+  .validator((d) => analyticsFilterSchema.parse(d))
   .handler(async ({ data }) =>
-    (await import("./collaborator.admin.server")).getCollaboratorDashboardAdmin(data.accessToken),
+    (await import("./collaborator.admin.server")).getCollaboratorDashboardAdmin(
+      data.accessToken,
+      data.timeframe,
+      data.startDate,
+      data.endDate,
+    ),
   );
 
 export const recordPageView = createServerFn({ method: "POST" })

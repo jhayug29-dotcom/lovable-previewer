@@ -130,10 +130,22 @@ export type ProductStat = {
 
 export type Analytics = {
   scope: "admin" | "seller";
+  timeframe?: string;
+  timeframeLabel?: string;
+  startDate?: string;
+  endDate?: string;
   productCount: number;
   activeProductCount: number;
   totalOrders: number;
   totalRevenue: number;
+  timeframeOrders?: number;
+  timeframeRevenue?: number;
+  visitors?: number;
+  views?: number;
+  signups?: number;
+  signIns?: number;
+  conversionRate?: number;
+  averageOrderValue?: number;
   ordersThisMonth: number;
   revenueThisMonth: number;
   ordersThisWeek: number;
@@ -685,6 +697,24 @@ export async function recordPageViewServer(params: {
         }
       } catch {
         // Continue with raw values if lookup fails
+      }
+    }
+
+    // Fallback: If no direct link was supplied in query params, deduce from active visitor session or user
+    if (!linkId && (cleanSession || userId)) {
+      try {
+        const { intelligentResolveCollaborator } = await import("./collaborator.engine.server");
+        const resolved = await intelligentResolveCollaborator({
+          collaboratorCode: cleanCode,
+          sessionId: cleanSession,
+          userId,
+        });
+        if (resolved?.id) {
+          linkId = resolved.id;
+          cleanCode = resolved.code;
+        }
+      } catch {
+        // Continue without attribution
       }
     }
 

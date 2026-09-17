@@ -27,6 +27,8 @@ import {
   saveCollaboratorProductAccess,
   toggleCollaboratorLink,
 } from "@/lib/analytics.functions";
+import { AnalyticsTimeframeSelector } from "@/components/admin/AnalyticsTimeframeSelector";
+import type { AnalyticsTimeframe } from "@/lib/timeframe";
 
 const inr = (n: number) => `₹${Math.round(Number(n) || 0).toLocaleString("en-IN")}`;
 
@@ -73,6 +75,8 @@ type Partner = {
     sales: number;
     revenue: number;
   };
+  timeframe?: string;
+  timeframeLabel?: string;
   links: LinkRow[];
 };
 type RecipientMode = "select" | "email";
@@ -92,13 +96,24 @@ export function CollaboratorsTab() {
   const [createdLink, setCreatedLink] = useState<CreatedLink | null>(null);
   const [linkFilter, setLinkFilter] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
 
   const partners = useQuery<Partner[]>({
-    queryKey: ["collaborator-partners", token ?? ""],
-    queryFn: () => listCollaboratorPartners({ data: { accessToken: token } }),
+    queryKey: ["collaborator-partners", token ?? "", timeframe, customStart, customEnd],
+    queryFn: () =>
+      listCollaboratorPartners({
+        data: {
+          accessToken: token,
+          timeframe,
+          startDate: customStart || undefined,
+          endDate: customEnd || undefined,
+        },
+      }),
     enabled: Boolean(token),
     staleTime: 0,
-    refetchInterval: 5_000,
+    refetchInterval: 4_000,
   });
 
   // Ultra-intelligent Realtime synchronization for Admin Collaborators Tab
@@ -347,19 +362,60 @@ export function CollaboratorsTab() {
     create.mutate();
   };
 
+  const tfLabel =
+    rows[0]?.timeframeLabel ||
+    (timeframe === "today"
+      ? "Today"
+      : timeframe === "7d"
+        ? "7 days"
+        : timeframe === "1m"
+          ? "1 month"
+          : timeframe === "3m"
+            ? "3 months"
+            : timeframe === "10m"
+              ? "10 months"
+              : "Custom");
+
   return (
     <div className="space-y-8">
+      {/* Timeframe selector */}
+      <AnalyticsTimeframeSelector
+        timeframe={timeframe}
+        onTimeframeChange={setTimeframe}
+        customStartDate={customStart}
+        customEndDate={customEnd}
+        onCustomRangeChange={(s, e) => {
+          setCustomStart(s);
+          setCustomEnd(e);
+          setTimeframe("custom");
+        }}
+        onRefresh={() => void partners.refetch()}
+        isRefreshing={partners.isFetching}
+      />
+
       {/* Overview Analytics Metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Stat label="Collaborators" value={String(rows.length)} hint="Active partners" />
         <Stat
-          label="Total Visitors"
+          label={`Visitors (${tfLabel})`}
           value={String(visitorTotal)}
           hint={`${viewsTotal} total views`}
         />
-        <Stat label="Sign-ups" value={String(signupTotal)} hint="Referred registered accounts" />
-        <Stat label="Total Sales" value={String(salesTotal)} hint="Attributed paid orders" />
-        <Stat label="Gross Revenue" value={inr(revenueTotal)} hint="From referral traffic" />
+        <Stat
+          label={`Sign-ups (${tfLabel})`}
+          value={String(signupTotal)}
+          hint="Referred accounts"
+        />
+        <Stat
+          label={`Sales (${tfLabel})`}
+          value={String(salesTotal)}
+          hint="Attributed paid orders"
+        />
+        <Stat
+          label={`Revenue (${tfLabel})`}
+          value={inr(revenueTotal)}
+          hint="From referral traffic"
+        />
       </div>
 
       {/* Newly Created Link Announcement Banner */}

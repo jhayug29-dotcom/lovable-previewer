@@ -5,6 +5,11 @@ import {
   requireAdmin,
   requireUser,
 } from "./supabase.server";
+import {
+  getTimeframeBounds,
+  type AnalyticsTimeframe,
+  type TimeframeBounds,
+} from "./timeframe";
 
 const PAID_STATUSES = new Set(["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"]);
 const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
@@ -39,10 +44,11 @@ export type CollaboratorPartner = {
   product_ids: string[];
   products: Product[];
   totals: CollaboratorStats;
+  timeframe?: string;
+  timeframeLabel?: string;
 };
 
-function adminDb(accessToken?: string): DbClient {
-  if (accessToken) return getDbClient(accessToken);
+function adminDb(_accessToken?: string): DbClient {
   return adminClient();
 }
 
@@ -71,6 +77,7 @@ async function statsForLink(
   id: string,
   collaboratorCode: string,
   allowedProductIds?: string[],
+  bounds?: TimeframeBounds,
 ): Promise<CollaboratorStats> {
   let visitors = 0;
   let page_views = 0;
@@ -86,11 +93,17 @@ async function statsForLink(
       `collaborator_code.eq.${id}`,
     ];
 
-    const { data: views, error: viewError } = await db
+    let viewQuery = db
       .from("page_views")
       .select("session_id, path, user_id, created_at")
       .or(filters.join(","))
       .limit(100000);
+
+    if (bounds) {
+      viewQuery = viewQuery.gte("created_at", bounds.startIso).lte("created_at", bounds.endIso);
+    }
+
+    const { data: views, error: viewError } = await viewQuery;
 
     if (!viewError && views) {
       page_views = views.length;
@@ -107,12 +120,14 @@ async function statsForLink(
 
   // 2. Fetch Orders
   try {
-    const { data: orders, error: orderError } = await db
+    let orderQuery = db
       .from("orders")
       .select(
-        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at",
+        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at, paid_at",
       )
       .limit(100000);
+
+    const { data: orders, error: orderError } = await orderQuery;
 
     if (!orderError && orders) {
       const allowed =
@@ -126,10 +141,15 @@ async function statsForLink(
           user_id: string | null;
           customer_email: string | null;
           collaborator_link_id: string | null;
+          created_at: string;
+          paid_at?: string | null;
         }[]
       ).filter((order) => {
         const isPaid = PAID_STATUSES.has((order.status ?? "").toUpperCase());
         if (!isPaid) return false;
+
+        const when = order.paid_at || order.created_at;
+        if (bounds && (when < bounds.startIso || when > bounds.endIso)) return false;
 
         const isDirect = order.collaborator_link_id === id;
         const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
@@ -164,9 +184,10 @@ async function safeStatsForLink(
   id: string,
   collaboratorCode: string,
   allowedProductIds?: string[],
+  bounds?: TimeframeBounds,
 ): Promise<CollaboratorStats> {
   try {
-    return await statsForLink(db, id, collaboratorCode, allowedProductIds);
+    return await statsForLink(db, id, collaboratorCode, allowedProductIds, bounds);
   } catch (error) {
     console.error("Collaborator stats unavailable", error);
     return { visitors: 0, page_views: 0, signups: 0, sales: 0, revenue: 0 };
@@ -185,11 +206,12 @@ async function buildLink(
     created_at: string;
   },
   ids?: string[],
+  bounds?: TimeframeBounds,
 ) {
   return {
     ...row,
     url: `/?ref=${row.code}`,
-    ...(await safeStatsForLink(db, row.id, row.code, ids)),
+    ...(await safeStatsForLink(db, row.id, row.code, ids, bounds)),
   };
 }
 
@@ -198,8 +220,14 @@ export async function listCollaboratorProducts(accessToken?: string) {
   return getProducts(adminDb(accessToken));
 }
 
-export async function listCollaboratorLinks(accessToken?: string): Promise<CollaboratorLink[]> {
+export async function listCollaboratorLinks(
+  accessToken?: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+): Promise<CollaboratorLink[]> {
   await requireAdmin(accessToken);
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const { data, error } = await db
     .from("collaborator_links")
@@ -208,15 +236,19 @@ export async function listCollaboratorLinks(accessToken?: string): Promise<Colla
   if (error) throw error;
   return Promise.all(
     ((data ?? []) as Omit<CollaboratorLink, keyof CollaboratorStats | "url">[]).map(async (row) =>
-      buildLink(db, row, await getAuthorizedProductIds(db, row.user_id)),
+      buildLink(db, row, await getAuthorizedProductIds(db, row.user_id), bounds),
     ),
   );
 }
 
 export async function listCollaboratorPartners(
   accessToken?: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
 ): Promise<CollaboratorPartner[]> {
   await requireAdmin(accessToken);
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const { data, error } = await db
     .from("collaborator_links")
@@ -249,7 +281,7 @@ export async function listCollaboratorPartners(
   for (const userId of userIds) {
     const productIds = await getAuthorizedProductIds(db, userId);
     const links = await Promise.all(
-      (byUser.get(userId) ?? []).map((row) => buildLink(db, row, productIds)),
+      (byUser.get(userId) ?? []).map((row) => buildLink(db, row, productIds, bounds)),
     );
     const totals = links.reduce(
       (sum, link) => ({
@@ -270,9 +302,9 @@ export async function listCollaboratorPartners(
       active: links.some((link) => link.active),
       links,
       product_ids: productIds,
-      // The admin UI uses its authenticated product catalog query for this list.
-      // Avoid making the entire partner list fail because this secondary product read has an RLS/config issue.
       products: [],
+      timeframe: bounds.timeframe,
+      timeframeLabel: bounds.label,
       totals,
     });
   }
@@ -456,8 +488,15 @@ export async function revokeCollaboratorPartner(accessToken: string | undefined,
   return { ok: true };
 }
 
-export async function getCollaboratorLinkStats(accessToken: string | undefined, id: string) {
+export async function getCollaboratorLinkStats(
+  accessToken: string | undefined,
+  id: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+) {
   await requireAdmin(accessToken);
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const { data: link, error } = await db
     .from("collaborator_links")
@@ -466,11 +505,17 @@ export async function getCollaboratorLinkStats(accessToken: string | undefined, 
     .maybeSingle();
   if (error) throw error;
   if (!link) throw new Error("Collaborator link not found");
-  return statsForLink(db, link.id, link.code, await getAuthorizedProductIds(db, link.user_id));
+  return statsForLink(db, link.id, link.code, await getAuthorizedProductIds(db, link.user_id), bounds);
 }
 
-export async function getCollaboratorDashboard(accessToken?: string) {
+export async function getCollaboratorDashboard(
+  accessToken?: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+) {
   const user = await requireUser(accessToken);
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const userEmail = (user.email ?? "").trim().toLowerCase();
 
@@ -535,7 +580,7 @@ export async function getCollaboratorDashboard(accessToken?: string) {
   ];
 
   const products = await getProducts(db, productIds);
-  const scoped = await Promise.all(activeLinks.map((link) => buildLink(db, link, productIds)));
+  const scoped = await Promise.all(activeLinks.map((link) => buildLink(db, link, productIds, bounds)));
   const totals = scoped.reduce(
     (sum, link) => ({
       visitors: sum.visitors + link.visitors,
@@ -550,6 +595,10 @@ export async function getCollaboratorDashboard(accessToken?: string) {
   return {
     userId: user.id,
     email: user.email ?? scoped[0]?.email ?? null,
+    timeframe: bounds.timeframe,
+    timeframeLabel: bounds.label,
+    startDate: bounds.startIso,
+    endDate: bounds.endIso,
     links: scoped,
     products,
     productIds,

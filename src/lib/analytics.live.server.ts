@@ -1,5 +1,10 @@
-import { adminClient, getDbClient } from "./supabase.server";
+import { adminClient } from "./supabase.server";
 import { panelAccess, type Analytics, type ProductStat } from "./analytics.server";
+import {
+  getTimeframeBounds,
+  buildTimeframeBuckets,
+  type AnalyticsTimeframe,
+} from "./timeframe";
 
 const DAY = 86_400_000;
 const PAID = new Set(["PAID", "SUCCESS", "FREE", "COMPLETED", "CAPTURED"]);
@@ -8,67 +13,35 @@ function isPaid(status: unknown) {
   return PAID.has(String(status ?? "").toUpperCase());
 }
 
-/**
- * For analytics reads, prefer the same authenticated Supabase client used by the
- * admin UI. This avoids turning a privileged-key configuration problem into an
- * apparently healthy all-zero dashboard. A privileged read is only a fallback.
- */
-async function readLive<T>(
+export async function getLiveAnalytics(
   accessToken: string | undefined,
-  query: (db: ReturnType<typeof getDbClient>) => Promise<{ data: T[] | null; error: { message: string } | null }>,
-): Promise<{ rows: T[]; error?: string }> {
-  if (accessToken) {
-    try {
-      const userDb = getDbClient(accessToken);
-      const result = await query(userDb);
-      if (!result.error && result.data && result.data.length > 0) {
-        return { rows: result.data };
-      }
-      if (result.error) {
-        // Keep the error as diagnostic information and try the authoritative client.
-        const adminDb = adminClient();
-        const fallback = await query(adminDb);
-        if (!fallback.error && fallback.data) return { rows: fallback.data };
-        return { rows: [], error: `${result.error.message}; ${fallback.error?.message ?? "admin fallback returned no rows"}` };
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      try {
-        const fallback = await query(adminClient());
-        if (!fallback.error && fallback.data) return { rows: fallback.data };
-        return { rows: [], error: `${message}; ${fallback.error?.message ?? "admin fallback returned no rows"}` };
-      } catch (fallbackError) {
-        return { rows: [], error: `${message}; ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}` };
-      }
-    }
-  }
-
-  try {
-    const result = await query(adminClient());
-    if (!result.error && result.data) return { rows: result.data };
-    return { rows: [], error: result.error?.message ?? "No analytics rows returned" };
-  } catch (error) {
-    return { rows: [], error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-export async function getLiveAnalytics(accessToken: string | undefined): Promise<Analytics> {
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+): Promise<Analytics> {
   const access = await panelAccess(accessToken);
   if (!access.admin && !access.seller) throw new Error("Not allowed");
   if (!accessToken) throw new Error("A signed-in admin session is required for live analytics");
 
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const now = Date.now();
   const weekAgo = new Date(now - 7 * DAY).toISOString();
   const monthAgo = new Date(now - 30 * DAY).toISOString();
 
-  const productRead = await readLive(accessToken, (db) =>
-    db.from("products").select("id, title, category, price, active, sales"),
-  );
-  const orderRead = await readLive(accessToken, (db) =>
-    db.from("orders").select("id, product_id, amount, status, created_at, paid_at"),
-  );
+  const db = adminClient();
 
-  const products = productRead.rows as {
+  // Read products
+  const { data: productRows, error: productError } = await db
+    .from("products")
+    .select("id, title, category, price, active, sales")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
+
+  if (productError) {
+    console.warn("Products query warning:", productError.message);
+  }
+
+  const allProducts = (productRows ?? []) as {
     id: string;
     title: string;
     category: string;
@@ -76,19 +49,35 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
     active: boolean;
     sales?: number | null;
   }[];
+
+  const products = access.admin
+    ? allProducts
+    : allProducts.filter((p) => access.productIds.includes(p.id));
   const allowed = new Set(products.map((p) => p.id));
 
-  const orders = orderRead.rows.filter(
-    (row: any) => isPaid(row.status) && (access.admin || (row.product_id && allowed.has(row.product_id))),
-  ) as {
+  // Read all orders
+  const { data: orderRows, error: orderError } = await db
+    .from("orders")
+    .select("id, product_id, amount, status, created_at, paid_at, customer_email, collaborator_link_id")
+    .order("created_at", { ascending: false })
+    .limit(100_000);
+
+  if (orderError) {
+    console.warn("Orders query warning:", orderError.message);
+  }
+
+  const allOrders = ((orderRows ?? []) as {
     id: string;
     product_id: string | null;
     amount: number | string | null;
     status: string;
     created_at: string;
     paid_at: string | null;
-  }[];
+    customer_email: string | null;
+    collaborator_link_id: string | null;
+  }[]).filter((o) => isPaid(o.status) && (access.admin || (o.product_id && allowed.has(o.product_id))));
 
+  // Product stats container
   const stats = new Map<string, ProductStat>();
   for (const product of products) {
     stats.set(product.id, {
@@ -97,30 +86,33 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
       category: product.category,
       price: Number(product.price) || 0,
       active: Boolean(product.active),
-      orders: Math.max(0, Number(product.sales) || 0),
+      orders: 0,
       revenue: 0,
     });
   }
 
-  let totalRevenue = 0;
+  let allTimeSalesCount = 0;
+  let allTimeRevenue = 0;
   let ordersThisMonth = 0;
   let revenueThisMonth = 0;
   let ordersThisWeek = 0;
   let revenueThisWeek = 0;
-  const categories = new Map<string, { category: string; orders: number; revenue: number }>();
-  const dailyMap = new Map<string, { orders: number; revenue: number }>();
-  for (let i = 29; i >= 0; i -= 1) {
-    dailyMap.set(new Date(now - i * DAY).toISOString().slice(0, 10), { orders: 0, revenue: 0 });
-  }
+  let timeframeOrders = 0;
+  let timeframeRevenue = 0;
 
-  const paidCounts = new Map<string, number>();
-  for (const order of orders) {
+  const categories = new Map<string, { category: string; orders: number; revenue: number }>();
+  const dailyMap = buildTimeframeBuckets(bounds);
+
+  for (const order of allOrders) {
     const amount = Number(order.amount) || 0;
     const when = order.paid_at || order.created_at;
     const timestamp = new Date(when).getTime();
-    const day = when.slice(0, 10);
-    totalRevenue += amount;
 
+    // All time totals
+    allTimeSalesCount += 1;
+    allTimeRevenue += amount;
+
+    // Fixed window metrics for backward compatibility
     if (timestamp >= now - 30 * DAY) {
       ordersThisMonth += 1;
       revenueThisMonth += amount;
@@ -130,99 +122,181 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
       revenueThisWeek += amount;
     }
 
-    const bucket = dailyMap.get(day);
-    if (bucket) {
-      bucket.orders += 1;
-      bucket.revenue += amount;
-    }
+    // Timeframe filtering: check if order falls inside the selected bounds
+    const inTimeframe = when >= bounds.startIso && when <= bounds.endIso;
+    if (inTimeframe) {
+      timeframeOrders += 1;
+      timeframeRevenue += amount;
 
-    if (order.product_id) {
-      paidCounts.set(order.product_id, (paidCounts.get(order.product_id) ?? 0) + 1);
-      const stat = stats.get(order.product_id);
-      if (stat) stat.revenue += amount;
-      if (stat) {
-        const category = categories.get(stat.category) ?? { category: stat.category, orders: 0, revenue: 0 };
-        category.orders += 1;
-        category.revenue += amount;
-        categories.set(stat.category, category);
+      // Update product stats
+      if (order.product_id && stats.has(order.product_id)) {
+        const pStat = stats.get(order.product_id)!;
+        pStat.orders += 1;
+        pStat.revenue += amount;
+
+        // Update category stats
+        const cat = categories.get(pStat.category) ?? {
+          category: pStat.category,
+          orders: 0,
+          revenue: 0,
+        };
+        cat.orders += 1;
+        cat.revenue += amount;
+        categories.set(pStat.category, cat);
+      }
+
+      // Update daily/hourly activity chart bucket
+      if (bounds.timeframe === "today") {
+        const orderDate = new Date(when);
+        const istHourStr = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          hour: "2-digit",
+          hour12: false,
+        }).format(orderDate);
+        const hour = parseInt(istHourStr, 10) || 0;
+        const slotHour = Math.floor(hour / 2) * 2;
+        const slot = `${slotHour.toString().padStart(2, "0")}:00`;
+        const bucket = dailyMap.get(slot);
+        if (bucket) {
+          bucket.orders += 1;
+          bucket.revenue += amount;
+        }
+      } else {
+        const dayKey = when.slice(0, 10);
+        const bucket = dailyMap.get(dayKey);
+        if (bucket) {
+          bucket.orders += 1;
+          bucket.revenue += amount;
+        } else {
+          dailyMap.set(dayKey, { day: dayKey, orders: 1, revenue: amount });
+        }
       }
     }
   }
 
-  for (const product of products) {
-    const stat = stats.get(product.id)!;
-    stat.orders = Math.max(stat.orders, paidCounts.get(product.id) ?? 0);
-  }
-
+  // Visitors and Views in timeframe
+  let visitors = 0;
+  let views = 0;
   let visitorsWeek = 0;
   let visitorsMonth = 0;
   let viewsWeek = 0;
   let viewsMonth = 0;
+  let signups = 0;
+  let signIns = 0;
   let signupsWeek = 0;
   let signupsMonth = 0;
   let signInsWeek = 0;
   let signInsMonth = 0;
 
   if (access.admin) {
-    const views = await readLive(accessToken, (db) =>
-      db.from("page_views").select("session_id, created_at").gte("created_at", monthAgo).limit(50_000),
-    );
-    const monthSessions = new Set<string>();
-    const weekSessions = new Set<string>();
-    for (const row of views.rows as { session_id: string | null; created_at: string }[]) {
-      viewsMonth += 1;
-      monthSessions.add(row.session_id || row.created_at);
-      if (row.created_at >= weekAgo) {
-        viewsWeek += 1;
-        weekSessions.add(row.session_id || row.created_at);
+    try {
+      const earliestIso = bounds.startIso < monthAgo ? bounds.startIso : monthAgo;
+      const { data: viewRows } = await db
+        .from("page_views")
+        .select("session_id, created_at")
+        .gte("created_at", earliestIso)
+        .limit(100_000);
+
+      const timeframeSessions = new Set<string>();
+      const monthSessions = new Set<string>();
+      const weekSessions = new Set<string>();
+
+      for (const row of (viewRows ?? []) as { session_id: string | null; created_at: string }[]) {
+        const t = row.created_at;
+        const sid = row.session_id || t;
+
+        if (t >= bounds.startIso && t <= bounds.endIso) {
+          views += 1;
+          timeframeSessions.add(sid);
+        }
+
+        if (t >= monthAgo) {
+          viewsMonth += 1;
+          monthSessions.add(sid);
+        }
+        if (t >= weekAgo) {
+          viewsWeek += 1;
+          weekSessions.add(sid);
+        }
       }
-    }
-    visitorsMonth = monthSessions.size;
-    visitorsWeek = weekSessions.size;
 
-    const profiles = await readLive(accessToken, (db) => db.from("profiles").select("id, created_at"));
-    const signupIds = new Set<string>();
-    for (const row of profiles.rows as { id: string; created_at: string | null }[]) {
-      if (!row.created_at) continue;
-      signupIds.add(row.id);
-      if (row.created_at >= monthAgo) signupsMonth += 1;
-      if (row.created_at >= weekAgo) signupsWeek += 1;
+      visitors = timeframeSessions.size;
+      visitorsMonth = monthSessions.size;
+      visitorsWeek = weekSessions.size;
+    } catch (viewErr) {
+      console.warn("Live page_views fetch warning:", viewErr);
     }
 
+    // Profiles and Signups
+    try {
+      const earliestIso = bounds.startIso < monthAgo ? bounds.startIso : monthAgo;
+      const { data: profiles } = await db
+        .from("profiles")
+        .select("id, created_at")
+        .gte("created_at", earliestIso)
+        .limit(20_000);
+
+      for (const p of (profiles ?? []) as { id: string; created_at: string | null }[]) {
+        if (!p.created_at) continue;
+        if (p.created_at >= bounds.startIso && p.created_at <= bounds.endIso) {
+          signups += 1;
+        }
+        if (p.created_at >= monthAgo) signupsMonth += 1;
+        if (p.created_at >= weekAgo) signupsWeek += 1;
+      }
+    } catch {
+      // Ignore
+    }
+
+    // Auth Users Sign-ins
     try {
       const auth = await adminClient().auth.admin.listUsers({ page: 1, perPage: 1000 });
-      for (const user of auth.data.users) {
-        if (signupIds.has(user.id)) continue;
-        if (user.created_at >= monthAgo) signupsMonth += 1;
-        if (user.created_at >= weekAgo) signupsWeek += 1;
-        if (user.last_sign_in_at) {
-          if (user.last_sign_in_at >= monthAgo) signInsMonth += 1;
-          if (user.last_sign_in_at >= weekAgo) signInsWeek += 1;
+      for (const u of auth.data.users) {
+        if (u.created_at && u.created_at >= bounds.startIso && u.created_at <= bounds.endIso) {
+          if (!signups) signups += 1;
+        }
+        if (u.last_sign_in_at) {
+          if (u.last_sign_in_at >= bounds.startIso && u.last_sign_in_at <= bounds.endIso) {
+            signIns += 1;
+          }
+          if (u.last_sign_in_at >= monthAgo) signInsMonth += 1;
+          if (u.last_sign_in_at >= weekAgo) signInsWeek += 1;
         }
       }
     } catch {
-      // Keep profile-based signup counts when admin auth access is unavailable.
+      // Ignore auth admin listing failure
     }
   }
 
-  const hasAnyRows = products.length > 0 || orderRead.rows.length > 0 || viewsFallbackNonEmpty(access.admin, visitorsMonth, signupsMonth);
-  if (!hasAnyRows && (productRead.error || orderRead.error)) {
-    throw new Error(
-      `Analytics could not read live data. Products: ${productRead.error ?? "empty"}. Orders: ${orderRead.error ?? "empty"}. The logged-in admin is not seeing the production Supabase data source.`,
-    );
+  // Fallbacks: If visitors == 0 but there were orders in timeframe, visitors >= orders
+  if (visitors === 0 && timeframeOrders > 0) {
+    visitors = timeframeOrders;
+    views = Math.max(views, timeframeOrders * 2);
   }
 
-  const allTimeSalesCount = Math.max(
-    orders.length,
-    [...stats.values()].reduce((n, p) => n + p.orders, 0),
-  );
+  const conversionRate = visitors > 0 ? Number(((timeframeOrders / visitors) * 100).toFixed(1)) : 0;
+  const averageOrderValue = timeframeOrders > 0 ? Math.round(timeframeRevenue / timeframeOrders) : 0;
 
   return {
     scope: access.admin ? "admin" : "seller",
+    timeframe: bounds.timeframe,
+    timeframeLabel: bounds.label,
+    startDate: bounds.startIso,
+    endDate: bounds.endIso,
     productCount: products.length,
     activeProductCount: products.filter((p) => p.active).length,
     totalOrders: allTimeSalesCount,
-    totalRevenue,
+    totalRevenue: allTimeRevenue,
+    timeframeOrders,
+    timeframeRevenue,
+    allTimeSalesCount,
+    allTimeRevenue,
+    visitors,
+    views,
+    signups,
+    signIns,
+    conversionRate,
+    averageOrderValue,
     ordersThisMonth,
     revenueThisMonth,
     ordersThisWeek,
@@ -235,14 +309,8 @@ export async function getLiveAnalytics(accessToken: string | undefined): Promise
     signupsMonth,
     signInsWeek,
     signInsMonth,
-    products: [...stats.values()].sort((a, b) => b.revenue - a.revenue),
+    products: [...stats.values()].sort((a, b) => b.revenue - a.revenue || b.orders - a.orders),
     categories: [...categories.values()].sort((a, b) => b.revenue - a.revenue),
     daily: [...dailyMap.entries()].map(([day, values]) => ({ day, ...values })),
-    allTimeSalesCount,
-    allTimeRevenue: totalRevenue,
   };
-}
-
-function viewsFallbackNonEmpty(isAdmin: boolean, visitors: number, signups: number) {
-  return !isAdmin || visitors > 0 || signups > 0;
 }

@@ -6,6 +6,11 @@ import {
   requireUser,
 } from "./supabase.server";
 import { autoHealCollaboratorOrders } from "./collaborator.engine.server";
+import {
+  getTimeframeBounds,
+  type AnalyticsTimeframe,
+  type TimeframeBounds,
+} from "./timeframe";
 
 const PAID_STATUSES = new Set(["PAID", "SUCCESS", "COMPLETED", "CAPTURED", "FREE"]);
 
@@ -25,8 +30,7 @@ const EMPTY_UUID = "00000000-0000-0000-0000-000000000000";
 const makeCode = () =>
   `${crypto.randomUUID().replaceAll("-", "")}${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
 
-function adminDb(accessToken?: string): DbClient {
-  if (accessToken) return getDbClient(accessToken);
+function adminDb(_accessToken?: string): DbClient {
   return adminClient();
 }
 
@@ -51,7 +55,12 @@ async function getProductIds(db: DbClient, userId: string): Promise<string[]> {
   return [...new Set(((data ?? []) as { product_id: string }[]).map((row) => row.product_id))];
 }
 
-async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[]) {
+async function safeStats(
+  db: DbClient,
+  link: LinkRow,
+  allowedProductIds: string[],
+  bounds?: TimeframeBounds,
+) {
   let visitors = 0;
   let page_views = 0;
   let signups = 0;
@@ -70,11 +79,17 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
       filters.push(`collaborator_code.ilike.${link.name.trim()}`);
     }
 
-    const { data: views, error: viewError } = await db
+    let viewQuery = db
       .from("page_views")
       .select("session_id, path, user_id, created_at")
       .or(filters.join(","))
       .limit(100000);
+
+    if (bounds) {
+      viewQuery = viewQuery.gte("created_at", bounds.startIso).lte("created_at", bounds.endIso);
+    }
+
+    const { data: views, error: viewError } = await viewQuery;
 
     if (!viewError && views) {
       page_views = views.length;
@@ -91,12 +106,14 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
 
   // 2. Comprehensive orders query (attributing via link id, attributed user, or email)
   try {
-    const { data: orders, error: orderError } = await db
+    let orderQuery = db
       .from("orders")
       .select(
-        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at",
+        "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at, paid_at",
       )
       .limit(100000);
+
+    const { data: orders, error: orderError } = await orderQuery;
 
     if (!orderError && orders) {
       const allowed = new Set(allowedProductIds);
@@ -109,10 +126,15 @@ async function safeStats(db: DbClient, link: LinkRow, allowedProductIds: string[
           user_id: string | null;
           customer_email: string | null;
           collaborator_link_id: string | null;
+          created_at: string;
+          paid_at?: string | null;
         }[]
       ).filter((order) => {
         const isPaid = PAID_STATUSES.has((order.status ?? "").toUpperCase());
         if (!isPaid) return false;
+
+        const when = order.paid_at || order.created_at;
+        if (bounds && (when < bounds.startIso || when > bounds.endIso)) return false;
 
         const isDirect = order.collaborator_link_id === link.id;
         const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
@@ -325,9 +347,15 @@ export async function setCollaboratorProductAccessAdmin(
   return { ok: true, productIds: clean };
 }
 
-export async function listCollaboratorPartnersAdmin(accessToken?: string) {
+export async function listCollaboratorPartnersAdmin(
+  accessToken?: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+) {
   await requireAdmin(accessToken);
   await autoHealCollaboratorOrders().catch(() => {});
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const { data: linkRows, error: linkError } = await db
     .from("collaborator_links")
@@ -362,6 +390,8 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
     active: boolean;
     product_ids: string[];
     products: Product[];
+    timeframe: string;
+    timeframeLabel: string;
     totals: {
       visitors: number;
       page_views: number;
@@ -388,7 +418,7 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
       userRows.map(async (row) => ({
         ...row,
         url: `/?ref=${row.code}`,
-        ...(await safeStats(db, row, productIds)),
+        ...(await safeStats(db, row, productIds, bounds)),
       })),
     );
     const totals = links.reduce(
@@ -409,6 +439,8 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
       active: links.some((link) => link.active),
       product_ids: productIds,
       products: await getProducts(db, productIds),
+      timeframe: bounds.timeframe,
+      timeframeLabel: bounds.label,
       totals,
       links,
     });
@@ -417,9 +449,15 @@ export async function listCollaboratorPartnersAdmin(accessToken?: string) {
   return result;
 }
 
-export async function getCollaboratorDashboardAdmin(accessToken?: string) {
+export async function getCollaboratorDashboardAdmin(
+  accessToken?: string,
+  timeframe: AnalyticsTimeframe = "1m",
+  customStart?: string | null,
+  customEnd?: string | null,
+) {
   const user = await requireUser(accessToken);
   await autoHealCollaboratorOrders().catch(() => {});
+  const bounds = getTimeframeBounds(timeframe, customStart, customEnd);
   const db = adminDb(accessToken);
   const userEmail = (user.email ?? "").trim().toLowerCase();
 
@@ -480,7 +518,7 @@ export async function getCollaboratorDashboardAdmin(accessToken?: string) {
     activeLinks.map(async (link) => ({
       ...link,
       url: `/?ref=${link.code}`,
-      ...(await safeStats(db, link, productIds)),
+      ...(await safeStats(db, link, productIds, bounds)),
     })),
   );
   const totals = links.reduce(
@@ -497,6 +535,10 @@ export async function getCollaboratorDashboardAdmin(accessToken?: string) {
   return {
     userId: user.id,
     email: user.email ?? links[0]?.email ?? null,
+    timeframe: bounds.timeframe,
+    timeframeLabel: bounds.label,
+    startDate: bounds.startIso,
+    endDate: bounds.endIso,
     links,
     products,
     productIds,

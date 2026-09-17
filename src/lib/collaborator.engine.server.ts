@@ -76,7 +76,31 @@ export async function resolveCollaboratorLink(
     // Ignore
   }
 
-  // 3. Match by partner email if code wasn't found
+  // 3. Match by collaborator name
+  try {
+    const { data, error } = await db
+      .from("collaborator_links")
+      .select("id, code, user_id, name, email, active")
+      .ilike("name", clean)
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!error && data?.id) {
+      return {
+        id: String(data.id),
+        code: String(data.code),
+        user_id: String(data.user_id),
+        name: String(data.name || ""),
+        email: String(data.email || ""),
+      };
+    }
+  } catch {
+    // Ignore
+  }
+
+  // 4. Match by partner email if code wasn't found
   if (clean.includes("@")) {
     try {
       const { data, error } = await db

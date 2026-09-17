@@ -18,6 +18,8 @@ import { SiteLayout } from "@/components/site/SiteLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { checkPanelAccess, fetchCollaboratorDashboard } from "@/lib/analytics.functions";
+import { AnalyticsTimeframeSelector } from "@/components/admin/AnalyticsTimeframeSelector";
+import type { AnalyticsTimeframe } from "@/lib/timeframe";
 
 export const Route = createFileRoute("/admin_/collaborators")({
   ssr: false,
@@ -56,6 +58,10 @@ type DashboardData = {
   email: string | null;
   productIds: string[];
   products: { id: string; title: string; category: string; price: number }[];
+  timeframe?: string;
+  timeframeLabel?: string;
+  startDate?: string;
+  endDate?: string;
   totals: {
     visitors: number;
     page_views: number;
@@ -92,13 +98,30 @@ function CollaboratorDashboard() {
   const { session } = useAuth();
   const qc = useQueryClient();
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>("today");
+  const [customStart, setCustomStart] = useState<string>("");
+  const [customEnd, setCustomEnd] = useState<string>("");
 
-  const { data, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["collaborator-dashboard", session?.access_token ?? ""],
-    queryFn: () => fetchCollaboratorDashboard({ data: { accessToken: session?.access_token } }),
+  const { data, isLoading, isFetching, error, refetch } = useQuery<DashboardData>({
+    queryKey: [
+      "collaborator-dashboard",
+      session?.access_token ?? "",
+      timeframe,
+      customStart,
+      customEnd,
+    ],
+    queryFn: () =>
+      fetchCollaboratorDashboard({
+        data: {
+          accessToken: session?.access_token,
+          timeframe,
+          startDate: customStart || undefined,
+          endDate: customEnd || undefined,
+        },
+      }),
     enabled: Boolean(session?.access_token),
     staleTime: 0,
-    refetchInterval: 5_000,
+    refetchInterval: 4_000,
     refetchOnWindowFocus: true,
   });
 
@@ -247,30 +270,47 @@ function CollaboratorDashboard() {
               </div>
             ) : null}
 
+            {/* TIMEFRAME SELECTOR */}
+            <div className="mt-8">
+              <AnalyticsTimeframeSelector
+                timeframe={timeframe}
+                onTimeframeChange={setTimeframe}
+                customStartDate={customStart}
+                customEndDate={customEnd}
+                onCustomRangeChange={(s, e) => {
+                  setCustomStart(s);
+                  setCustomEnd(e);
+                  setTimeframe("custom");
+                }}
+                onRefresh={() => void refetch()}
+                isRefreshing={isFetching}
+              />
+            </div>
+
             {/* OVERALL METRICS */}
-            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <Metric
                 icon={Users}
-                label="Visitors"
+                label={`Visitors (${data.timeframeLabel || "Period"})`}
                 value={String(data.totals.visitors)}
                 hint={`${data.totals.page_views} product views`}
               />
               <Metric
                 icon={UserPlus}
-                label="Sign-ups"
+                label={`Sign-ups (${data.timeframeLabel || "Period"})`}
                 value={String(data.totals.signups || 0)}
                 hint="Registered accounts referred"
                 highlight
               />
               <Metric
                 icon={BarChart3}
-                label="Sales"
+                label={`Sales (${data.timeframeLabel || "Period"})`}
                 value={String(data.totals.sales)}
-                hint="Authorized products"
+                hint="Attributed paid orders"
               />
               <Metric
                 icon={BarChart3}
-                label="Revenue"
+                label={`Revenue (${data.timeframeLabel || "Period"})`}
                 value={inr(data.totals.revenue)}
                 hint="Earned via your links"
               />
