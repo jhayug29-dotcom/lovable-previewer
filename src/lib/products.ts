@@ -250,8 +250,8 @@ export const products: Product[] = [
   {
     id: "15f2c707-7cc8-4c05-9ed9-70ff1e7ea315",
     slug: "Animated Character Pack",
-    title: "Animated Character Pack then Mkae your Blank Frame A Cool Motion design",
-    tagline: "30+ Animated Character Pack ",
+    title: "Animated Character Pack that Make your Blank Frame A Cool Motion design",
+    tagline: "30+ Animated Character Pack",
     category: "After Effects",
     cover:
       "https://wylcbblegcyzunychqqa.supabase.co/storage/v1/object/public/product-media/uploads/1788369194697-h1rpsbvqmw.png",
@@ -502,13 +502,12 @@ export function getProduct(slug: string): Product | undefined {
     const pTitle = (p.title || "").toLowerCase();
     const pNorm = pSlug.replace(/[^a-z0-9]/g, "");
     return (
+      pId === decoded ||
       pSlug === decoded ||
       pSlug === spaceVariant ||
       pSlug === hyphenVariant ||
-      pId === decoded ||
       pTitle === decoded ||
-      pNorm === normalized ||
-      (normalized.length >= 4 && (pNorm.includes(normalized) || normalized.includes(pNorm)))
+      pNorm === normalized
     );
   });
 }

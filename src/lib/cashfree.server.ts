@@ -79,6 +79,7 @@ async function applyCoupon(
 }
 
 export type CreateOrderInput = {
+  productId?: string;
   slug: string;
   origin: string;
   customerName: string;
@@ -89,7 +90,7 @@ export type CreateOrderInput = {
   collaboratorCode?: string | undefined;
 };
 
-async function persistPendingOrder(input: {
+async function persistPendingOrder(_input: {
   userId: string | null;
   product: ProductRow;
   cfOrderId: string;
@@ -101,34 +102,13 @@ async function persistPendingOrder(input: {
   origin: string;
   collaboratorLinkId: string | null;
 }) {
-  try {
-    const { error } = await adminClient().from("orders").insert({
-      user_id: input.userId,
-      product_id: input.product.id,
-      cf_order_id: input.cfOrderId,
-      amount: input.amount,
-      status: "PENDING",
-      coupon_code: input.couponCode ?? null,
-      customer_email: input.customerEmail,
-      customer_name: input.customerName,
-      customer_phone: input.customerPhone,
-      download_link: input.product.download_link,
-      origin: input.origin,
-      collaborator_link_id: input.collaboratorLinkId,
-    });
-    if (error) {
-      console.error("[Cashfree] Pending order persistence failed; checkout will continue:", error.message);
-      return false;
-    }
-    return true;
-  } catch (error) {
-    console.error("[Cashfree] Pending order persistence threw; checkout will continue:", error);
-    return false;
-  }
+  // Do not insert uncompleted/pending checkout sessions into orders table.
+  // Real orders are only persisted upon successful payment verification.
+  return true;
 }
 
 export async function createOrder(input: CreateOrderInput) {
-  const product = await loadProduct(input.slug);
+  const product = await loadProduct(input.productId || input.slug);
   if (product.is_free) throw new Error("This product is free — no payment needed");
 
   // catalog.loadProduct() already applies the currently active store sale.
@@ -364,7 +344,7 @@ async function recoverOrderFromCashfree(
   let product: ProductRow | null = null;
   try {
     const { loadProduct: fetchCatalogProduct } = await import("./catalog.server");
-    const target = productId || productSlug || orderNote;
+    const target = productId || productSlug;
     if (target) {
       const p = await fetchCatalogProduct(target);
       if (p) {
@@ -405,12 +385,13 @@ async function recoverOrderFromCashfree(
     } catch {}
   }
 
-  const status =
-    payload.order_status === "PAID"
-      ? "PAID"
-      : payload.order_status === "ACTIVE"
-        ? "PENDING"
-        : "FAILED";
+  const isCompleted = payload.order_status === "PAID";
+  if (!isCompleted) {
+    // Never persist unpaid / dropped / pending transactions to the orders ledger.
+    return null;
+  }
+
+  const status = "PAID";
 
   const rowData = {
     user_id: userId,
@@ -425,7 +406,7 @@ async function recoverOrderFromCashfree(
     download_link: product?.download_link ?? null,
     origin,
     collaborator_link_id: collaboratorLinkId || null,
-    paid_at: status === "PAID" ? new Date().toISOString() : null,
+    paid_at: new Date().toISOString(),
   };
 
   try {
@@ -696,9 +677,22 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   }
 
   let row = await loadOrder(cfOrderId);
-  if (!row) row = await recoverOrderFromCashfree(cfOrderId, payload);
-  if (row?.status === "PAID") {
-    paid = true;
+  if (paid) {
+    if (!row) {
+      row = await recoverOrderFromCashfree(cfOrderId, payload);
+    }
+  } else {
+    // If Cashfree confirmed this transaction was not paid (expired, user dropped, cancelled):
+    if (row && (row.status === "PENDING" || row.status === "PAID")) {
+      if (
+        payload.order_status === "EXPIRED" ||
+        payload.order_status === "TERMINATED" ||
+        payload.order_status === "CANCELLED"
+      ) {
+        await db.from("orders").update({ status: "FAILED" }).eq("id", row.id);
+        row.status = "FAILED";
+      }
+    }
   }
 
   const status: VerifiedOrder["status"] = paid
@@ -714,6 +708,18 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
     .from("orders")
     .select("id, cf_order_id, product_id, amount, status, download_link, products(id, slug, title, category, download_link, is_free)")
     .like("cf_order_id", `${cfOrderId}_item_%`);
+
+  if (!paid && siblings && siblings.length > 0) {
+    for (const sib of siblings as any[]) {
+      if (
+        payload.order_status === "EXPIRED" ||
+        payload.order_status === "TERMINATED" ||
+        payload.order_status === "CANCELLED"
+      ) {
+        await db.from("orders").update({ status: "FAILED" }).eq("id", sib.id);
+      }
+    }
+  }
 
   if (paid && siblings && siblings.length > 0) {
     for (const sib of siblings as any[]) {
@@ -821,9 +827,10 @@ export async function claimFree(
   collaboratorCode?: string,
   clientUserEmail?: string,
   clientUserName?: string,
+  productId?: string,
 ) {
   const user = await requireUser(accessToken);
-  const product = await loadProduct(slug);
+  const product = await loadProduct(productId || slug);
   if (!product.is_free) throw new Error("This product is not free");
 
   // Determine user email and name reliably

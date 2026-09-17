@@ -78,6 +78,7 @@ export function BuyButton({
 
       const result = await claimFree({
         data: {
+          productId: id,
           slug,
           accessToken: session.access_token,
           userEmail,
@@ -141,6 +142,7 @@ export function BuyButton({
       const collaboratorCode = getCollaboratorCode();
       const result = await createOrder({
         data: {
+          productId: id,
           slug,
           origin: window.location.origin,
           customerName: name,

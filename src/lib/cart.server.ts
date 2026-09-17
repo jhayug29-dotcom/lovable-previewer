@@ -70,7 +70,7 @@ export async function createCartOrder(input: CreateCartOrderInput) {
   // Verify all products from database catalog
   const verifiedProducts = await Promise.all(
     input.items.map(async (item) => {
-      const prod = await loadProduct(item.slug || item.id);
+      const prod = await loadProduct(item.id || item.slug);
       return {
         id: prod.id,
         slug: prod.slug,
@@ -237,7 +237,7 @@ export async function claimFreeCart(input: ClaimFreeCartInput) {
 
   const verifiedProducts = await Promise.all(
     input.items.map(async (item) => {
-      const prod = await loadProduct(item.slug || item.id);
+      const prod = await loadProduct(item.id || item.slug);
       return {
         id: prod.id,
         slug: prod.slug,

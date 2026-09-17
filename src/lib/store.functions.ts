@@ -5,6 +5,7 @@ export const createCashfreeOrder = createServerFn({ method: "POST" })
   .validator((data) =>
     z
       .object({
+        productId: z.string().optional(),
         slug: z.string().min(1),
         origin: z.string().url(),
         customerName: z.string().min(1),
@@ -49,6 +50,7 @@ export const claimFreeProduct = createServerFn({ method: "POST" })
   .validator((data) =>
     z
       .object({
+        productId: z.string().optional(),
         slug: z.string().min(1),
         accessToken: z.string().optional(),
         collaboratorCode: z
@@ -68,6 +70,7 @@ export const claimFreeProduct = createServerFn({ method: "POST" })
       data.collaboratorCode,
       data.userEmail,
       data.userName,
+      data.productId,
     );
   });
 

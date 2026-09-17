@@ -140,88 +140,98 @@ function isUuid(str: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
-export async function loadProduct(slug: string): Promise<DbProduct | null> {
-  const rawSlug = (slug || "").trim();
-  const decoded = decodeURIComponent(rawSlug).trim();
-  const spaceVariant = decoded.replace(/-/g, " ");
-  const hyphenVariant = decoded.replace(/\s+/g, "-");
+export async function loadProduct(slugOrId: string): Promise<DbProduct | null> {
+  const raw = (slugOrId || "").trim();
+  if (!raw) return null;
 
+  const decoded = decodeURIComponent(raw).trim();
   const db = publicClient();
+
   if (db) {
-    const orClauses = [
-      `slug.eq."${decoded}"`,
-      `slug.ilike."${decoded}"`,
-      `slug.ilike."${spaceVariant}"`,
-      `slug.ilike."${hyphenVariant}"`,
-    ];
-    if (isUuid(decoded)) orClauses.push(`id.eq."${decoded}"`);
+    let data: Row | null = null;
 
-    let { data, error } = await db
-      .from("products")
-      .select(PRODUCT_SELECT)
-      .or(orClauses.join(","))
-      .eq("active", true)
-      .maybeSingle();
-
-    if (error) {
-      const basic = await db
+    // 1. If it's a UUID, lookup by primary key ID first (100% exact, no collision possible)
+    if (isUuid(decoded)) {
+      const byId = await db
         .from("products")
-        .select("*")
-        .or(orClauses.join(","))
-        .eq("active", true)
+        .select(PRODUCT_SELECT)
+        .eq("id", decoded)
         .maybeSingle();
-      if (!basic.error) {
-        data = basic.data;
-        error = null;
+      if (!byId.error && byId.data) {
+        data = byId.data as Row;
       }
     }
 
-    if (error) throw new Error(`Product read failed: ${error.message}`);
+    // 2. Lookup by exact slug
+    if (!data) {
+      const bySlug = await db
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .ilike("slug", decoded)
+        .maybeSingle();
+      if (!bySlug.error && bySlug.data) {
+        data = bySlug.data as Row;
+      }
+    }
 
-    if (
-      data &&
-      (!Array.isArray((data as Row)["reviews"]) || (data as Row)["reviews"].length === 0)
-    ) {
-      const { data: revs, error: reviewError } = await db
-        .from("reviews")
-        .select("*")
-        .eq("product_id", (data as Row).id)
-        .order("created_at", { ascending: false });
-      if (!reviewError && revs && revs.length > 0) (data as Row).reviews = revs;
+    // 3. Lookup by hyphen/space normalized slug (e.g. "Ae-Extention" vs "Ae Extention")
+    if (!data) {
+      const spaceVariant = decoded.replace(/-/g, " ");
+      const hyphenVariant = decoded.replace(/\s+/g, "-");
+      const byVariant = await db
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .or(`slug.ilike."${spaceVariant}",slug.ilike."${hyphenVariant}"`)
+        .maybeSingle();
+      if (!byVariant.error && byVariant.data) {
+        data = byVariant.data as Row;
+      }
+    }
+
+    // 4. Lookup by exact title
+    if (!data) {
+      const byTitle = await db
+        .from("products")
+        .select(PRODUCT_SELECT)
+        .ilike("title", decoded)
+        .maybeSingle();
+      if (!byTitle.error && byTitle.data) {
+        data = byTitle.data as Row;
+      }
     }
 
     if (data) {
+      if (!Array.isArray(data["reviews"]) || data["reviews"].length === 0) {
+        const { data: revs } = await db
+          .from("reviews")
+          .select("*")
+          .eq("product_id", (data as Row).id)
+          .order("created_at", { ascending: false });
+        if (revs && revs.length > 0) (data as Row).reviews = revs;
+      }
       const { sale } = await loadPromos();
-      const product = mapProduct(data as Row);
+      const product = mapProduct(data);
       return applySaleToAll([product], sale)[0] ?? null;
     }
-
-    return null;
   }
 
+  // Fallback to static catalog with strict exact matching (NO fuzzy substring collisions)
   const all = await loadProducts();
   const targetLower = decoded.toLowerCase();
-  const targetSpace = spaceVariant.toLowerCase();
-  const targetHyphen = hyphenVariant.toLowerCase();
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const normTarget = normalize(decoded);
+  const spaceVariant = decoded.replace(/-/g, " ").toLowerCase();
+  const hyphenVariant = decoded.replace(/\s+/g, "-").toLowerCase();
 
   return (
     all.find((p) => {
       const pSlug = (p.slug || "").trim().toLowerCase();
-      const pId = (p.id || "").trim();
-      const pNorm = normalize(p.slug || "");
-      const titleNorm = normalize(p.title || "");
+      const pId = (p.id || "").trim().toLowerCase();
+      const pTitle = (p.title || "").trim().toLowerCase();
       return (
+        pId === targetLower ||
         pSlug === targetLower ||
-        pSlug === targetSpace ||
-        pSlug === targetHyphen ||
-        pId === decoded ||
-        p.title.toLowerCase() === targetLower ||
-        pNorm === normTarget ||
-        (normTarget.length >= 4 && (pNorm.includes(normTarget) || normTarget.includes(pNorm))) ||
-        (normTarget.length >= 4 &&
-          (titleNorm.includes(normTarget) || normTarget.includes(titleNorm.slice(0, 10))))
+        pSlug === spaceVariant ||
+        pSlug === hyphenVariant ||
+        pTitle === targetLower
       );
     }) ?? null
   );

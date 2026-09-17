@@ -214,34 +214,93 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
   let restoredOrders = 0;
   let totalRevenue = 0;
 
-  // 1. Reconcile orders
+  // Helper to verify true payment state against Cashfree API
+  const appId = process.env["CASHFREE_APP_ID"] || "1348337cd58fd2946007d114ebb7338431";
+  const secret = process.env["CASHFREE_SECRET_KEY"] || "cfsk_ma_prod_c0607dab370ee9b4fbd58e8777883cce_36d411fa";
+  const mode = process.env["CASHFREE_MODE"] || "production";
+  const cfBase = mode === "sandbox" ? "https://sandbox.cashfree.com/pg" : "https://api.cashfree.com/pg";
+
+  async function checkCashfreeStatus(cfOrderId: string): Promise<"PAID" | "FAILED"> {
+    try {
+      const oRes = await fetch(`${cfBase}/orders/${encodeURIComponent(cfOrderId)}`, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-version": "2023-08-01",
+          "x-client-id": appId,
+          "x-client-secret": secret,
+        },
+        cache: "no-store",
+      });
+      if (!oRes.ok) return "FAILED";
+      const oData = (await oRes.json()) as { order_status?: string };
+      if (String(oData.order_status ?? "").toUpperCase() === "PAID") return "PAID";
+
+      const pRes = await fetch(`${cfBase}/orders/${encodeURIComponent(cfOrderId)}/payments`, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-version": "2023-08-01",
+          "x-client-id": appId,
+          "x-client-secret": secret,
+        },
+        cache: "no-store",
+      });
+      if (pRes.ok) {
+        const payments = (await pRes.json()) as Array<{ payment_status?: string }>;
+        if (
+          Array.isArray(payments) &&
+          payments.some((p) => String(p.payment_status ?? "").toUpperCase() === "SUCCESS")
+        ) {
+          return "PAID";
+        }
+      }
+      return "FAILED";
+    } catch {
+      return "FAILED";
+    }
+  }
+
+  // 1. Strictly reconcile each order against true gateway state
   for (const order of orders) {
     let needsUpdate = false;
     let newStatus = order.status;
     let newProductId = order.product_id;
     let newPaidAt = order.paid_at;
     const amount = Number(order.amount ?? 0);
+    const cfId = String(order.cf_order_id ?? "");
 
-    // If order was pending but originated from checkout with known amount/coupon or customer, settle it
-    if (order.status === "PENDING") {
-      newStatus = "PAID";
-      newPaidAt = order.paid_at || order.created_at || new Date().toISOString();
-      needsUpdate = true;
-      restoredOrders += 1;
+    let actualPaid = false;
+    if (cfId.startsWith("free_")) {
+      actualPaid = true;
+    } else if (cfId.startsWith("editly_")) {
+      const cfStatus = await checkCashfreeStatus(cfId);
+      actualPaid = cfStatus === "PAID";
+    } else {
+      actualPaid = isPaid(order.status);
     }
 
-    // Attempt to map missing product_id
+    if (actualPaid) {
+      if (order.status !== "PAID") {
+        newStatus = "PAID";
+        newPaidAt = order.paid_at || order.created_at || new Date().toISOString();
+        needsUpdate = true;
+        restoredOrders += 1;
+      }
+    } else {
+      // If payment was not completed (dropped midway, abandoned, or expired), mark FAILED
+      if (order.status !== "FAILED") {
+        newStatus = "FAILED";
+        needsUpdate = true;
+      }
+    }
+
+    // Attempt to map missing product_id if not set
     if (!newProductId) {
       if (
         order.coupon_code?.toUpperCase().includes("DEEPCOMP") ||
         amount === 199 ||
         amount === 284 ||
         amount === 299 ||
-        amount === 99 ||
-        order.cf_order_id.includes("1789648650079") ||
-        order.cf_order_id.includes("1787993256621") ||
-        order.cf_order_id.includes("1785749544097") ||
-        order.cf_order_id.includes("1785736365815")
+        amount === 99
       ) {
         const deepComp = products.find(
           (p) =>
@@ -298,7 +357,7 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
     }
   }
 
-  // 2. Compute sales count per product from all paid orders
+  // 2. Compute sales count per product from only genuinely paid orders
   const { data: updatedOrders } = await db.from("orders").select("product_id, amount, status");
   const paidOrders = (updatedOrders ?? []).filter((o) => isPaid(o.status));
 
@@ -311,7 +370,7 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
 
   let syncedProducts = 0;
   for (const p of products) {
-    const calculatedSales = salesCountByProduct.get(p.id) ?? (p.sales || 0);
+    const calculatedSales = salesCountByProduct.get(p.id) ?? 0;
     if (calculatedSales !== p.sales) {
       try {
         await db.from("products").update({ sales: calculatedSales }).eq("id", p.id);

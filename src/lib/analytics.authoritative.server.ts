@@ -44,6 +44,32 @@ async function verifyCashfreeOrder(
     if (!response.ok) return null;
     const status = String(payload.order_status ?? "").toUpperCase();
     if (status === "PAID") return "PAID";
+
+    const pRes = await fetch(`${cfg.base}/orders/${encodeURIComponent(cfOrderId)}/payments`, {
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-version": "2023-08-01",
+        "x-client-id": cfg.appId,
+        "x-client-secret": cfg.secret,
+      },
+      cache: "no-store",
+    });
+    if (pRes.ok) {
+      const payments = (await pRes.json()) as Array<{ payment_status?: string }>;
+      if (
+        Array.isArray(payments) &&
+        payments.some((p) => String(p.payment_status ?? "").toUpperCase() === "SUCCESS")
+      ) {
+        return "PAID";
+      }
+      if (
+        Array.isArray(payments) &&
+        payments.some((p) => String(p.payment_status ?? "").toUpperCase() === "USER_DROPPED")
+      ) {
+        return "FAILED";
+      }
+    }
+
     if (status === "ACTIVE") return "PENDING";
     return "FAILED";
   } catch {
