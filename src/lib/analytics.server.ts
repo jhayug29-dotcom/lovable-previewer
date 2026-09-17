@@ -146,6 +146,10 @@ export type Analytics = {
   signIns?: number;
   conversionRate?: number;
   averageOrderValue?: number;
+  freeOrdersCount?: number;
+  paidOrdersCount?: number;
+  uniqueCustomersCount?: number;
+  repeatCustomerRate?: number;
   ordersThisMonth: number;
   revenueThisMonth: number;
   ordersThisWeek: number;

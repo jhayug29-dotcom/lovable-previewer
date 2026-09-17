@@ -58,7 +58,7 @@ export async function getLiveAnalytics(
   // Read all orders
   const { data: orderRows, error: orderError } = await db
     .from("orders")
-    .select("id, product_id, amount, status, created_at, paid_at, customer_email, collaborator_link_id")
+    .select("id, cf_order_id, product_id, amount, status, created_at, paid_at, customer_email, collaborator_link_id")
     .order("created_at", { ascending: false })
     .limit(100_000);
 
@@ -68,6 +68,7 @@ export async function getLiveAnalytics(
 
   const allOrders = ((orderRows ?? []) as {
     id: string;
+    cf_order_id: string | null;
     product_id: string | null;
     amount: number | string | null;
     status: string;
@@ -103,6 +104,13 @@ export async function getLiveAnalytics(
   const categories = new Map<string, { category: string; orders: number; revenue: number }>();
   const dailyMap = buildTimeframeBuckets(bounds);
 
+  let freeOrdersCount = 0;
+  let paidOrdersCount = 0;
+  const startMs = bounds.start.getTime();
+  const endMs = bounds.end.getTime();
+  const customerEmails = new Set<string>();
+  const customerFrequency = new Map<string, number>();
+
   for (const order of allOrders) {
     const amount = Number(order.amount) || 0;
     const when = order.paid_at || order.created_at;
@@ -111,6 +119,12 @@ export async function getLiveAnalytics(
     // All time totals
     allTimeSalesCount += 1;
     allTimeRevenue += amount;
+
+    if (order.customer_email) {
+      const email = order.customer_email.toLowerCase();
+      customerEmails.add(email);
+      customerFrequency.set(email, (customerFrequency.get(email) ?? 0) + 1);
+    }
 
     // Fixed window metrics for backward compatibility
     if (timestamp >= now - 30 * DAY) {
@@ -123,14 +137,37 @@ export async function getLiveAnalytics(
     }
 
     // Timeframe filtering: check if order falls inside the selected bounds
-    const inTimeframe = when >= bounds.startIso && when <= bounds.endIso;
+    const inTimeframe = timestamp >= startMs && timestamp <= endMs;
     if (inTimeframe) {
       timeframeOrders += 1;
       timeframeRevenue += amount;
+      if (amount === 0) freeOrdersCount += 1;
+      else paidOrdersCount += 1;
+
+      // Intelligent product mapping
+      let pid = order.product_id;
+      if (!pid) {
+        if (
+          amount === 199 ||
+          amount === 99 ||
+          amount === 1 ||
+          amount === 284 ||
+          order.cf_order_id?.includes("1789648650079") ||
+          order.cf_order_id?.includes("1787993256621") ||
+          order.cf_order_id?.includes("1785749544097") ||
+          order.cf_order_id?.includes("1785736365815")
+        ) {
+          const deepComp = products.find((p) => p.title.toLowerCase().includes("deepcomp"));
+          if (deepComp) pid = deepComp.id;
+        } else if (amount === 119) {
+          const p119 = products.find((p) => Math.round(p.price) === 119);
+          if (p119) pid = p119.id;
+        }
+      }
 
       // Update product stats
-      if (order.product_id && stats.has(order.product_id)) {
-        const pStat = stats.get(order.product_id)!;
+      if (pid && stats.has(pid)) {
+        const pStat = stats.get(pid)!;
         pStat.orders += 1;
         pStat.revenue += amount;
 
@@ -274,6 +311,15 @@ export async function getLiveAnalytics(
     views = Math.max(views, timeframeOrders * 2);
   }
 
+  let repeatCustomers = 0;
+  for (const count of customerFrequency.values()) {
+    if (count > 1) repeatCustomers += 1;
+  }
+  const repeatCustomerRate =
+    customerEmails.size > 0
+      ? Number(((repeatCustomers / customerEmails.size) * 100).toFixed(1))
+      : 0;
+
   const conversionRate = visitors > 0 ? Number(((timeframeOrders / visitors) * 100).toFixed(1)) : 0;
   const averageOrderValue = timeframeOrders > 0 ? Math.round(timeframeRevenue / timeframeOrders) : 0;
 
@@ -297,6 +343,10 @@ export async function getLiveAnalytics(
     signIns,
     conversionRate,
     averageOrderValue,
+    freeOrdersCount,
+    paidOrdersCount,
+    uniqueCustomersCount: customerEmails.size,
+    repeatCustomerRate,
     ordersThisMonth,
     revenueThisMonth,
     ordersThisWeek,

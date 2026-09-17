@@ -2345,11 +2345,12 @@ function AnalyticsTab() {
         isRefreshing={isFetching}
       />
 
+      {/* ─── Primary KPIs ─── */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
-          label={`Sales (${data.timeframeLabel || "Period"})`}
-          value={String(data.timeframeOrders ?? data.totalOrders)}
-          hint={inr(data.timeframeRevenue ?? data.totalRevenue)}
+          label={`Revenue (${data.timeframeLabel || "Period"})`}
+          value={inr(data.timeframeRevenue ?? data.totalRevenue)}
+          hint={`${data.timeframeOrders ?? data.totalOrders} orders`}
         />
         <Stat
           label={`Visitors (${data.timeframeLabel || "Period"})`}
@@ -2362,76 +2363,98 @@ function AnalyticsTab() {
           hint={`Avg order: ${inr(data.averageOrderValue ?? 0)}`}
         />
         <Stat
-          label="All-time Sales"
-          value={String(data.totalOrders)}
-          hint={`Lifetime: ${inr(data.totalRevenue)}`}
+          label="All-time Revenue"
+          value={inr(data.totalRevenue)}
+          hint={`${data.totalOrders} lifetime orders`}
+        />
+      </div>
+
+      {/* ─── Secondary KPIs ─── */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Stat
+          label="Paid Orders"
+          value={String(data.paidOrdersCount ?? 0)}
+          hint={`${data.freeOrdersCount ?? 0} free claims`}
         />
         <Stat
-          label="Products"
-          value={String(data.productCount)}
-          hint={`${data.activeProductCount} live`}
+          label="Unique Customers"
+          value={String(data.uniqueCustomersCount ?? 0)}
+          hint={`${data.repeatCustomerRate ?? 0}% repeat rate`}
         />
         <Stat
-          label="This month"
+          label="This Month"
           value={String(data.ordersThisMonth)}
           hint={inr(data.revenueThisMonth)}
         />
         <Stat
-          label="This week"
+          label="This Week"
           value={String(data.ordersThisWeek)}
           hint={inr(data.revenueThisWeek)}
         />
-        {isAdminScope ? (
-          <>
-            <Stat
-              label={`Sign-ups (${data.timeframeLabel || "Period"})`}
-              value={String(data.signups ?? 0)}
-              hint={`${data.signIns ?? 0} sign-ins in period`}
-            />
-            <Stat
-              label="Visitors (7 days)"
-              value={String(data.visitorsWeek)}
-              hint={`${data.viewsWeek} page views`}
-            />
-            <Stat
-              label="Visitors (30 days)"
-              value={String(data.visitorsMonth)}
-              hint={`${data.viewsMonth} page views`}
-            />
-            <Stat
-              label="Sign-ins (30 days)"
-              value={String(data.signInsMonth)}
-              hint={`${data.signupsMonth} new accounts`}
-            />
-          </>
-        ) : null}
       </div>
 
+      {/* ─── Admin-only metrics row ─── */}
+      {isAdminScope ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Stat
+            label={`Sign-ups (${data.timeframeLabel || "Period"})`}
+            value={String(data.signups ?? 0)}
+            hint={`${data.signIns ?? 0} sign-ins`}
+          />
+          <Stat
+            label="Products"
+            value={String(data.productCount)}
+            hint={`${data.activeProductCount} live`}
+          />
+          <Stat
+            label="Visitors (7d)"
+            value={String(data.visitorsWeek)}
+            hint={`${data.viewsWeek} views`}
+          />
+          <Stat
+            label="Visitors (30d)"
+            value={String(data.visitorsMonth)}
+            hint={`${data.viewsMonth} views`}
+          />
+        </div>
+      ) : null}
+
+      {/* ─── Sales by product / category ─── */}
       <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <Card title={`Sales by product (${data.timeframeLabel || "Selected Period"})`}>
           {data.products.length === 0 ? (
             <p className="text-sm text-muted-foreground">No products assigned yet.</p>
           ) : (
             <ul className="space-y-2">
-              {data.products.map((p) => (
-                <li
-                  key={p.productId}
-                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 text-sm"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-display font-bold text-ink">
-                      {p.title}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {p.category} · {p.active ? "live" : "hidden"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block font-display font-bold text-ink">{p.orders} sold</span>
-                    <span className="text-xs text-muted-foreground">{inr(p.revenue)}</span>
-                  </span>
-                </li>
-              ))}
+              {data.products.map((p) => {
+                const maxRev = Math.max(1, ...data.products.map((x) => x.revenue));
+                const pct = Math.round((p.revenue / maxRev) * 100);
+                return (
+                  <li
+                    key={p.productId}
+                    className="relative overflow-hidden rounded-2xl bg-white/55 px-4 py-3 text-sm"
+                  >
+                    <div
+                      className="absolute inset-y-0 left-0 bg-primary/10 transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                    <div className="relative flex items-center justify-between gap-3">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-display font-bold text-ink">
+                          {p.title}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {p.category} · {p.active ? "live" : "hidden"}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block font-display font-bold text-ink">{p.orders} sold</span>
+                        <span className="text-xs text-muted-foreground">{inr(p.revenue)}</span>
+                      </span>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -2458,21 +2481,35 @@ function AnalyticsTab() {
         </Card>
       </div>
 
+      {/* ─── Revenue Activity Chart ─── */}
       <Card title={`Sales & revenue activity (${data.timeframeLabel || "Timeline"})`}>
-        <div className="flex h-40 items-end gap-1">
-          {data.daily.map((d) => (
-            <div key={d.day} className="group relative flex-1">
-              <div
-                className="w-full rounded-t-md bg-primary/70 transition-all duration-500 group-hover:bg-primary"
-                style={{ height: `${Math.max(4, (d.revenue / peak) * 140)}px` }}
-                title={`${d.day}: ${d.orders} sales · ${inr(d.revenue)}`}
-              />
-            </div>
-          ))}
+        <div className="flex h-44 items-end gap-[2px]">
+          {data.daily.map((d) => {
+            const barH = Math.max(4, (d.revenue / peak) * 160);
+            const orderBarH = Math.max(2, (d.orders / Math.max(1, ...data.daily.map((x) => x.orders))) * 160);
+            return (
+              <div key={d.day} className="group relative flex-1 flex items-end gap-[1px]">
+                <div
+                  className="flex-1 rounded-t-md bg-primary/70 transition-all duration-500 group-hover:bg-primary"
+                  style={{ height: `${barH}px` }}
+                />
+                <div
+                  className="flex-1 rounded-t-md bg-emerald-400/60 transition-all duration-500 group-hover:bg-emerald-500"
+                  style={{ height: `${orderBarH}px` }}
+                />
+                <div className="pointer-events-none absolute -top-16 left-1/2 z-10 -translate-x-1/2 scale-0 rounded-lg bg-ink px-2.5 py-1.5 text-[10px] font-semibold text-white shadow-lg transition-transform duration-200 group-hover:scale-100 whitespace-nowrap">
+                  <p className="font-bold">{d.day}</p>
+                  <p>{d.orders} orders · {inr(d.revenue)}</p>
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Hover a bar to inspect the exact figures for each interval.
-        </p>
+        <div className="mt-2 flex items-center gap-4 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-primary/70" /> Revenue</span>
+          <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-400/60" /> Orders</span>
+          <span className="ml-auto">Hover bars for details</span>
+        </div>
       </Card>
 
       {/* Complete Orders & Sales Transactions Table */}

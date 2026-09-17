@@ -55,12 +55,115 @@ async function getProductIds(db: DbClient, userId: string): Promise<string[]> {
   return [...new Set(((data ?? []) as { product_id: string }[]).map((row) => row.product_id))];
 }
 
+export type RawPageView = {
+  session_id: string | null;
+  path: string;
+  user_id: string | null;
+  created_at: string;
+  collaborator_code: string | null;
+  collaborator_link_id: string | null;
+};
+
+export type RawOrder = {
+  id: string;
+  product_id: string | null;
+  amount: number | string | null;
+  status: string;
+  user_id: string | null;
+  customer_email: string | null;
+  collaborator_link_id: string | null;
+  created_at: string;
+  paid_at?: string | null;
+};
+
+export function computeLinkStatsInMemory(
+  link: LinkRow,
+  allowedProductIds: string[],
+  bounds: TimeframeBounds,
+  allViews: RawPageView[],
+  allOrders: RawOrder[],
+) {
+  const startMs = bounds.start.getTime();
+  const endMs = bounds.end.getTime();
+  const cleanCode = (link.code || "").toLowerCase();
+  const cleanId = (link.id || "").toLowerCase();
+  const cleanName = (link.name || "").trim().toLowerCase();
+  const cleanEmail = (link.email || "").trim().toLowerCase();
+
+  const linkSessions = new Set<string>();
+  const attributedUserSet = new Set<string>();
+  let page_views = 0;
+
+  for (const v of allViews) {
+    const vTime = new Date(v.created_at).getTime();
+    if (vTime < startMs || vTime > endMs) continue;
+
+    const vCode = (v.collaborator_code || "").toLowerCase();
+    const vLinkId = (v.collaborator_link_id || "").toLowerCase();
+
+    const matches =
+      (vCode && (vCode === cleanCode || vCode === cleanId || (cleanName && vCode === cleanName))) ||
+      (vLinkId && vLinkId === cleanId);
+
+    if (matches) {
+      page_views += 1;
+      if (v.session_id) linkSessions.add(v.session_id);
+      if (v.user_id) attributedUserSet.add(v.user_id);
+    }
+  }
+
+  const visitors = linkSessions.size || (page_views > 0 ? 1 : 0);
+  let signups = attributedUserSet.size;
+
+  const allowed = allowedProductIds.length ? new Set(allowedProductIds) : null;
+  let sales = 0;
+  let revenue = 0;
+
+  for (const o of allOrders) {
+    const isPaid = PAID_STATUSES.has((o.status ?? "").toUpperCase());
+    if (!isPaid) continue;
+
+    const when = o.paid_at || o.created_at;
+    const oTime = new Date(when).getTime();
+    if (oTime < startMs || oTime > endMs) continue;
+
+    const isDirect = (o.collaborator_link_id || "").toLowerCase() === cleanId;
+    const isUserMatch = o.user_id ? attributedUserSet.has(o.user_id) : false;
+    const isEmailMatch = Boolean(cleanEmail && (o.customer_email || "").toLowerCase() === cleanEmail);
+
+    if (!isDirect && !isUserMatch && !isEmailMatch) continue;
+
+    if (allowed && o.product_id && !allowed.has(o.product_id)) continue;
+
+    sales += 1;
+    revenue += Number(o.amount) || 0;
+    if (o.user_id) attributedUserSet.add(o.user_id);
+  }
+
+  signups = Math.max(signups, attributedUserSet.size);
+
+  return {
+    visitors,
+    page_views,
+    signups,
+    sales,
+    revenue,
+  };
+}
+
 async function safeStats(
   db: DbClient,
   link: LinkRow,
   allowedProductIds: string[],
   bounds?: TimeframeBounds,
+  cachedViews?: RawPageView[],
+  cachedOrders?: RawOrder[],
 ) {
+  const activeBounds = bounds || getTimeframeBounds("1m");
+  if (cachedViews && cachedOrders) {
+    return computeLinkStatsInMemory(link, allowedProductIds, activeBounds, cachedViews, cachedOrders);
+  }
+
   let visitors = 0;
   let page_views = 0;
   let signups = 0;
@@ -81,12 +184,12 @@ async function safeStats(
 
     let viewQuery = db
       .from("page_views")
-      .select("session_id, path, user_id, created_at")
+      .select("session_id, path, user_id, created_at, collaborator_code, collaborator_link_id")
       .or(filters.join(","))
       .limit(100000);
 
-    if (bounds) {
-      viewQuery = viewQuery.gte("created_at", bounds.startIso).lte("created_at", bounds.endIso);
+    if (activeBounds) {
+      viewQuery = viewQuery.gte("created_at", activeBounds.startIso).lte("created_at", activeBounds.endIso);
     }
 
     const { data: views, error: viewError } = await viewQuery;
@@ -117,26 +220,20 @@ async function safeStats(
 
     if (!orderError && orders) {
       const allowed = new Set(allowedProductIds);
+      const startMs = activeBounds.start.getTime();
+      const endMs = activeBounds.end.getTime();
+
       const visibleOrders = (
-        orders as {
-          id: string;
-          product_id: string | null;
-          amount: number | string | null;
-          status: string;
-          user_id: string | null;
-          customer_email: string | null;
-          collaborator_link_id: string | null;
-          created_at: string;
-          paid_at?: string | null;
-        }[]
+        orders as RawOrder[]
       ).filter((order) => {
         const isPaid = PAID_STATUSES.has((order.status ?? "").toUpperCase());
         if (!isPaid) return false;
 
         const when = order.paid_at || order.created_at;
-        if (bounds && (when < bounds.startIso || when > bounds.endIso)) return false;
+        const oTime = new Date(when).getTime();
+        if (oTime < startMs || oTime > endMs) return false;
 
-        const isDirect = order.collaborator_link_id === link.id;
+        const isDirect = (order.collaborator_link_id || "").toLowerCase() === link.id.toLowerCase();
         const isAttributedUser = order.user_id ? attributedUserSet.has(order.user_id) : false;
         const isAttributedEmail = Boolean(
           order.customer_email &&
@@ -411,6 +508,26 @@ export async function listCollaboratorPartnersAdmin(
     >;
   }>;
 
+  // Batch fetch page_views and orders once for sub-millisecond memory aggregation
+  let viewQuery = db
+    .from("page_views")
+    .select("session_id, path, user_id, created_at, collaborator_code, collaborator_link_id")
+    .limit(100_000);
+
+  if (bounds) {
+    viewQuery = viewQuery.gte("created_at", bounds.startIso).lte("created_at", bounds.endIso);
+  }
+  const { data: allViewsData } = await viewQuery;
+  const allViews = (allViewsData ?? []) as RawPageView[];
+
+  const { data: allOrdersData } = await db
+    .from("orders")
+    .select(
+      "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at, paid_at",
+    )
+    .limit(100_000);
+  const allOrders = (allOrdersData ?? []) as RawOrder[];
+
   for (const userId of userIds) {
     const productIds = productIdsByUser.get(userId) ?? [];
     const userRows = rows.filter((row) => row.user_id === userId);
@@ -418,7 +535,7 @@ export async function listCollaboratorPartnersAdmin(
       userRows.map(async (row) => ({
         ...row,
         url: `/?ref=${row.code}`,
-        ...(await safeStats(db, row, productIds, bounds)),
+        ...(await safeStats(db, row, productIds, bounds, allViews, allOrders)),
       })),
     );
     const totals = links.reduce(
@@ -513,12 +630,31 @@ export async function getCollaboratorDashboardAdmin(
     ...new Set(((accessData ?? []) as { product_id: string }[]).map((r) => r.product_id)),
   ];
 
+  // Batch fetch views and orders once for collaborator dashboard
+  let dashViewQuery = db
+    .from("page_views")
+    .select("session_id, path, user_id, created_at, collaborator_code, collaborator_link_id")
+    .limit(100_000);
+  if (bounds) {
+    dashViewQuery = dashViewQuery.gte("created_at", bounds.startIso).lte("created_at", bounds.endIso);
+  }
+  const { data: dashViewsData } = await dashViewQuery;
+  const dashViews = (dashViewsData ?? []) as RawPageView[];
+
+  const { data: dashOrdersData } = await db
+    .from("orders")
+    .select(
+      "id, product_id, amount, status, user_id, customer_email, collaborator_link_id, created_at, paid_at",
+    )
+    .limit(100_000);
+  const dashOrders = (dashOrdersData ?? []) as RawOrder[];
+
   const products = await getProducts(db, productIds);
   const links = await Promise.all(
     activeLinks.map(async (link) => ({
       ...link,
       url: `/?ref=${link.code}`,
-      ...(await safeStats(db, link, productIds, bounds)),
+      ...(await safeStats(db, link, productIds, bounds, dashViews, dashOrders)),
     })),
   );
   const totals = links.reduce(
