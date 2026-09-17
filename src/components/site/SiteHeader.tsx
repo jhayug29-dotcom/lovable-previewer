@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X, Link2 } from "lucide-react";
+import { Store, LifeBuoy, Rocket, ShieldCheck, LogOut, Menu, X, Link2, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 import { signOut } from "@/lib/auth";
 import { useIndependenceMode } from "@/hooks/useIndependenceMode";
 import { AccountMenu } from "@/components/site/AccountMenu";
@@ -16,6 +17,7 @@ const navItems = [
 
 export function SiteHeader() {
   const { user, session, isAdmin } = useAuth();
+  const { openCart, itemCount } = useCart();
   const { isIndependenceMode } = useIndependenceMode();
   const [open, setOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -105,6 +107,21 @@ export function SiteHeader() {
               </Link>
             )
           ) : null}
+          {/* Shopping Cart Trigger */}
+          <button
+            type="button"
+            onClick={openCart}
+            className="glass relative flex size-11 items-center justify-center rounded-full text-ink transition-transform duration-500 hover:scale-105 active:scale-95 cursor-pointer"
+            aria-label={`Shopping cart (${itemCount} items)`}
+          >
+            <ShoppingBag className="size-5" strokeWidth={1.8} />
+            {itemCount > 0 ? (
+              <span className="absolute -top-1 -right-1 flex min-w-[20px] h-5 items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-extrabold text-accent-foreground shadow-lift">
+                {itemCount}
+              </span>
+            ) : null}
+          </button>
+
           <AccountMenu />
           <button
             type="button"

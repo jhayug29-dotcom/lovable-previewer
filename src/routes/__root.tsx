@@ -10,6 +10,8 @@ import {
 } from "@tanstack/react-router";
 import appCss from "../styles.css?url";
 import { AuthProvider } from "../contexts/AuthContext";
+import { CartProvider } from "../contexts/CartContext";
+import { CartDrawer } from "../components/cart/CartDrawer";
 import { Toaster } from "../components/ui/sonner";
 import { PageViewTrackerV2 } from "../components/site/PageViewTrackerV2";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -192,10 +194,13 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
-        <PageViewTrackerV2 />
-        <AnalyticsRealtimeBridge />
-        <Toaster position="top-center" />
+        <CartProvider>
+          <Outlet />
+          <CartDrawer />
+          <PageViewTrackerV2 />
+          <AnalyticsRealtimeBridge />
+          <Toaster position="top-center" />
+        </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

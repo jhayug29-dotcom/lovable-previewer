@@ -599,9 +599,20 @@ async function settlePaidOrder(cfOrderId: string, row: SettleRow): Promise<strin
   return link;
 }
 
+export type VerifiedOrderItem = {
+  id: string;
+  title: string;
+  slug: string;
+  category?: string;
+  price: number;
+  isFree?: boolean;
+  downloadLink: string | null;
+};
+
 export type VerifiedOrder = {
   status: "PAID" | "PENDING" | "FAILED";
   amount: number;
+  isFree: boolean;
   productTitle: string;
   productSlug: string;
   downloadLink: string | null;
@@ -610,9 +621,64 @@ export type VerifiedOrder = {
   customerName: string | null;
   receiptSent: boolean;
   paidAt: string;
+  items: VerifiedOrderItem[];
 };
 
 export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
+  const db = adminClient();
+
+  // 1. Direct handling for free claims (no external Cashfree call)
+  if (cfOrderId.startsWith("free_")) {
+    const { data: batchRows } = await db
+      .from("orders")
+      .select(
+        "id, cf_order_id, product_id, amount, status, customer_email, customer_name, customer_phone, download_link, paid_at, receipt_sent_at, products(id, slug, title, category, download_link, is_free)",
+      )
+      .or(`cf_order_id.eq.${cfOrderId},cf_order_id.like.${cfOrderId}_item_%`);
+
+    const rows = (batchRows ?? []) as any[];
+    if (rows.length > 0) {
+      const primary = rows[0];
+      const items: VerifiedOrderItem[] = await Promise.all(
+        rows.map(async (r) => {
+          let dLink = r.download_link || r.products?.download_link;
+          if (!dLink && r.product_id) {
+            try {
+              const { loadProduct: fetchProd } = await import("./catalog.server");
+              const p = await fetchProd(r.product_id);
+              dLink = p?.downloadLink || null;
+            } catch {}
+          }
+          return {
+            id: r.products?.id || r.product_id,
+            title: r.products?.title || "Editly Digital Asset",
+            slug: r.products?.slug || "",
+            category: r.products?.category || "Asset",
+            price: 0,
+            isFree: true,
+            downloadLink: dLink,
+          };
+        }),
+      );
+
+      return {
+        status: "PAID",
+        amount: 0,
+        isFree: true,
+        productTitle: items.map((i) => i.title).join(", "),
+        productSlug: items[0]?.slug || "",
+        downloadLink: items[0]?.downloadLink || null,
+        email: primary.customer_email ?? null,
+        phone: primary.customer_phone ?? null,
+        customerName: primary.customer_name ?? null,
+        receiptSent: Boolean(primary.receipt_sent_at),
+        paidAt: primary.paid_at || new Date().toISOString(),
+        items,
+      };
+    }
+  }
+
+  // 2. Standard Cashfree Order Verification
   const payload = await fetchCashfreeOrder(cfOrderId);
   let paid = payload.order_status === "PAID";
   let transactionTime = payload.created_at || new Date().toISOString();
@@ -643,6 +709,36 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
 
   const link = row && paid ? await settlePaidOrder(cfOrderId, row) : null;
 
+  // Settle any sibling items in cart purchase if this was a multi-item checkout
+  const { data: siblings } = await db
+    .from("orders")
+    .select("id, cf_order_id, product_id, amount, status, download_link, products(id, slug, title, category, download_link, is_free)")
+    .like("cf_order_id", `${cfOrderId}_item_%`);
+
+  if (paid && siblings && siblings.length > 0) {
+    for (const sib of siblings as any[]) {
+      if (sib.status !== "PAID") {
+        let sibLink = sib.download_link || sib.products?.download_link;
+        if (!sibLink && sib.product_id) {
+          try {
+            const { loadProduct: fetchProd } = await import("./catalog.server");
+            const p = await fetchProd(sib.product_id);
+            sibLink = p?.downloadLink || null;
+          } catch {}
+        }
+        await db
+          .from("orders")
+          .update({
+            status: "PAID",
+            download_link: sibLink,
+            paid_at: new Date().toISOString(),
+          })
+          .eq("id", sib.id);
+        await syncProductSalesCounter(sib.product_id).catch(() => {});
+      }
+    }
+  }
+
   const finalDownloadLink =
     link ||
     row?.download_link ||
@@ -652,11 +748,26 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   const customerEmail = row?.customer_email ?? payload.customer_details?.customer_email ?? null;
   const customerPhone = row?.customer_phone ?? payload.customer_details?.customer_phone ?? null;
   const customerName = row?.customer_name ?? payload.customer_details?.customer_name ?? null;
+  const amount = Number(payload.order_amount ?? row?.amount ?? 0);
+  const isFree = amount === 0;
+
+  // Build items list (primary + siblings)
+  const allRows = [row, ...(siblings ?? [])].filter(Boolean) as any[];
+  const items: VerifiedOrderItem[] = allRows.map((r, idx) => ({
+    id: r.products?.id || r.product_id || `item_${idx}`,
+    title: r.products?.title || (idx === 0 ? payload.order_note || "Editly Store purchase" : `Item ${idx + 1}`),
+    slug: r.products?.slug || "",
+    category: r.products?.category || "Asset",
+    price: Number(r.amount ?? 0),
+    isFree: Number(r.amount ?? 0) === 0,
+    downloadLink: r.download_link || r.products?.download_link || finalDownloadLink,
+  }));
 
   return {
     status,
-    amount: Number(payload.order_amount ?? row?.amount ?? 0),
-    productTitle: row?.products?.title ?? (payload.order_note || "Editly Store purchase"),
+    amount,
+    isFree,
+    productTitle: items.length > 1 ? items.map((i) => i.title).join(", ") : (row?.products?.title ?? (payload.order_note || "Editly Store purchase")),
     productSlug: row?.products?.slug ?? (payload.order_tags?.product_slug || ""),
     downloadLink: paid ? finalDownloadLink : null,
     email: customerEmail,
@@ -664,6 +775,7 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
     customerName: customerName,
     receiptSent: paid ? Boolean(row?.receipt_sent_at) : false,
     paidAt: row?.paid_at || transactionTime,
+    items,
   };
 }
 

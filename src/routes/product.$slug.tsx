@@ -238,7 +238,16 @@ function ProductPage() {
               ) : null}
             </div>
 
-            <BuyButton slug={product.slug} price={product.price} isFree={product.isFree} />
+            <BuyButton
+              slug={product.slug}
+              price={product.price}
+              isFree={product.isFree}
+              id={product.id}
+              title={product.title}
+              cover={product.cover}
+              category={product.category}
+              originalPrice={product.originalPrice}
+            />
             <button
               type="button"
               onClick={() => {

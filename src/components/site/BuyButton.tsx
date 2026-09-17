@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, Loader2, Gift, Tag, ShieldCheck, LogIn } from "lucide-react";
+import { Download, Loader2, Gift, Tag, ShieldCheck, LogIn, ShoppingBag, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCart } from "@/contexts/CartContext";
 import { openCashfreeCheckout } from "@/lib/cashfree-client";
 import { createCashfreeOrder, claimFreeProduct } from "@/lib/store.functions";
 import { validateCoupon } from "@/lib/catalog";
@@ -16,6 +17,11 @@ type Props = {
   slug: string;
   price: number;
   isFree?: boolean | undefined;
+  id?: string | undefined;
+  title?: string | undefined;
+  cover?: string | undefined;
+  category?: string | undefined;
+  originalPrice?: number | undefined;
 };
 
 function getCollaboratorCode(): string | undefined {
@@ -23,8 +29,19 @@ function getCollaboratorCode(): string | undefined {
   return code ?? undefined;
 }
 
-export function BuyButton({ slug, price, isFree }: Props) {
+export function BuyButton({
+  slug,
+  price,
+  isFree,
+  id,
+  title,
+  cover,
+  category,
+  originalPrice,
+}: Props) {
   const { user, session } = useAuth();
+  const { addToCart, isInCart, openCart } = useCart();
+  const navigate = useNavigate();
   const createOrder = useServerFn(createCashfreeOrder);
   const claimFree = useServerFn(claimFreeProduct);
   const [open, setOpen] = useState(false);
@@ -96,6 +113,15 @@ export function BuyButton({ slug, price, isFree }: Props) {
         }
       }
 
+      if (result.orderId) {
+        toast.success("Unlocked! Opening your receipt and downloads...");
+        await navigate({
+          to: "/payment/status",
+          search: { order_id: result.orderId },
+        });
+        return;
+      }
+
       if (emailed && recipientEmail) {
         toast.success(`Unlocked — download link emailed to ${recipientEmail}!`);
       } else {
@@ -132,9 +158,27 @@ export function BuyButton({ slug, price, isFree }: Props) {
     }
   };
 
+  const itemInCart = isInCart(id || slug);
+  const handleCartToggle = () => {
+    if (itemInCart) {
+      openCart();
+    } else {
+      addToCart({
+        id: id || slug,
+        slug,
+        title: title || slug,
+        price,
+        originalPrice: originalPrice || price,
+        isFree,
+        cover,
+        category,
+      });
+    }
+  };
+
   if (!user) {
     return (
-      <div className="mt-7">
+      <div className="mt-7 space-y-3">
         <Link
           to="/auth"
           search={{ redirect: `/product/${slug}` }}
@@ -143,7 +187,24 @@ export function BuyButton({ slug, price, isFree }: Props) {
           <LogIn className="size-5" strokeWidth={1.8} />
           Sign in to {isFree ? "download free" : "buy this pack"}
         </Link>
-        <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={handleCartToggle}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-3.5 font-display text-sm font-semibold text-ink backdrop-blur-md transition-all duration-300 hover:bg-white/20 active:scale-95 cursor-pointer"
+        >
+          {itemInCart ? (
+            <>
+              <Check className="size-4 text-accent" />
+              <span>In Cart · View Bag</span>
+            </>
+          ) : (
+            <>
+              <ShoppingBag className="size-4 text-primary" />
+              <span>Add to Cart</span>
+            </>
+          )}
+        </button>
+        <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="size-4" strokeWidth={1.7} />
           Takes a few seconds — your downloads stay in your account forever
         </p>
@@ -153,7 +214,7 @@ export function BuyButton({ slug, price, isFree }: Props) {
 
   if (isFree) {
     return (
-      <div className="mt-7">
+      <div className="mt-7 space-y-3">
         {freeLink ? (
           <a
             href={freeLink}
@@ -169,7 +230,7 @@ export function BuyButton({ slug, price, isFree }: Props) {
             type="button"
             onClick={() => void handleFree()}
             disabled={busy}
-            className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60"
+            className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60 cursor-pointer"
           >
             {busy ? (
               <Loader2 className="size-5 animate-spin" />
@@ -179,7 +240,24 @@ export function BuyButton({ slug, price, isFree }: Props) {
             Get it free
           </button>
         )}
-        <p className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+        <button
+          type="button"
+          onClick={handleCartToggle}
+          className="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-3.5 font-display text-sm font-semibold text-ink backdrop-blur-md transition-all duration-300 hover:bg-white/20 active:scale-95 cursor-pointer"
+        >
+          {itemInCart ? (
+            <>
+              <Check className="size-4 text-accent" />
+              <span>In Cart · View Bag</span>
+            </>
+          ) : (
+            <>
+              <ShoppingBag className="size-4 text-primary" />
+              <span>Add to Cart</span>
+            </>
+          )}
+        </button>
+        <p className="mt-2 flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <ShieldCheck className="size-4" strokeWidth={1.7} />
           Free download · commercial licence included
         </p>
@@ -190,17 +268,36 @@ export function BuyButton({ slug, price, isFree }: Props) {
   return (
     <div className="mt-7">
       {!open ? (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="btn-shine group flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 ease-[var(--ease-macos)] hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95"
-        >
-          <Download
-            className="size-5 transition-transform duration-500 group-hover:translate-y-0.5"
-            strokeWidth={1.8}
-          />
-          Buy now — instant download
-        </button>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="btn-shine group flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 ease-[var(--ease-macos)] hover:-translate-y-0.5 hover:scale-[1.02] active:scale-95 cursor-pointer"
+          >
+            <Download
+              className="size-5 transition-transform duration-500 group-hover:translate-y-0.5"
+              strokeWidth={1.8}
+            />
+            Buy now — instant download
+          </button>
+          <button
+            type="button"
+            onClick={handleCartToggle}
+            className="flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/10 px-8 py-3.5 font-display text-sm font-semibold text-ink backdrop-blur-md transition-all duration-300 hover:bg-white/20 active:scale-95 cursor-pointer"
+          >
+            {itemInCart ? (
+              <>
+                <Check className="size-4 text-accent" />
+                <span>In Cart · View Bag</span>
+              </>
+            ) : (
+              <>
+                <ShoppingBag className="size-4 text-primary" />
+                <span>Add to Cart</span>
+              </>
+            )}
+          </button>
+        </div>
       ) : (
         <form onSubmit={handlePay} className="animate-rise-in space-y-3">
           <input
@@ -244,7 +341,7 @@ export function BuyButton({ slug, price, isFree }: Props) {
           <button
             type="submit"
             disabled={busy}
-            className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60"
+            className="btn-shine flex w-full items-center justify-center gap-2 rounded-full bg-primary px-8 py-4.5 font-display text-base font-semibold text-primary-foreground shadow-float transition-all duration-500 hover:-translate-y-0.5 disabled:opacity-60 cursor-pointer"
           >
             {busy ? (
               <Loader2 className="size-5 animate-spin" />
@@ -256,7 +353,7 @@ export function BuyButton({ slug, price, isFree }: Props) {
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-ink"
+            className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-ink cursor-pointer"
           >
             Cancel
           </button>

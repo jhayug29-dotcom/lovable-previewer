@@ -39,6 +39,12 @@ import {
 } from "@/lib/analytics.functions";
 import { AnalyticsTimeframeSelector } from "@/components/admin/AnalyticsTimeframeSelector";
 import type { AnalyticsTimeframe } from "@/lib/timeframe";
+import {
+  parsePromotionRule,
+  serializePromotionForDb,
+  type PromotionType,
+  type PromotionRule,
+} from "@/lib/promotions";
 
 import { categories } from "@/lib/products";
 import { DEFAULT_SETTINGS, fetchSettings, saveSettings, type SiteSettings } from "@/lib/settings";
@@ -1505,13 +1511,24 @@ type SaleRow = {
   ends_at: string | null;
 };
 
+const PROMOTION_OPTIONS = [
+  { id: "percent" as const, label: "% Off", desc: "Percentage discount" },
+  { id: "flat" as const, label: "Flat Price", desc: "Fixed price per item" },
+  { id: "quantity" as const, label: "Quantity (2+)", desc: "Buy 2+ items discount" },
+  { id: "bundle" as const, label: "Bundle Deal", desc: "Bundle specific products" },
+  { id: "threshold" as const, label: "Spend Offer", desc: "Orders over ₹X value" },
+];
+
 const emptySale = {
   id: "",
   title: "",
   description: "",
-  sale_type: "percent" as "percent" | "flat",
+  promoType: "percent" as PromotionType,
   percent_off: "20",
   flat_price: "99",
+  discount_amount: "150",
+  min_quantity: "2",
+  min_spend: "999",
   badge_label: "SALE",
   starts_at: "",
   ends_at: "",
@@ -1530,132 +1547,227 @@ function SalesTab() {
     setForm((f) => ({ ...f, [key]: v }));
 
   const load = (row: SaleRow) => {
+    const rule = parsePromotionRule(row);
     setForm({
-      id: row.id,
-      title: row.title,
-      description: row.description ?? "",
-      sale_type: row.sale_type === "flat" ? "flat" : "percent",
-      percent_off: String(row.percent_off ?? 20),
-      flat_price: String(row.flat_price ?? 99),
-      badge_label: row.badge_label ?? "SALE",
-      starts_at: toLocalInput(row.starts_at),
-      ends_at: toLocalInput(row.ends_at),
-      active: row.active,
+      id: rule.id || row.id,
+      title: rule.title,
+      description: rule.description,
+      promoType: rule.promoType,
+      percent_off: String(rule.percentOff ?? 20),
+      flat_price: String(rule.flatPrice ?? 99),
+      discount_amount: String(rule.discountAmount ?? 150),
+      min_quantity: String(rule.minQuantity ?? 2),
+      min_spend: String(rule.minSpend ?? 999),
+      badge_label: rule.badgeLabel ?? "SALE",
+      starts_at: toLocalInput(rule.startsAt || row.starts_at),
+      ends_at: toLocalInput(rule.endsAt || row.ends_at),
+      active: rule.active,
     });
-    setPicked(row.product_ids ?? []);
+    setPicked(
+      rule.promoType === "bundle"
+        ? (rule.bundleProductIds ?? [])
+        : (rule.productIds ?? []),
+    );
   };
 
   const toggleProduct = (id: string) =>
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   const submit = () => {
-    if (!form.title) {
-      toast.error("Enter a headline");
+    if (!form.title.trim()) {
+      toast.error("Enter a promotion headline");
       return;
     }
-    save.mutate({
-      ...(form.id ? { id: form.id } : {}),
+
+    const rule: PromotionRule = {
+      id: form.id || undefined,
       title: form.title,
       description: form.description,
-      sale_type: form.sale_type,
-      percent_off: form.sale_type === "percent" ? Number(form.percent_off || 0) : null,
-      flat_price: form.sale_type === "flat" ? Number(form.flat_price || 0) : null,
-      product_ids: picked,
-      badge_label: form.badge_label || null,
-      starts_at: toIso(form.starts_at),
-      ends_at: toIso(form.ends_at),
+      promoType: form.promoType,
+      percentOff:
+        form.promoType === "percent" || form.promoType === "quantity" || form.promoType === "bundle"
+          ? Number(form.percent_off) || null
+          : null,
+      flatPrice:
+        form.promoType === "flat" || (form.promoType === "bundle" && form.flat_price)
+          ? Number(form.flat_price) || null
+          : null,
+      discountAmount:
+        form.promoType === "threshold" ? Number(form.discount_amount) || null : null,
+      minQuantity: form.promoType === "quantity" ? Number(form.min_quantity) || 2 : null,
+      minSpend: form.promoType === "threshold" ? Number(form.min_spend) || 500 : null,
+      bundleProductIds: form.promoType === "bundle" ? picked : [],
+      productIds: form.promoType === "bundle" ? [] : picked,
+      badgeLabel: form.badge_label || null,
       active: form.active,
-    });
+      startsAt: toIso(form.starts_at),
+      endsAt: toIso(form.ends_at),
+    };
+
+    const payload = serializePromotionForDb(rule);
+    save.mutate(payload);
     setForm({ ...emptySale });
     setPicked([]);
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-      <Card title={form.id ? "Edit sale" : "Run a sale"}>
+    <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <Card title={form.id ? "Edit promotion" : "Create a promotion / deal"}>
         <Text
-          label="Headline"
+          label="Headline / Title"
           value={form.title}
           onChange={set("title") as (v: string) => void}
-          placeholder="Diwali sale — everything at ₹99"
+          placeholder={
+            form.promoType === "quantity"
+              ? "Buy 2 or more packs, get 20% off whole cart"
+              : form.promoType === "bundle"
+                ? "Creator Triple Bundle — 3 packs for ₹499"
+                : form.promoType === "threshold"
+                  ? "Mega Sale — ₹200 off on orders above ₹999"
+                  : "Summer Sale — 30% off presets"
+          }
         />
         <Area
-          label="Description"
+          label="Offer Details / Description"
           value={form.description}
           onChange={set("description") as (v: string) => void}
+          placeholder="Brief terms or highlights shown to buyers..."
         />
 
-        <div className="grid grid-cols-2 gap-2">
-          {(
-            [
-              { id: "percent", label: "Percent off" },
-              { id: "flat", label: "Flat price" },
-            ] as const
-          ).map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setForm((f) => ({ ...f, sale_type: option.id }))}
-              className={`rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${
-                form.sale_type === option.id
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-white/60 text-ink/75 hover:bg-white/85"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        {/* Promotion Type Selector */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Promotion Type
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {PROMOTION_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => {
+                  let defaultBadge = form.badge_label;
+                  if (opt.id === "quantity") defaultBadge = "BUY 2+ GET 20%";
+                  else if (opt.id === "bundle") defaultBadge = "BUNDLE DEAL";
+                  else if (opt.id === "threshold") defaultBadge = "TIER OFFER";
+                  else if (opt.id === "percent") defaultBadge = "SALE";
+                  setForm((f) => ({ ...f, promoType: opt.id, badge_label: defaultBadge }));
+                }}
+                className={`flex flex-col items-start rounded-2xl p-3 text-left transition-colors ${
+                  form.promoType === opt.id
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-white/60 text-ink/80 hover:bg-white/90"
+                }`}
+              >
+                <span className="font-display text-xs font-bold">{opt.label}</span>
+                <span className="text-[10px] opacity-80">{opt.desc}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        {form.sale_type === "percent" ? (
+        {/* Dynamic Fields Based on Promotion Type */}
+        {form.promoType === "quantity" ? (
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-white/40 p-3.5 border border-border/40">
+            <Text
+              label="Min items in cart (e.g. 2)"
+              type="number"
+              value={form.min_quantity}
+              onChange={set("min_quantity") as (v: string) => void}
+            />
+            <Text
+              label="Discount % off cart"
+              type="number"
+              value={form.percent_off}
+              onChange={set("percent_off") as (v: string) => void}
+            />
+          </div>
+        ) : form.promoType === "threshold" ? (
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-white/40 p-3.5 border border-border/40">
+            <Text
+              label="Min order spend (₹)"
+              type="number"
+              value={form.min_spend}
+              onChange={set("min_spend") as (v: string) => void}
+            />
+            <Text
+              label="Discount amount (₹)"
+              type="number"
+              value={form.discount_amount}
+              onChange={set("discount_amount") as (v: string) => void}
+            />
+          </div>
+        ) : form.promoType === "bundle" ? (
+          <div className="grid grid-cols-2 gap-3 rounded-2xl bg-white/40 p-3.5 border border-border/40">
+            <Text
+              label="Flat bundle price (₹)"
+              type="number"
+              value={form.flat_price}
+              onChange={set("flat_price") as (v: string) => void}
+              placeholder="e.g. 499"
+            />
+            <Text
+              label="Or Bundle discount %"
+              type="number"
+              value={form.percent_off}
+              onChange={set("percent_off") as (v: string) => void}
+              placeholder="e.g. 30"
+            />
+          </div>
+        ) : form.promoType === "flat" ? (
+          <Text
+            label="Flat price per item (₹)"
+            type="number"
+            value={form.flat_price}
+            onChange={set("flat_price") as (v: string) => void}
+          />
+        ) : (
           <Text
             label="Discount %"
             type="number"
             value={form.percent_off}
             onChange={set("percent_off") as (v: string) => void}
           />
-        ) : (
-          <Text
-            label="Flat price for every product in the sale (₹)"
-            type="number"
-            value={form.flat_price}
-            onChange={set("flat_price") as (v: string) => void}
-          />
         )}
 
         <Text
-          label="Badge shown on cards"
+          label="Badge label shown on products"
           value={form.badge_label}
           onChange={set("badge_label") as (v: string) => void}
+          placeholder="e.g. SALE, BUNDLE, 20% OFF"
         />
 
+        {/* Product Selection */}
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Products ({picked.length === 0 ? "all products" : `${picked.length} selected`})
+            {form.promoType === "bundle"
+              ? `Select Bundle Products (${picked.length} selected)`
+              : `Target Products (${picked.length === 0 ? "whole store" : `${picked.length} selected`})`}
           </p>
           <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-2xl bg-white/45 p-2">
             {products.length === 0 ? (
-              <p className="px-2 py-1 text-sm text-muted-foreground">No products yet.</p>
+              <p className="px-2 py-1 text-sm text-muted-foreground">No products found.</p>
             ) : (
               products.map((p) => (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => toggleProduct(p.id)}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs transition-colors ${
                     picked.includes(p.id)
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground font-semibold"
                       : "text-ink hover:bg-white/70"
                   }`}
                 >
                   <span className="truncate">{p.title}</span>
-                  <span className="text-xs opacity-80">₹{p.price}</span>
+                  <span className="text-[11px] opacity-80">₹{p.price}</span>
                 </button>
               ))
             )}
           </div>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Leave everything unselected to apply the sale to the whole store.
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            {form.promoType === "bundle"
+              ? "Select the specific products that must be purchased together for this bundle deal."
+              : "Leave unselected to apply to all products in the store."}
           </p>
         </div>
 
@@ -1674,14 +1786,14 @@ function SalesTab() {
           />
         </div>
         <Toggle
-          label="Sale is live"
+          label="Promotion is live"
           value={form.active}
           onChange={set("active") as (v: boolean) => void}
         />
 
         <PrimaryButton onClick={submit} busy={save.isPending}>
           <Megaphone className="size-4" strokeWidth={1.9} />
-          {form.id ? "Save sale" : "Publish sale"}
+          {form.id ? "Update promotion" : "Publish promotion"}
         </PrimaryButton>
         {form.id ? (
           <button
@@ -1690,50 +1802,64 @@ function SalesTab() {
               setForm({ ...emptySale });
               setPicked([]);
             }}
-            className="w-full text-center text-xs text-muted-foreground hover:text-ink"
+            className="w-full text-center text-xs text-muted-foreground hover:text-ink cursor-pointer"
           >
             Cancel editing
           </button>
         ) : null}
       </Card>
 
-      <Card title={`Sales (${rows.length})`}>
+      <Card title={`Active & Scheduled Promotions (${rows.length})`}>
         {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No sales yet.</p>
+          <p className="text-sm text-muted-foreground">No promotions configured yet.</p>
         ) : (
-          <ul className="space-y-2">
-            {rows.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 transition-colors hover:bg-white/75"
-              >
-                <button
-                  type="button"
-                  onClick={() => load(row)}
-                  className="min-w-0 flex-1 text-left"
+          <ul className="space-y-2.5">
+            {rows.map((row) => {
+              const rule = parsePromotionRule(row);
+              return (
+                <li
+                  key={row.id}
+                  className="flex items-center justify-between gap-3 rounded-2xl bg-white/55 px-4 py-3 transition-colors hover:bg-white/80"
                 >
-                  <p className="truncate font-display text-sm font-bold text-ink">{row.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {row.sale_type === "flat"
-                      ? `Flat ₹${row.flat_price ?? 0}`
-                      : `${row.percent_off ?? 0}% off`}{" "}
-                    ·{" "}
-                    {(row.product_ids ?? []).length === 0
-                      ? "all products"
-                      : `${(row.product_ids ?? []).length} products`}{" "}
-                    · {row.active ? "live" : "off"}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove.mutate(row.id)}
-                  aria-label="Delete sale"
-                  className="text-muted-foreground transition-colors hover:text-destructive"
-                >
-                  <Trash2 className="size-4" strokeWidth={1.8} />
-                </button>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => load(row)}
+                    className="min-w-0 flex-1 text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-display text-sm font-bold text-ink">{rule.title}</p>
+                      {rule.badgeLabel ? (
+                        <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-extrabold text-accent shrink-0">
+                          {rule.badgeLabel}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                      {rule.promoType === "quantity"
+                        ? `Buy ${rule.minQuantity || 2}+ items → ${rule.percentOff}% off`
+                        : rule.promoType === "bundle"
+                          ? `Bundle (${rule.bundleProductIds.length} items) → ${
+                              rule.flatPrice ? `₹${rule.flatPrice}` : `${rule.percentOff}% off`
+                            }`
+                          : rule.promoType === "threshold"
+                            ? `Orders > ₹${rule.minSpend || 999} → ₹${rule.discountAmount || 0} off`
+                            : rule.promoType === "flat"
+                              ? `Flat ₹${rule.flatPrice ?? 0}`
+                              : `${rule.percentOff ?? 0}% off`}{" "}
+                      · {rule.active ? "🟢 Live" : "⚪ Off"}
+                    </p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove.mutate(row.id)}
+                    aria-label="Delete promotion"
+                    className="text-muted-foreground transition-colors hover:text-destructive shrink-0 cursor-pointer"
+                  >
+                    <Trash2 className="size-4" strokeWidth={1.8} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
