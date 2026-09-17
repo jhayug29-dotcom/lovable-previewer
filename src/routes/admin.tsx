@@ -2200,6 +2200,18 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
+type OrderRow = {
+  id: string;
+  cf_order_id: string;
+  product_id: string | null;
+  amount: number;
+  status: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
 function AnalyticsTab() {
   const qc = useQueryClient();
   const accessToken = useAccessToken();
@@ -2207,6 +2219,10 @@ function AnalyticsTab() {
   const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>("today");
   const [customStart, setCustomStart] = useState<string>("");
   const [customEnd, setCustomEnd] = useState<string>("");
+
+  const { data: orderRows = [] } = useTable<OrderRow>("orders");
+  const { data: productRows = [] } = useTable<ProductRow>("products");
+  const productMap = useMemo(() => new Map(productRows.map((p) => [p.id, p])), [productRows]);
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["analytics", accessToken ?? "", timeframe, customStart, customEnd],
@@ -2457,6 +2473,92 @@ function AnalyticsTab() {
         <p className="text-xs text-muted-foreground">
           Hover a bar to inspect the exact figures for each interval.
         </p>
+      </Card>
+
+      {/* Complete Orders & Sales Transactions Table */}
+      <Card title={`All Orders & Past Sales Transactions (${orderRows.length})`}>
+        {orderRows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No orders recorded yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-border/30 text-muted-foreground">
+                  <th className="py-2.5 font-semibold">Date</th>
+                  <th className="py-2.5 font-semibold">Order ID</th>
+                  <th className="py-2.5 font-semibold">Product</th>
+                  <th className="py-2.5 font-semibold">Customer</th>
+                  <th className="py-2.5 font-semibold text-right">Amount</th>
+                  <th className="py-2.5 font-semibold text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/20">
+                {orderRows.map((o) => {
+                  const prod = productMap.get(o.product_id || "");
+                  const isPaidOrder = [
+                    "PAID",
+                    "SUCCESS",
+                    "FREE",
+                    "COMPLETED",
+                    "CAPTURED",
+                  ].includes(o.status?.toUpperCase());
+                  return (
+                    <tr key={o.id} className="hover:bg-white/40 transition-colors">
+                      <td className="py-2.5 text-muted-foreground whitespace-nowrap">
+                        {new Date(o.paid_at || o.created_at).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td
+                        className="py-2.5 font-mono text-[11px] text-ink truncate max-w-[130px]"
+                        title={o.cf_order_id}
+                      >
+                        {o.cf_order_id}
+                      </td>
+                      <td
+                        className="py-2.5 font-medium text-ink truncate max-w-[220px]"
+                        title={prod?.title || "DeepComp / Product"}
+                      >
+                        {prod?.title ||
+                          (o.cf_order_id.includes("1789648650079") ||
+                          o.cf_order_id.includes("1787993256621") ||
+                          o.cf_order_id.includes("1785749544097")
+                            ? "DeepComp — Make After Effects Feel Unfairly Easy"
+                            : "Direct Product / Preset")}
+                      </td>
+                      <td
+                        className="py-2.5 text-muted-foreground truncate max-w-[170px]"
+                        title={o.customer_email || ""}
+                      >
+                        {o.customer_email || o.customer_name || "Customer"}
+                      </td>
+                      <td className="py-2.5 font-bold text-right text-ink">
+                        {Number(o.amount) === 0 ? (
+                          <span className="text-emerald-500 font-bold">Free</span>
+                        ) : (
+                          inr(Number(o.amount))
+                        )}
+                      </td>
+                      <td className="py-2.5 text-right">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            isPaidOrder
+                              ? "bg-emerald-500/15 text-emerald-500"
+                              : "bg-amber-500/15 text-amber-500"
+                          }`}
+                        >
+                          {o.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

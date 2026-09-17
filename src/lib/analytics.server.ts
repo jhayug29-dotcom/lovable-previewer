@@ -228,8 +228,22 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
 
     // Attempt to map missing product_id
     if (!newProductId) {
-      if (order.coupon_code?.toUpperCase().includes("DEEPCOMP")) {
-        const deepComp = products.find((p) => p.title.toLowerCase().includes("deepcomp"));
+      if (
+        order.coupon_code?.toUpperCase().includes("DEEPCOMP") ||
+        amount === 199 ||
+        amount === 284 ||
+        amount === 299 ||
+        amount === 99 ||
+        order.cf_order_id.includes("1789648650079") ||
+        order.cf_order_id.includes("1787993256621") ||
+        order.cf_order_id.includes("1785749544097") ||
+        order.cf_order_id.includes("1785736365815")
+      ) {
+        const deepComp = products.find(
+          (p) =>
+            p.title.toLowerCase().includes("deepcomp") ||
+            p.slug?.toLowerCase().includes("ae extention"),
+        );
         if (deepComp) {
           newProductId = deepComp.id;
           needsUpdate = true;
@@ -255,14 +269,6 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
         const p19 = products.find((p) => Math.round(p.price) === 19);
         if (p19) {
           newProductId = p19.id;
-          needsUpdate = true;
-        }
-      } else if (amount === 299 || amount === 99) {
-        const pMatch = products.find(
-          (p) => p.title.toLowerCase().includes("deepcomp") || p.price > 0,
-        );
-        if (pMatch) {
-          newProductId = pMatch.id;
           needsUpdate = true;
         }
       }
