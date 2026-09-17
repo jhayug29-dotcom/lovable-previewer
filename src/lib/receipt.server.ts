@@ -44,7 +44,8 @@ export async function sendReceiptEmail(payload: ReceiptPayload): Promise<boolean
   }
 
   const fallbackLink = (payload.downloadLink || "").trim();
-  const formattedAmount = `₹${payload.amount.toLocaleString("en-IN")}`;
+  const formattedAmount =
+    payload.amount === 0 ? "Free (₹0)" : `₹${payload.amount.toLocaleString("en-IN")}`;
   const orderDate = new Date().toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",

@@ -9,6 +9,8 @@ import { createCashfreeOrder, claimFreeProduct } from "@/lib/store.functions";
 import { validateCoupon } from "@/lib/catalog";
 import { formatPrice } from "@/lib/products";
 import { getReferralCode } from "@/lib/referral";
+import { sendReceipt } from "@/lib/receipt";
+import { isEmailjsConfigured } from "@/lib/email-config";
 
 type Props = {
   slug: string;
@@ -54,15 +56,51 @@ export function BuyButton({ slug, price, isFree }: Props) {
     }
     setBusy(true);
     try {
+      const userEmail = user?.email ?? undefined;
+      const userName = (user?.user_metadata?.full_name as string) ?? undefined;
+
       const result = await claimFree({
         data: {
           slug,
           accessToken: session.access_token,
+          userEmail,
+          userName,
           ...(getCollaboratorCode() ? { collaboratorCode: getCollaboratorCode() } : {}),
         },
       });
       setFreeLink(result.downloadLink ?? null);
-      toast.success("Unlocked — your download is ready");
+
+      let emailed = Boolean(result.receiptSent);
+      const recipientEmail = result.email || user?.email;
+
+      // Robust client-side fallback if server-side delivery is not confirmed
+      if (!emailed && recipientEmail && result.downloadLink && isEmailjsConfigured()) {
+        try {
+          const clientOk = await sendReceipt({
+            toEmail: recipientEmail,
+            customerName:
+              result.customerName ||
+              userName ||
+              recipientEmail.split("@")[0] ||
+              "Valued Customer",
+            customerPhone: "",
+            productName: result.productTitle,
+            amount: 0,
+            orderId: result.orderId || `free_${Date.now()}`,
+            downloadLink: result.downloadLink,
+            storeName: "Editly Store",
+          });
+          if (clientOk) emailed = true;
+        } catch (e) {
+          console.warn("[EmailJS] Browser fallback send error:", e);
+        }
+      }
+
+      if (emailed && recipientEmail) {
+        toast.success(`Unlocked — download link emailed to ${recipientEmail}!`);
+      } else {
+        toast.success("Unlocked — your download is ready");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not unlock this product");
     } finally {

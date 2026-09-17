@@ -17,7 +17,8 @@ export async function sendReceipt(input: ReceiptInput): Promise<boolean> {
   if (!isEmailjsConfigured()) return false;
 
   const fallbackLink = (input.downloadLink || "").trim();
-  const formattedAmount = `₹${input.amount.toLocaleString("en-IN")}`;
+  const formattedAmount =
+    input.amount === 0 ? "Free (₹0)" : `₹${input.amount.toLocaleString("en-IN")}`;
   const orderDate = new Date().toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",

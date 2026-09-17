@@ -55,12 +55,20 @@ export const claimFreeProduct = createServerFn({ method: "POST" })
           .string()
           .regex(/^[a-zA-Z0-9_-]{8,80}$/)
           .optional(),
+        userEmail: z.string().optional(),
+        userName: z.string().optional(),
       })
       .parse(data),
   )
   .handler(async ({ data }) => {
     const { claimFree } = await import("./cashfree.server");
-    return claimFree(data.slug, data.accessToken, data.collaboratorCode);
+    return claimFree(
+      data.slug,
+      data.accessToken,
+      data.collaboratorCode,
+      data.userEmail,
+      data.userName,
+    );
   });
 
 export const generateAiReviews = createServerFn({ method: "POST" })

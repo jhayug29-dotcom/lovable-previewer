@@ -707,14 +707,46 @@ export async function claimFree(
   slug: string,
   accessToken: string | undefined,
   collaboratorCode?: string,
+  clientUserEmail?: string,
+  clientUserName?: string,
 ) {
   const user = await requireUser(accessToken);
   const product = await loadProduct(slug);
   if (!product.is_free) throw new Error("This product is not free");
+
+  // Determine user email and name reliably
+  let customerEmail = (user.email || clientUserEmail || "").trim();
+  let customerName = (clientUserName || customerEmail.split("@")[0] || "Valued Customer").trim();
+
+  try {
+    const { data: profile } = await adminClient()
+      .from("profiles")
+      .select("email, full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.email && !customerEmail) customerEmail = profile.email.trim();
+    if (profile?.full_name?.trim()) customerName = profile.full_name.trim();
+  } catch (err) {
+    console.warn("[Cashfree] Could not fetch user profile for claimFree:", err);
+  }
+
+  // Guarantee direct download link from catalog or DB
+  let downloadLink = product.download_link;
+  if (!downloadLink && product.id) {
+    try {
+      const { data: directProd } = await adminClient()
+        .from("products")
+        .select("download_link, title")
+        .eq("id", product.id)
+        .maybeSingle();
+      if (directProd?.download_link) downloadLink = directProd.download_link;
+    } catch {}
+  }
+
   const collaborator = await intelligentResolveCollaborator({
     collaboratorCode,
     userId: user.id,
-    customerEmail: user.email,
+    customerEmail: customerEmail || user.email,
   });
   const cfOrderId = `free_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -724,39 +756,69 @@ export async function claimFree(
     cf_order_id: cfOrderId,
     amount: 0,
     status: "PAID",
-    customer_email: user.email,
-    download_link: product.download_link,
+    customer_email: customerEmail || user.email || null,
+    customer_name: customerName,
+    download_link: downloadLink,
     paid_at: new Date().toISOString(),
     collaborator_link_id: collaborator?.id ?? null,
   });
   if (orderError) throw new Error(`Could not record free order: ${orderError.message}`);
 
-  await syncProductSalesCounter(product.id);
+  await syncProductSalesCounter(product.id).catch(() => {});
 
   if (collaborator?.id) {
-    broadcastCollaboratorRealtimeEvent("order_paid", {
-      orderId: cfOrderId,
-      linkId: collaborator.id,
-      code: collaborator.code,
-      amount: 0,
-      productId: product.id,
-    });
+    try {
+      broadcastCollaboratorRealtimeEvent("order_paid", {
+        orderId: cfOrderId,
+        linkId: collaborator.id,
+        code: collaborator.code,
+        amount: 0,
+        productId: product.id,
+      });
+    } catch {}
   }
 
-  if (user.email) {
-    void sendReceiptEmail({
-      toEmail: user.email,
-      customerName: user.email.split("@")[0] || "Valued Customer",
-      customerPhone: "",
-      productName: product.title,
-      amount: 0,
-      orderId: cfOrderId,
-      downloadLink: product.download_link ?? "",
-      storeName: "Editly Store",
-    }).catch(() => false);
+  // Explicitly await EmailJS receipt sending before completing serverless function
+  let receiptSent = false;
+  const emailToDeliver = customerEmail || user.email;
+  if (emailToDeliver && emailToDeliver.includes("@")) {
+    try {
+      receiptSent = await sendReceiptEmail({
+        toEmail: emailToDeliver,
+        customerName,
+        customerPhone: "",
+        productName: product.title,
+        amount: 0,
+        orderId: cfOrderId,
+        downloadLink: downloadLink ?? "",
+        storeName: "Editly Store",
+      });
+
+      if (receiptSent) {
+        try {
+          await adminClient()
+            .from("orders")
+            .update({ receipt_sent_at: new Date().toISOString() })
+            .eq("cf_order_id", cfOrderId);
+        } catch (dbErr) {
+          console.warn("[Cashfree] Could not update receipt_sent_at for free order:", dbErr);
+        }
+      }
+    } catch (emailErr) {
+      console.error("[Cashfree] claimFree sendReceiptEmail failed:", emailErr);
+    }
+  } else {
+    console.warn("[Cashfree] No valid email address found to send free product receipt.");
   }
 
-  return { downloadLink: product.download_link, productTitle: product.title };
+  return {
+    orderId: cfOrderId,
+    downloadLink,
+    productTitle: product.title,
+    receiptSent,
+    email: emailToDeliver || null,
+    customerName,
+  };
 }
 
 export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED") {
