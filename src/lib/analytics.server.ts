@@ -214,13 +214,14 @@ export async function syncAndRestoreAnalyticsServer(accessToken: string | undefi
   let restoredOrders = 0;
   let totalRevenue = 0;
 
-  // Helper to verify true payment state against Cashfree API
-  const appId = process.env["CASHFREE_APP_ID"] || "1348337cd58fd2946007d114ebb7338431";
-  const secret = process.env["CASHFREE_SECRET_KEY"] || "cfsk_ma_prod_c0607dab370ee9b4fbd58e8777883cce_36d411fa";
+  // Helper to verify true payment state against Cashfree API strictly using server env vars
+  const appId = (process.env["CASHFREE_APP_ID"] ?? "").trim();
+  const secret = (process.env["CASHFREE_SECRET_KEY"] ?? "").trim();
   const mode = process.env["CASHFREE_MODE"] || "production";
   const cfBase = mode === "sandbox" ? "https://sandbox.cashfree.com/pg" : "https://api.cashfree.com/pg";
 
   async function checkCashfreeStatus(cfOrderId: string): Promise<"PAID" | "FAILED"> {
+    if (!appId || !secret) return "FAILED";
     try {
       const oRes = await fetch(`${cfBase}/orders/${encodeURIComponent(cfOrderId)}`, {
         headers: {

@@ -90,7 +90,7 @@ export type CreateOrderInput = {
   collaboratorCode?: string | undefined;
 };
 
-async function persistPendingOrder(_input: {
+async function persistPendingOrder(input: {
   userId: string | null;
   product: ProductRow;
   cfOrderId: string;
@@ -102,9 +102,30 @@ async function persistPendingOrder(_input: {
   origin: string;
   collaboratorLinkId: string | null;
 }) {
-  // Do not insert uncompleted/pending checkout sessions into orders table.
-  // Real orders are only persisted upon successful payment verification.
-  return true;
+  try {
+    const { error } = await adminClient().from("orders").insert({
+      user_id: input.userId,
+      product_id: input.product.id,
+      cf_order_id: input.cfOrderId,
+      amount: input.amount,
+      status: "PENDING",
+      coupon_code: input.couponCode ?? null,
+      customer_email: input.customerEmail,
+      customer_name: input.customerName,
+      customer_phone: input.customerPhone,
+      download_link: input.product.download_link,
+      origin: input.origin,
+      collaborator_link_id: input.collaboratorLinkId,
+    });
+    if (error) {
+      console.warn("[Cashfree] Pending order persistence warning:", error.message);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.warn("[Cashfree] Pending order persistence threw:", error);
+    return false;
+  }
 }
 
 export async function createOrder(input: CreateOrderInput) {
@@ -321,6 +342,7 @@ async function fetchCashfreePayments(cfOrderId: string): Promise<CashfreePayment
 async function recoverOrderFromCashfree(
   cfOrderId: string,
   payload: CashfreeOrderPayload,
+  isPaidGateway = false,
 ): Promise<SettleRow | null> {
   const tags = payload.order_tags ?? {};
   let productId = tags.product_id || null;
@@ -385,7 +407,7 @@ async function recoverOrderFromCashfree(
     } catch {}
   }
 
-  const isCompleted = payload.order_status === "PAID";
+  const isCompleted = payload.order_status === "PAID" || isPaidGateway;
   if (!isCompleted) {
     // Never persist unpaid / dropped / pending transactions to the orders ledger.
     return null;
@@ -679,7 +701,7 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
   let row = await loadOrder(cfOrderId);
   if (paid) {
     if (!row) {
-      row = await recoverOrderFromCashfree(cfOrderId, payload);
+      row = await recoverOrderFromCashfree(cfOrderId, payload, paid);
     }
   } else {
     // If Cashfree confirmed this transaction was not paid (expired, user dropped, cancelled):
@@ -787,13 +809,16 @@ export async function verifyOrder(cfOrderId: string): Promise<VerifiedOrder> {
 
 export async function resendOrderReceipt(
   cfOrderId: string,
-  overrideEmail?: string,
+  _overrideEmail?: string,
 ): Promise<{ success: boolean; message: string }> {
   const verified = await verifyOrder(cfOrderId);
   if (verified.status !== "PAID") {
     return { success: false, message: "Order is not paid" };
   }
-  const emailTo = (overrideEmail || verified.email || "").trim();
+
+  // SECURITY: Receipts must ONLY be sent to the verified email originally associated with the order.
+  // Never allow an arbitrary overrideEmail to divert receipts or overwrite customer ownership.
+  const emailTo = (verified.email || "").trim();
   if (!emailTo || !emailTo.includes("@")) {
     return { success: false, message: "No valid email address found for this order" };
   }
@@ -813,7 +838,7 @@ export async function resendOrderReceipt(
     try {
       await adminClient()
         .from("orders")
-        .update({ receipt_sent_at: new Date().toISOString(), customer_email: emailTo })
+        .update({ receipt_sent_at: new Date().toISOString() })
         .eq("cf_order_id", cfOrderId);
     } catch {}
     return { success: true, message: `Receipt sent to ${emailTo}` };
@@ -944,7 +969,7 @@ export async function finalizeOrder(cfOrderId: string, status: "PAID" | "FAILED"
   let row = await loadOrder(cfOrderId);
   if (!row) {
     try {
-      row = await recoverOrderFromCashfree(cfOrderId, await fetchCashfreeOrder(cfOrderId));
+      row = await recoverOrderFromCashfree(cfOrderId, await fetchCashfreeOrder(cfOrderId), status === "PAID");
     } catch {
       row = null;
     }

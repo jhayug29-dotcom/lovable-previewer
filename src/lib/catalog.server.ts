@@ -1,6 +1,12 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { products as fallbackProducts } from "@/lib/products";
-import { mapProduct, PRODUCT_SELECT, type DbProduct, type Row } from "@/lib/catalog-map";
+import {
+  mapProduct,
+  PUBLIC_PRODUCT_SELECT,
+  PRODUCT_SELECT,
+  type DbProduct,
+  type Row,
+} from "@/lib/catalog-map";
 import {
   applySaleToAll,
   isBannerLive,
@@ -33,7 +39,7 @@ async function queryProducts(): Promise<DbProduct[]> {
 
   let { data, error } = await client
     .from("products")
-    .select(PRODUCT_SELECT)
+    .select(PUBLIC_PRODUCT_SELECT)
     .eq("active", true)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: false });
@@ -41,7 +47,7 @@ async function queryProducts(): Promise<DbProduct[]> {
   if (error) {
     const basic = await client
       .from("products")
-      .select("*")
+      .select(PUBLIC_PRODUCT_SELECT)
       .eq("active", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });

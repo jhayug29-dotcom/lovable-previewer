@@ -19,6 +19,12 @@ export const Route = createFileRoute("/api/public/cashfree-webhook")({
         if (!secret) return new Response("Not configured", { status: 500 });
         if (!signature || !timestamp) return new Response("Missing signature", { status: 401 });
 
+        const tsNum = Number(timestamp);
+        // SECURITY: Reject replayed webhooks older than 10 minutes
+        if (!isNaN(tsNum) && Math.abs(Date.now() - tsNum) > 10 * 60 * 1000) {
+          return new Response("Webhook timestamp expired", { status: 400 });
+        }
+
         const expected = createHmac("sha256", secret).update(`${timestamp}${raw}`).digest("base64");
         const a = Buffer.from(signature);
         const b = Buffer.from(expected);
@@ -26,10 +32,12 @@ export const Route = createFileRoute("/api/public/cashfree-webhook")({
           return new Response("Invalid signature", { status: 401 });
         }
 
-        const event = JSON.parse(raw) as {
-          type?: string;
-          data?: { order?: { order_id?: string } };
-        };
+        let event: { type?: string; data?: { order?: { order_id?: string } } };
+        try {
+          event = JSON.parse(raw);
+        } catch {
+          return new Response("Invalid JSON payload", { status: 400 });
+        }
         const orderId = event.data?.order?.order_id;
         if (!orderId) return new Response("ok");
 

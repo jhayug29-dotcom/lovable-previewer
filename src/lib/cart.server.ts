@@ -238,12 +238,32 @@ export async function claimFreeCart(input: ClaimFreeCartInput) {
   const verifiedProducts = await Promise.all(
     input.items.map(async (item) => {
       const prod = await loadProduct(item.id || item.slug);
+      if (!prod) {
+        throw new Error("Invalid product in cart");
+      }
+      // SECURITY: Strictly prevent unauthorized claiming of paid products for free.
+      if (!prod.isFree && Number(prod.price) > 0) {
+        throw new Error(`Unauthorized: Cannot claim paid product "${prod.title}" via free checkout`);
+      }
+
+      let dLink = prod.downloadLink ?? null;
+      if (!dLink && prod.id) {
+        try {
+          const { data: dbProd } = await adminClient()
+            .from("products")
+            .select("download_link")
+            .eq("id", prod.id)
+            .maybeSingle();
+          if (dbProd?.download_link) dLink = dbProd.download_link;
+        } catch {}
+      }
+
       return {
         id: prod.id,
         slug: prod.slug,
         title: prod.title,
         price: 0,
-        downloadLink: prod.downloadLink ?? null,
+        downloadLink: dLink,
       };
     }),
   );

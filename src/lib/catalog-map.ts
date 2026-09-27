@@ -68,6 +68,8 @@ function mapReview(row: Row): Review {
 /** Pure row -> product mapper. Safe to import from server and browser code. */
 export function mapProduct(row: Row): DbProduct {
   const reviews = Array.isArray(row["reviews"]) ? (row["reviews"] as Row[]).map(mapReview) : [];
+  const isFree = Boolean(row["is_free"]);
+
   return {
     id: String(row["id"] ?? ""),
     slug: String(row["slug"] ?? ""),
@@ -77,8 +79,10 @@ export function mapProduct(row: Row): DbProduct {
     cover: String(row["cover_url"] ?? ""),
     ...(row["banner_url"] ? { banner: String(row["banner_url"]) } : {}),
     ...(row["video_url"] ? { videoUrl: String(row["video_url"]) } : {}),
-    ...(row["download_link"] ? { downloadLink: String(row["download_link"]) } : {}),
-    isFree: Boolean(row["is_free"]),
+    // SECURITY: Never expose downloadLink for paid products in public catalog responses.
+    // Paid products are delivered exclusively via verified order settlement and emailed receipts.
+    ...(row["download_link"] && isFree ? { downloadLink: String(row["download_link"]) } : {}),
+    isFree,
     price: Number(row["price"] ?? 0),
     originalPrice: Number(row["original_price"] ?? 0),
     rating: Number(row["rating"] ?? 5),
@@ -96,4 +100,8 @@ export function mapProduct(row: Row): DbProduct {
   };
 }
 
-export const PRODUCT_SELECT = "*, reviews(*)";
+export const PUBLIC_PRODUCT_COLUMNS =
+  "id, slug, title, tagline, description, category, cover_url, banner_url, video_url, price, original_price, is_free, badge, features, file_info, how_to_use, rating, sales, active, show_on_homepage, sort_order, launch_time, timer_image_url, created_at";
+
+export const PUBLIC_PRODUCT_SELECT = `${PUBLIC_PRODUCT_COLUMNS}, reviews(*)`;
+export const PRODUCT_SELECT = `${PUBLIC_PRODUCT_COLUMNS}, download_link, reviews(*)`;

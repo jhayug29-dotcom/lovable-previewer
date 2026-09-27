@@ -529,7 +529,8 @@ function useRemove(table: string) {
       toast.success("Deleted");
       void qc.invalidateQueries();
       try {
-        await invalidateStoreCache();
+        const { data: s } = await supabase.auth.getSession();
+        await invalidateStoreCache({ data: { accessToken: s.session?.access_token } });
       } catch {
         // ignore
       }
@@ -2115,7 +2116,8 @@ function SettingsTab() {
       toast.success("Contact details updated");
       void queryClient.invalidateQueries();
       try {
-        await invalidateStoreCache();
+        const { data: s } = await supabase.auth.getSession();
+        await invalidateStoreCache({ data: { accessToken: s.session?.access_token } });
       } catch {
         // ignore
       }

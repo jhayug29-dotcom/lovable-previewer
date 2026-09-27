@@ -39,12 +39,9 @@ export function getSupabaseKey(): string {
   return key;
 }
 
-const KNOWN_SERVICE_ROLE_JWT =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE";
-
 /**
- * Resolves the Supabase service-role key. Automatically falls back to the verified working
- * JWT if an unregistered or placeholder 'sb_secret_' key is provided in the environment.
+ * Resolves the Supabase service-role key strictly from server environment variables.
+ * Never exposes or falls back to hardcoded secrets in source files.
  */
 export function getServiceRoleKey(): string | undefined {
   const key =
@@ -54,15 +51,12 @@ export function getServiceRoleKey(): string | undefined {
     getEnv("SUPABASE_SECRET_KEY") ??
     getEnv("STORE_SUPABASE_SECRET_KEY");
 
-  // Reject invalid placeholder or known unregistered keys that trigger "Unregistered API key" error
-  if (!key || key === "sb_secret_xxx" || key.startsWith("sb_secret_")) {
-    const url = getEnv("VITE_SUPABASE_URL") ?? getEnv("SUPABASE_URL") ?? "";
-    if (url.includes("wylcbblegcyzunychqqa") || !url) {
-      return KNOWN_SERVICE_ROLE_JWT;
-    }
+  // Reject invalid placeholder keys
+  if (key && (key === "sb_secret_xxx" || key.startsWith("sb_secret_xxx"))) {
+    return undefined;
   }
 
-  return key || KNOWN_SERVICE_ROLE_JWT;
+  return key;
 }
 
 /** Service-role client. Falls back to the publishable key exactly like the known-good deployment. */

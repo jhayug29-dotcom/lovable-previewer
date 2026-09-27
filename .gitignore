@@ -50,4 +50,10 @@ node-compile-cache/
 # one place (.env, which is already ignored above).
 scripts/
 supabase/backup*.json
+test-*.*
+test_*.*
+*.test.js
+*.test.cjs
+*.test.ts
+
 

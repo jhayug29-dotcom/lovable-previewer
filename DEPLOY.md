@@ -22,19 +22,19 @@ paste the name and the value, tick **Production + Preview + Development**, Save.
 
 | Name                            | Value                                                    |
 | ------------------------------- | -------------------------------------------------------- |
-| `VITE_SUPABASE_URL`             | `https://wylcbblegcyzunychqqa.supabase.co`               |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV`         |
-| `SUPABASE_URL`                  | `https://wylcbblegcyzunychqqa.supabase.co`               |
-| `SUPABASE_PUBLISHABLE_KEY`      | `sb_publishable_DP56-TYWMUcKiJh_Pl_JxQ_JtgqeYuV`         |
-| `SUPABASE_SERVICE_ROLE_KEY`     | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE` |
-| `SUPABASE_SECRET_KEY`           | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind5bGNiYmxlZ2N5enVueWNocXFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NTA1MDQ5OCwiZXhwIjoyMTAwNjI2NDk4fQ.iBHks-KtL5UjXjD3aaGfPjmzOWOVCGA1JXaaAojt4gE` |
-| `CASHFREE_APP_ID`               | `1348337cd58fd2946007d114ebb7338431`                     |
-| `CASHFREE_SECRET_KEY`           | `cfsk_ma_prod_c0607dab370ee9b4fbd58e8777883cce_36d411fa` |
-| `EMAILJS_PUBLIC_KEY`            | `yMInTQ6igoNvRwpNk`                                      |
-| `EMAILJS_PRIVATE_KEY`           | `OYOXv27MB1DgFVE53imjc`                                  |
-| `VITE_EMAILJS_PUBLIC_KEY`       | `yMInTQ6igoNvRwpNk`                                      |
-| `VITE_EMAILJS_SERVICE_ID`       | `service_tbk5flg`                                        |
-| `VITE_EMAILJS_TEMPLATE_ID`      | `template_e8uqzpz`                                       |
+| `VITE_SUPABASE_URL`             | `https://<YOUR_PROJECT_REF>.supabase.co`                 |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | `<YOUR_SUPABASE_ANON_KEY>`                               |
+| `SUPABASE_URL`                  | `https://<YOUR_PROJECT_REF>.supabase.co`                 |
+| `SUPABASE_PUBLISHABLE_KEY`      | `<YOUR_SUPABASE_ANON_KEY>`                               |
+| `SUPABASE_SERVICE_ROLE_KEY`     | `<YOUR_SUPABASE_SERVICE_ROLE_KEY>`                       |
+| `SUPABASE_SECRET_KEY`           | `<YOUR_SUPABASE_SERVICE_ROLE_KEY>`                       |
+| `CASHFREE_APP_ID`               | `<YOUR_CASHFREE_APP_ID>`                                 |
+| `CASHFREE_SECRET_KEY`           | `<YOUR_CASHFREE_SECRET_KEY>`                             |
+| `EMAILJS_PUBLIC_KEY`            | `<YOUR_EMAILJS_PUBLIC_KEY>`                              |
+| `EMAILJS_PRIVATE_KEY`           | `<YOUR_EMAILJS_PRIVATE_KEY>`                             |
+| `VITE_EMAILJS_PUBLIC_KEY`       | `<YOUR_EMAILJS_PUBLIC_KEY>`                              |
+| `VITE_EMAILJS_SERVICE_ID`       | `<YOUR_EMAILJS_SERVICE_ID>`                              |
+| `VITE_EMAILJS_TEMPLATE_ID`      | `<YOUR_EMAILJS_TEMPLATE_ID>`                             |
 | `NITRO_PRESET`                  | `vercel`                                                 |
 
 Leave `CASHFREE_MODE` **unset** for live payments. Set it to `sandbox` (and

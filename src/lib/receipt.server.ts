@@ -31,12 +31,17 @@ export function isServerReceiptConfigured(): boolean {
 /** Returns true when EmailJS accepted the message. Never throws. */
 export async function sendReceiptEmail(payload: ReceiptPayload): Promise<boolean> {
   const publicKey =
-    cfg("EMAILJS_PUBLIC_KEY") ?? cfg("VITE_EMAILJS_PUBLIC_KEY") ?? "yMInTQ6igoNvRwpNk";
-  const privateKey = cfg("EMAILJS_PRIVATE_KEY", "OYOXv27MB1DgFVE53imjc")!;
+    cfg("EMAILJS_PUBLIC_KEY") ?? cfg("VITE_EMAILJS_PUBLIC_KEY");
+  const privateKey = cfg("EMAILJS_PRIVATE_KEY");
   const serviceId =
-    cfg("EMAILJS_SERVICE_ID") ?? cfg("VITE_EMAILJS_SERVICE_ID") ?? "service_tbk5flg";
+    cfg("EMAILJS_SERVICE_ID") ?? cfg("VITE_EMAILJS_SERVICE_ID");
   const templateId =
-    cfg("EMAILJS_TEMPLATE_ID") ?? cfg("VITE_EMAILJS_TEMPLATE_ID") ?? "template_e8uqzpz";
+    cfg("EMAILJS_TEMPLATE_ID") ?? cfg("VITE_EMAILJS_TEMPLATE_ID");
+
+  if (!privateKey || !publicKey || !serviceId || !templateId) {
+    console.warn("[EmailJS] Cannot send receipt: EmailJS server credentials are not configured in environment.");
+    return false;
+  }
 
   if (!payload.toEmail || !payload.toEmail.includes("@")) {
     console.warn("[EmailJS] Cannot send receipt without valid recipient email:", payload.toEmail);
