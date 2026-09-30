@@ -37,30 +37,39 @@ async function queryProducts(): Promise<DbProduct[]> {
   const client = publicClient();
   if (!client) return fallbackProducts;
 
-  let { data, error } = await client
-    .from("products")
-    .select(PUBLIC_PRODUCT_SELECT)
-    .eq("active", true)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    const basic = await client
+  try {
+    let { data, error } = await client
       .from("products")
       .select(PUBLIC_PRODUCT_SELECT)
       .eq("active", true)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: false });
-    if (!basic.error && basic.data) {
-      data = basic.data;
-      error = null;
-    }
-  }
 
-  if (error) throw new Error(`Store product read failed: ${error.message}`);
-  if (!data) throw new Error("Store product read returned no data");
-  if (data.length === 0) return [];
-  return (data as Row[]).map(mapProduct);
+    if (error) {
+      console.warn("[Store] Primary product query failed:", error.message);
+      // Fallback query with core essential columns only
+      const basic = await client
+        .from("products")
+        .select("id, slug, title, tagline, description, category, cover_url, price, original_price, is_free, rating, sales, active, sort_order, created_at")
+        .eq("active", true)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+      if (!basic.error && basic.data) {
+        data = basic.data as unknown as StoreProduct[];
+        error = null;
+      }
+    }
+
+    if (error || !data || data.length === 0) {
+      console.warn("[Store] Database returned no products or error, using fallback catalog:", error?.message);
+      return fallbackProducts;
+    }
+
+    return (data as Row[]).map(mapProduct);
+  } catch (err) {
+    console.error("[Store] Fatal error querying products, using fallback catalog:", err);
+    return fallbackProducts;
+  }
 }
 
 async function loadRawProducts(): Promise<DbProduct[]> {
@@ -132,14 +141,22 @@ export type ProductSection = {
 export async function loadProductSections(productId: string): Promise<ProductSection[]> {
   const db = publicClient();
   if (!db) return [];
-  const { data, error } = await db
-    .from("product_sections")
-    .select("id, product_id, title, content, sort_order, enabled")
-    .eq("product_id", productId)
-    .eq("enabled", true)
-    .order("sort_order", { ascending: true });
-  if (error) throw new Error(`Product sections read failed: ${error.message}`);
-  return (data as ProductSection[] | null) ?? [];
+  try {
+    const { data, error } = await db
+      .from("product_sections")
+      .select("id, product_id, title, content, sort_order, enabled")
+      .eq("product_id", productId)
+      .eq("enabled", true)
+      .order("sort_order", { ascending: true });
+    if (error) {
+      console.warn("[Store] Product sections read unavailable:", error.message);
+      return [];
+    }
+    return (data as ProductSection[] | null) ?? [];
+  } catch (err) {
+    console.warn("[Store] Product sections read failed:", err);
+    return [];
+  }
 }
 
 function isUuid(str: string): boolean {

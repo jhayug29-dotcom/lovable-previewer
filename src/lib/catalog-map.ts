@@ -101,7 +101,8 @@ export function mapProduct(row: Row): DbProduct {
 }
 
 export const PUBLIC_PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, category, cover_url, banner_url, video_url, price, original_price, is_free, badge, features, file_info, how_to_use, rating, sales, active, show_on_homepage, sort_order, launch_time, timer_image_url, created_at";
+  "id, slug, title, tagline, description, category, cover_url, banner_url, video_url, price, original_price, is_free, badge, features, file_info, how_to_use, rating, sales, active, show_on_homepage, sort_order, created_at";
 
 export const PUBLIC_PRODUCT_SELECT = `${PUBLIC_PRODUCT_COLUMNS}, reviews(*)`;
 export const PRODUCT_SELECT = `${PUBLIC_PRODUCT_COLUMNS}, download_link, reviews(*)`;
+
