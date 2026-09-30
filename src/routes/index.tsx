@@ -14,7 +14,7 @@ import { ScrollRevealWords } from "@/components/site/mindloop/ScrollRevealWords"
 import { LoopMark } from "@/components/site/mindloop/MindloopNav";
 import { fadeUp, heroReveal } from "@/components/site/mindloop/anim";
 import { useSmoothScroll } from "@/components/site/mindloop/useSmoothScroll";
-import { OrbitalImageWheel } from "@/components/site/mindloop/OrbitalImageWheel";
+import { CardStack } from "@/components/ui/card-stack";
 import { KineticText } from "@/components/site/mindloop/KineticText";
 import { AvatarCircles } from "@/components/site/mindloop/AvatarCircles";
 import { CursorFollow } from "@/components/magic/CursorFollow";
@@ -101,14 +101,20 @@ function Landing() {
       ? loaderData.products
       : staticFallbackProducts;
   const featured = products.slice(0, 4);
-  // Tile every product's cover onto the orbital wheel; repeat the set when the
-  // catalog is small so the ring stays visually full (never identical neighbours).
-  const wheelImages = useMemo(() => {
-    const base = products.map((p) => ({ src: p.cover, alt: p.title, label: p.title }));
-    if (base.length === 0) return [];
-    const target = 22;
-    const repeats = Math.max(1, Math.ceil(target / base.length));
-    return Array.from({ length: repeats * base.length }, (_, i) => base[i % base.length]!);
+  // Shuffled product carousel cards for the 3D CardStack.
+  // Dynamically re-shuffled on every page load/revisit so different products cycle at the front!
+  const carouselItems = useMemo(() => {
+    const valid = products.filter((p) => p.cover && p.cover.trim() !== "");
+    const pool = valid.length > 0 ? valid : products;
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    return shuffled.map((p) => ({
+      id: p.id || p.slug,
+      title: p.title,
+      description: p.tagline || (p.badge ? `${p.badge} • ${p.category}` : p.category),
+      imageSrc: p.cover || p.banner || "/placeholder.svg",
+      href: `/product/${p.slug}`,
+      tag: p.badge || p.category,
+    }));
   }, [products]);
 
   useSmoothScroll();
@@ -117,7 +123,7 @@ function Landing() {
     <div id="top" className="mindloop min-h-screen bg-black font-inter text-foreground">
       <MindloopNav />
 
-      {/* ============================================ 1 · HERO (SonarGrid Background) */}
+      {/* ============================================ 1 · HERO (SonarGrid + CardStack) */}
       <SonarGrid
         id="hero"
         ringWidth={90}
@@ -130,12 +136,12 @@ function Landing() {
         baseOpacity={0.35}
         color="#ffffff"
         pingArea={[0.22, 0.18, 0.78, 0.82]}
-        className="relative flex min-h-[94vh] w-full flex-col justify-center overflow-hidden bg-black"
+        className="relative flex min-h-screen w-full flex-col justify-start overflow-hidden bg-black pb-14 sm:pb-20"
       >
         {/* Soft wash localized directly behind the copy keeps headline legible while rings pass underneath */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_38%_32%_at_50%_45%,rgba(0,0,0,0.8)_0%,transparent_100%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_44%_36%_at_50%_35%,rgba(0,0,0,0.85)_0%,transparent_100%)]"
         />
 
         {/* Seamless bottom fade into the section below */}
@@ -144,9 +150,9 @@ function Landing() {
           className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black to-transparent"
         />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 pt-20 text-center sm:px-8 md:pt-24 lg:pt-28">
+        <div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col px-4 pt-10 text-center sm:px-6 md:pt-14">
           {/* Avatar stack */}
-          <motion.div {...heroReveal(0)} className="mb-5 flex items-center justify-center gap-3">
+          <motion.div {...heroReveal(0)} className="mb-4 flex items-center justify-center gap-3">
             <AvatarCircles avatarUrls={HERO_AVATARS} />
             <span className="text-xs text-muted-foreground sm:text-sm">
               500+ editors already creating
@@ -154,7 +160,7 @@ function Landing() {
           </motion.div>
 
           {/* Two lines, each revealed on its own beat: "Create" / "without limits". */}
-          <h1 className="text-5xl font-medium leading-[1.02] tracking-[-2px] md:text-6xl lg:text-7xl">
+          <h1 className="text-4xl font-medium leading-[1.02] tracking-[-2px] sm:text-5xl md:text-6xl lg:text-7xl">
             <motion.span {...heroReveal(0.12)} className="block">
               Create
             </motion.span>
@@ -164,19 +170,19 @@ function Landing() {
           </h1>
 
           <motion.p
-            {...heroReveal(0.42)}
-            className="mx-auto mt-6 max-w-[280px] text-xs font-light opacity-80 sm:max-w-[340px] sm:text-[13px] md:max-w-[380px] md:text-sm"
+            {...heroReveal(0.38)}
+            className="mx-auto mt-4 max-w-[320px] text-xs font-light opacity-80 sm:max-w-[380px] sm:text-[13px] md:max-w-[420px] md:text-sm"
             style={{ color: "hsl(var(--hero-subtitle))", willChange: "transform, opacity, filter" }}
           >
             Premium assets for editors and motion designers — presets, LUTs, extensions and SFX,
             crafted to help you ship faster and finish stronger.
           </motion.p>
 
-          {/* Explore Assets — directly beneath the heading text */}
-          <motion.div {...heroReveal(0.54)} className="mt-10 flex justify-center">
+          {/* Explore Assets CTA button */}
+          <motion.div {...heroReveal(0.48)} className="mt-7 flex justify-center">
             <Link
               to="/store"
-              className={`${SHIMMER_SURFACE} group inline-flex items-center gap-2 rounded-full bg-foreground px-10 py-4 text-sm font-semibold tracking-wide text-background transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]`}
+              className={`${SHIMMER_SURFACE} group inline-flex items-center gap-2 rounded-full bg-foreground px-8 py-3.5 text-sm font-semibold tracking-wide text-background transition-transform duration-200 hover:scale-[1.03] active:scale-[0.98]`}
             >
               {/* Dark spark on a white pill: the backdrop matches `--foreground`
                   so only a hairline of the travelling highlight shows at the rim. */}
@@ -192,16 +198,29 @@ function Landing() {
               />
             </Link>
           </motion.div>
+
+          {/* 3D CardStack Product Carousel in the vacant space beneath the CTA */}
+          <motion.div {...heroReveal(0.58)} className="mt-8 sm:mt-12 w-full max-w-4xl mx-auto">
+            <CardStack
+              items={carouselItems}
+              autoAdvance
+              intervalMs={2800}
+              pauseOnHover
+              showDots
+              cardWidth={480}
+              cardHeight={280}
+            />
+          </motion.div>
         </div>
       </SonarGrid>
 
       {/* ============================================ 2 · EDITING HAS CHANGED */}
       <section
         id="how-it-works"
-        className="px-5 pb-6 pt-24 sm:px-8 md:px-16 md:pb-9 md:pt-32 lg:px-28"
+        className="px-5 pb-6 pt-16 sm:px-8 md:px-16 md:pb-9 md:pt-20 lg:px-28"
       >
         <div className="mx-auto max-w-5xl text-center">
-          <h2 className="text-5xl leading-[1.02] tracking-[-1px] md:text-7xl lg:text-8xl">
+          <h2 className="text-4xl leading-[1.02] tracking-[-1px] sm:text-5xl md:text-6xl lg:text-7xl">
             <KineticText text="Editing has changed. Have you?" highlight={["changed."]} />
           </h2>
           <motion.p
@@ -212,30 +231,6 @@ function Landing() {
             actually work in 2026.
           </motion.p>
         </div>
-
-        {/* Orbital product wheel — auto-spins on a slow, seamless loop directly
-            beneath the heading. Full-bleed: the negative margins cancel the
-            section's horizontal padding so the arc runs edge to edge.
-            `yaw` mounts each card tangentially on the ring so it turns away from
-            the viewer toward the ends of the arc — that 3D turn is what makes it
-            read as an orbit rather than a conveyor belt. Landscape tiles match the
-            4:3 product covers, so nothing is cropped. Out-of-focus cards keep
-            full brightness and colour; the only softening is the arc's own ends
-            dissolving into the page. */}
-        <OrbitalImageWheel
-          images={wheelImages}
-          autoplay
-          turns={2}
-          itemWidth={320}
-          itemHeight={220}
-          yaw={0}
-          autoplayDuration={190}
-          blur={0}
-          dim={100}
-          brightnessBoost={0}
-          minSaturation={100}
-          className="-mx-5 mb-4 bg-transparent sm:-mx-8 md:-mx-16 lg:-mx-28"
-        />
 
         <div className="mx-auto mt-12 grid max-w-5xl grid-cols-1 gap-12 md:mt-16 md:grid-cols-3 md:gap-8">
           {SURFACES.map((s, i) => (
