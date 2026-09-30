@@ -55,7 +55,7 @@ async function queryProducts(): Promise<DbProduct[]> {
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (!basic.error && basic.data) {
-        data = basic.data as unknown as StoreProduct[];
+        data = basic.data as any;
         error = null;
       }
     }

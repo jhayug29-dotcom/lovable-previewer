@@ -22,11 +22,11 @@ import { Meteors } from "@/components/magic/Meteors";
 import { SHIMMER_SURFACE, ShimmerLayers } from "@/components/magic/Shimmer";
 import { SilkWave } from "@/components/magic/SilkWave";
 import { PromoBanners } from "@/components/site/PromoBanners";
+import { SonarGrid } from "@/components/ui/sonar-grid";
 
 // Decorative background clips (muted, aria-hidden). Self-hosted from `public/`
 // as plain H.264 MP4 — no CDN and no adaptive-streaming manifest, so the repo
 // carries every asset the page needs and any static host can serve it.
-const HERO_VIDEO = "/media/hero.mp4";
 const MISSION_VIDEO = "/media/mission.mp4";
 const SOLUTION_VIDEO = "/media/solution.mp4";
 
@@ -117,28 +117,35 @@ function Landing() {
     <div id="top" className="mindloop min-h-screen bg-black font-inter text-foreground">
       <MindloopNav />
 
-      {/* ============================================ 1 · HERO
-          Reference framing: copy sits in the dark upper band, the cinematic
-          scene fills the lower two-thirds, and a soft fade closes the seam into
-          the black section below. */}
-      <section className="relative flex min-h-[94vh] flex-col overflow-hidden bg-black">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
+      {/* ============================================ 1 · HERO (SonarGrid Background) */}
+      <SonarGrid
+        id="hero"
+        ringWidth={90}
+        speed={260}
+        amplitude={2.2}
+        pingEvery={2.4}
+        interactive={true}
+        spacing={26}
+        baseOpacity={0.22}
+        color="#818cf8"
+        pingArea={[0.2, 0.2, 0.8, 0.75]}
+        className="relative flex min-h-[94vh] w-full flex-col justify-center overflow-hidden bg-black"
+      >
+        {/* Soft radial wash behind the copy keeps headline and text legible while sonar rings expand */}
+        <div
           aria-hidden="true"
-          className="absolute inset-0 h-full w-full object-cover object-[center_63%] [mask-image:linear-gradient(to_bottom,transparent_0%,black_15%,black_100%)] sm:object-[center_68%] md:object-[center_73%]"
-        >
-          <source src={HERO_VIDEO} type="video/mp4" />
-        </video>
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_55%_45%_at_50%_42%,rgba(0,0,0,0.65)_0%,transparent_100%)]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_40%_at_50%_40%,rgba(99,102,241,0.06)_0%,transparent_100%)]"
+        />
 
-        {/* Top fade to make the headline text readable against the background */}
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,#000_0%,#000_15%,rgba(0,0,0,0.8)_35%,transparent_60%)]" />
-
-        {/* The closing fade: precise bottom feather starting at the reference line */}
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,transparent_0%,transparent_76%,rgba(0,0,0,0.15)_82%,rgba(0,0,0,0.5)_90%,#000_100%)]" />
+        {/* The closing fade: smooth feather into the black section below */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black via-black/70 to-transparent"
+        />
 
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 pt-20 text-center sm:px-8 md:pt-24 lg:pt-28">
           {/* Avatar stack */}
@@ -189,7 +196,7 @@ function Landing() {
             </Link>
           </motion.div>
         </div>
-      </section>
+      </SonarGrid>
 
       {/* ============================================ 2 · EDITING HAS CHANGED */}
       <section
