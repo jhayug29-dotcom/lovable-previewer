@@ -69,8 +69,8 @@ export function SonarGrid({
   const refreshRef = React.useRef<() => void>(() => {})
 
   // The render loop reads props through this ref so knob changes apply live without restarting it.
-  const opts = React.useRef({ spacing, dotRadius, baseOpacity, pingEvery, speed, ringWidth, amplitude, interactive, maxRings, seedPing, pingArea })
-  opts.current = { spacing, dotRadius, baseOpacity, pingEvery, speed, ringWidth, amplitude, interactive, maxRings, seedPing, pingArea }
+  const opts = React.useRef({ spacing, dotRadius, baseOpacity, color, pingEvery, speed, ringWidth, amplitude, interactive, maxRings, seedPing, pingArea })
+  opts.current = { spacing, dotRadius, baseOpacity, color, pingEvery, speed, ringWidth, amplitude, interactive, maxRings, seedPing, pingArea }
 
   const setHost = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -95,11 +95,18 @@ export function SonarGrid({
     let timer = 0
     let visible = true
     let seeded = false
-    let stroke = ""
+    let stroke = opts.current.color || "#ffffff"
     let nextPing = performance.now() + opts.current.pingEvery * 1000
 
     const readColor = () => {
-      stroke = getComputedStyle(canvas).color
+      const computed = canvas ? getComputedStyle(canvas).color : ""
+      if (opts.current.color) {
+        stroke = opts.current.color
+      } else if (computed && computed !== "rgba(0, 0, 0, 0)" && computed !== "transparent") {
+        stroke = computed
+      } else {
+        stroke = "#ffffff"
+      }
     }
 
     const addRing = (x: number, y: number, born: number) => {
@@ -119,8 +126,12 @@ export function SonarGrid({
         return { x: r.x, y: r.y, radius, reach: radius + o.ringWidth, fade: 1 - age / lifetime }
       })
 
+      if (!stroke || stroke === "rgba(0, 0, 0, 0)" || stroke === "transparent") {
+        readColor()
+      }
+
       ctx.clearRect(0, 0, width, height)
-      ctx.fillStyle = stroke
+      ctx.fillStyle = stroke || "#ffffff"
 
       const cols = Math.ceil(width / o.spacing) + 1
       const rows = Math.ceil(height / o.spacing) + 1

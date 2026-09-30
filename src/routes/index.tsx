@@ -126,25 +126,22 @@ function Landing() {
         pingEvery={2.4}
         interactive={true}
         spacing={26}
-        baseOpacity={0.22}
-        color="#818cf8"
-        pingArea={[0.2, 0.2, 0.8, 0.75]}
+        dotRadius={1.5}
+        baseOpacity={0.35}
+        color="#ffffff"
+        pingArea={[0.22, 0.18, 0.78, 0.82]}
         className="relative flex min-h-[94vh] w-full flex-col justify-center overflow-hidden bg-black"
       >
-        {/* Soft radial wash behind the copy keeps headline and text legible while sonar rings expand */}
+        {/* Soft wash localized directly behind the copy keeps headline legible while rings pass underneath */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_55%_45%_at_50%_42%,rgba(0,0,0,0.65)_0%,transparent_100%)]"
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_60%_40%_at_50%_40%,rgba(99,102,241,0.06)_0%,transparent_100%)]"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_38%_32%_at_50%_45%,rgba(0,0,0,0.8)_0%,transparent_100%)]"
         />
 
-        {/* The closing fade: smooth feather into the black section below */}
+        {/* Seamless bottom fade into the section below */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black via-black/70 to-transparent"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black to-transparent"
         />
 
         <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col px-5 pt-20 text-center sm:px-8 md:pt-24 lg:pt-28">
